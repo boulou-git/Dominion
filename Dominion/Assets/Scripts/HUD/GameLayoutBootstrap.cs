@@ -42,7 +42,9 @@ public static class GameLayoutBootstrap
         CanvasScaler scaler = root.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         scaler.matchWidthOrHeight = 0.5f;
+        scaler.referencePixelsPerUnit = 100f;
 
         EnsureEventSystem(scene);
     }
@@ -71,6 +73,7 @@ public sealed class GameLayoutController : MonoBehaviour
     private RectTransform _inPlayRoot;
     private RectTransform _handRoot;
     private Text _viewedPlayerTitle;
+    private Text _phaseText;
     private Text _actionsText;
     private Text _buysText;
     private Text _coinsText;
@@ -80,6 +83,8 @@ public sealed class GameLayoutController : MonoBehaviour
     private Text _specialZonesText;
     private Text _statusText;
     private Text _logText;
+    private Button _nextPhaseButton;
+    private Text _nextPhaseButtonText;
     private GameObject _overlay;
     private Text _overlayTitle;
     private Text _overlayContent;
@@ -206,15 +211,26 @@ public sealed class GameLayoutController : MonoBehaviour
     private void BuildResources(RectTransform right)
     {
         Text title = CreateText("Title", right, "JOUEUR OBSERVÉ", 22, TextAnchor.MiddleCenter);
-        SetAnchors(title.rectTransform, new Vector2(0f, 0.88f), new Vector2(1f, 1f), 10f);
+        SetAnchors(title.rectTransform, new Vector2(0f, 0.91f), new Vector2(1f, 1f), 10f);
 
-        _actionsText = ResourceLine(right, "Actions", 0.72f);
-        _buysText = ResourceLine(right, "Achats", 0.60f);
-        _coinsText = ResourceLine(right, "Pièces", 0.48f);
-        _handCountText = ResourceLine(right, "Main", 0.36f);
+        _phaseText = CreateText("Phase", right, "Phase : -", 22, TextAnchor.MiddleCenter);
+        SetAnchors(_phaseText.rectTransform, new Vector2(0.08f, 0.82f), new Vector2(0.92f, 0.90f), 0f);
 
-        _statusText = CreateText("Status", right, string.Empty, 18, TextAnchor.UpperCenter);
-        SetAnchors(_statusText.rectTransform, new Vector2(0.05f, 0.04f), new Vector2(0.95f, 0.28f), 8f);
+        _actionsText = ResourceLine(right, "Actions", 0.68f);
+        _buysText = ResourceLine(right, "Achats", 0.56f);
+        _coinsText = ResourceLine(right, "Pièces", 0.44f);
+        _handCountText = ResourceLine(right, "Main", 0.32f);
+
+        _nextPhaseButton = CreateButton("Phase suivante", right, 220f, RequestNextPhase);
+        RectTransform phaseButtonRect = _nextPhaseButton.GetComponent<RectTransform>();
+        phaseButtonRect.anchorMin = new Vector2(0.12f, 0.18f);
+        phaseButtonRect.anchorMax = new Vector2(0.88f, 0.27f);
+        phaseButtonRect.offsetMin = Vector2.zero;
+        phaseButtonRect.offsetMax = Vector2.zero;
+        _nextPhaseButtonText = _nextPhaseButton.GetComponentInChildren<Text>();
+
+        _statusText = CreateText("Status", right, string.Empty, 17, TextAnchor.UpperCenter);
+        SetAnchors(_statusText.rectTransform, new Vector2(0.05f, 0.025f), new Vector2(0.95f, 0.15f), 8f);
     }
 
     private Text ResourceLine(RectTransform parent, string label, float y)
@@ -284,6 +300,7 @@ public sealed class GameLayoutController : MonoBehaviour
         if (viewed != null)
             RefreshViewedPlayer(state, viewed);
 
+        RefreshPhaseButton(state);
         RefreshLocalHand(localPlayer);
         RebuildPlayerTabs(state);
     }
@@ -326,6 +343,7 @@ public sealed class GameLayoutController : MonoBehaviour
     {
         bool active = player.PlayerId == state.ActivePlayerId;
         _viewedPlayerTitle.text = player.NickName + (active ? "  ★ TOUR ACTUEL" : string.Empty);
+        _phaseText.text = "Phase : " + GetPhaseLabel(state.Phase);
         _actionsText.text = "Actions : " + player.Actions;
         _buysText.text = "Achats : " + player.Buys;
         _coinsText.text = "Pièces : " + player.Coins;
@@ -340,6 +358,62 @@ public sealed class GameLayoutController : MonoBehaviour
         _statusText.text = state.IsPaused ? "PARTIE EN PAUSE\n" + state.PauseReason : (player.IsConnected ? "Connecté" : "Déconnecté");
 
         RebuildInPlay(player);
+    }
+
+    private void RefreshPhaseButton(GameStateSnapshot state)
+    {
+        if (_nextPhaseButton == null)
+            return;
+
+        bool localTurn = state != null && state.ActivePlayerId == NetworkGameState.LocalPlayerId;
+        _nextPhaseButton.interactable = localTurn && !state.IsPaused && state.IsStarted;
+
+        if (_nextPhaseButtonText == null)
+            return;
+
+        if (!localTurn)
+        {
+            _nextPhaseButtonText.text = "En attente";
+            return;
+        }
+
+        switch (state.Phase)
+        {
+            case NetworkGameState.ActionPhase:
+                _nextPhaseButtonText.text = "Passer à l'achat";
+                break;
+            case NetworkGameState.BuyPhase:
+                _nextPhaseButtonText.text = "Passer à l'ajustement";
+                break;
+            case NetworkGameState.CleanupPhase:
+                _nextPhaseButtonText.text = "Terminer le tour";
+                break;
+            default:
+                _nextPhaseButtonText.text = "Phase suivante";
+                _nextPhaseButton.interactable = false;
+                break;
+        }
+    }
+
+    private void RequestNextPhase()
+    {
+        if (PlayersTurnsHandler.Instance != null)
+            PlayersTurnsHandler.Instance.AdvancePhase();
+    }
+
+    private static string GetPhaseLabel(string phase)
+    {
+        switch (phase)
+        {
+            case NetworkGameState.ActionPhase:
+                return "Action";
+            case NetworkGameState.BuyPhase:
+                return "Achat";
+            case NetworkGameState.CleanupPhase:
+                return "Ajustement";
+            default:
+                return string.IsNullOrEmpty(phase) ? "-" : phase;
+        }
     }
 
     private void RebuildInPlay(PlayerStateSnapshot player)
@@ -418,6 +492,7 @@ public sealed class GameLayoutController : MonoBehaviour
     private void ShowEmptyState()
     {
         _viewedPlayerTitle.text = "PLATEAU — en attente du GameState";
+        _phaseText.text = "Phase : -";
         _actionsText.text = "Actions : -";
         _buysText.text = "Achats : -";
         _coinsText.text = "Pièces : -";
@@ -426,6 +501,10 @@ public sealed class GameLayoutController : MonoBehaviour
         _discardText.text = "DÉFAUSSE\n-";
         _specialZonesText.text = "PILES / ZONES SPÉCIALES\n-";
         _statusText.text = "En attente de l'état réseau";
+        if (_nextPhaseButton != null)
+            _nextPhaseButton.interactable = false;
+        if (_nextPhaseButtonText != null)
+            _nextPhaseButtonText.text = "En attente";
     }
 
     private static int SafeCount<T>(List<T> list)
