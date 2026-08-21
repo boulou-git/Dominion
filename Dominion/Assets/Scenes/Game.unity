@@ -1946,8 +1946,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameHUDHandler
   _endTurnButton: {fileID: 1497100290}
-  _myTurnPanel: {fileID: 0}
-  _othersTurnPanel: {fileID: 0}
+  _myTurnPanel: {fileID: 2046316068}
+  _othersTurnPanel: {fileID: 1124360946}
 --- !u!1 &1877180376
 GameObject:
   m_ObjectHideFlags: 0

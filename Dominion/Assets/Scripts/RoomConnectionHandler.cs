@@ -9,6 +9,9 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
     private static string _roomName = "Dominion";
 
+    [SerializeField]
+    PhotonView _pv;
+
     private static RoomOptions _roomOptions = new RoomOptions()
     {
         MaxPlayers = 8,
