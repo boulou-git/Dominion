@@ -77,10 +77,6 @@ public static class NetworkGameState
         StateChanged?.Invoke(null);
     }
 
-    /// <summary>
-    /// Creates the first immutable player order and first turn.
-    /// This may only be called by the current Master Client.
-    /// </summary>
     public static bool InitialiseAuthoritativeState()
     {
         if (!CanWrite())
@@ -119,6 +115,8 @@ public static class NetworkGameState
             });
         }
 
+        UpdatePauseState(state);
+
         PlayerStateSnapshot firstConnectedPlayer = state.Players.Find(player => player.IsConnected);
         state.ActivePlayerId = firstConnectedPlayer != null ? firstConnectedPlayer.PlayerId : state.Players[0].PlayerId;
 
@@ -136,8 +134,8 @@ public static class NetworkGameState
     }
 
     /// <summary>
-    /// Called by the Master when Photon reports a player leaving or re-entering.
-    /// A disconnected player stays in the fixed turn order and pauses the match.
+    /// A disconnected player remains in the immutable match player order. Any absence
+    /// pauses the authoritative game until every player is connected again.
     /// </summary>
     public static bool SetPlayerConnectivity(Player photonPlayer, bool connected)
     {
@@ -148,8 +146,6 @@ public static class NetworkGameState
         string playerId = GetPlayerId(photonPlayer);
         PlayerStateSnapshot playerState = next.Players.Find(player => player.PlayerId == playerId);
 
-        // The room is closed as soon as the game starts. Ignore any player that is not
-        // part of the immutable player list instead of silently changing turn order.
         if (playerState == null)
             return false;
 
@@ -173,20 +169,16 @@ public static class NetworkGameState
             changed = true;
         }
 
-        bool shouldPause = next.Players.Exists(player => !player.IsConnected);
-        if (next.IsPaused != shouldPause)
-        {
-            next.IsPaused = shouldPause;
+        bool previousPause = next.IsPaused;
+        string previousReason = next.PauseReason;
+        UpdatePauseState(next);
+
+        if (previousPause != next.IsPaused || previousReason != next.PauseReason)
             changed = true;
-        }
 
         return changed && CommitState(next);
     }
 
-    /// <summary>
-    /// The newly elected Master continues from the room snapshot, bumps the authority epoch,
-    /// and refreshes connectivity without resetting the turn or player order.
-    /// </summary>
     public static bool HandleMasterMigration()
     {
         if (!CanWrite())
@@ -214,13 +206,13 @@ public static class NetworkGameState
             }
         }
 
-        next.IsPaused = next.Players.Exists(player => !player.IsConnected);
+        UpdatePauseState(next);
         return CommitState(next);
     }
 
     /// <summary>
-    /// First command-style state transition. The Master rejects stale commands, commands from
-    /// a previous authority epoch, commands while paused, and commands from the wrong player.
+    /// The Master rejects stale commands, old authority epochs, wrong-player commands,
+    /// and every gameplay command while the match is paused for a disconnected player.
     /// </summary>
     public static bool TryAdvanceTurn(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
     {
@@ -244,6 +236,22 @@ public static class NetworkGameState
         next.Phase = "Action";
 
         return CommitState(next);
+    }
+
+    private static void UpdatePauseState(GameStateSnapshot state)
+    {
+        if (state == null)
+            return;
+
+        List<string> missingPlayers = state.Players
+            .Where(player => !player.IsConnected)
+            .Select(player => string.IsNullOrEmpty(player.NickName) ? "Joueur" : player.NickName)
+            .ToList();
+
+        state.IsPaused = missingPlayers.Count > 0;
+        state.PauseReason = state.IsPaused
+            ? "En attente de reconnexion : " + string.Join(", ", missingPlayers)
+            : string.Empty;
     }
 
     private static bool CanWrite()
@@ -270,8 +278,6 @@ public static class NetworkGameState
         if (!queued)
             return false;
 
-        // Keep the Master locally current immediately. If the operation never reaches the
-        // server because of a disconnect, HydrateFromRoom(force: true) will restore server truth.
         SetLocalState(committed);
         return true;
     }
