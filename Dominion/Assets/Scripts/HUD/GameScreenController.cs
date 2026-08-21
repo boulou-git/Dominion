@@ -1,50 +1,42 @@
 using System;
 using System.Collections.Generic;
+using Photon.Pun;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Binds the editable GameScreen prefab to replicated state.
-/// The prefab owns the layout; this controller only fills dynamic content and local navigation.
+/// Binds the editable GameScreen prefab to the current replicated game state.
+/// The prefab owns layout/visuals; this controller only fills dynamic content.
 /// </summary>
 public sealed class GameScreenController : MonoBehaviour
 {
     [Header("Top bar")]
     [SerializeField] private RectTransform _playersRoot;
     [SerializeField] private Text _turnText;
-    [SerializeField] private Button _reserveButton;
-    [SerializeField] private Button _trashedButton;
-    [SerializeField] private Button _exiledButton;
 
-    [Header("Observed player board")]
-    [SerializeField] private Text _boardTitle;
+    [Header("Supply")]
+    [SerializeField] private RectTransform _baseSupplyRoot;
+    [SerializeField] private RectTransform _kingdomSupplyRoot;
+
+    [Header("Board")]
     [SerializeField] private RectTransform _inPlayRoot;
-    [SerializeField] private Text _deckText;
-    [SerializeField] private Text _discardText;
-    [SerializeField] private Text _specialZonesText;
+    [SerializeField] private Text _boardTitle;
 
-    [Header("Observed player status")]
+    [Header("Right status")]
     [SerializeField] private Text _phaseText;
     [SerializeField] private Text _actionsText;
     [SerializeField] private Text _buysText;
     [SerializeField] private Text _coinsText;
+    [SerializeField] private Text _deckText;
+    [SerializeField] private Text _discardText;
     [SerializeField] private Text _handCountText;
     [SerializeField] private Text _statusText;
     [SerializeField] private Button _nextPhaseButton;
     [SerializeField] private Text _nextPhaseButtonText;
 
-    [Header("Local hand / journal")]
+    [Header("Hand / journal")]
     [SerializeField] private RectTransform _handRoot;
     [SerializeField] private Text _journalText;
-
-    [Header("Global zones overlay")]
-    [SerializeField] private GameObject _globalOverlay;
-    [SerializeField] private Text _globalOverlayTitle;
-    [SerializeField] private GameObject _reserveContent;
-    [SerializeField] private RectTransform _baseSupplyRoot;
-    [SerializeField] private RectTransform _kingdomSupplyRoot;
-    [SerializeField] private Text _globalPlaceholderText;
-    [SerializeField] private Button _globalOverlayCloseButton;
 
     [Header("Card zoom")]
     [SerializeField] private GameObject _zoomOverlay;
@@ -53,31 +45,19 @@ public sealed class GameScreenController : MonoBehaviour
 
     private readonly List<GameObject> _playerPills = new List<GameObject>();
     private readonly List<GameObject> _kingdomCards = new List<GameObject>();
-    private readonly List<GameObject> _inPlayCards = new List<GameObject>();
-    private string _viewedPlayerId;
     private bool _kingdomBuilt;
 
-    private static readonly Color NormalPlayer = new Color(0.12f, 0.115f, 0.105f, 1f);
-    private static readonly Color ActivePlayer = new Color(0.40f, 0.32f, 0.17f, 1f);
-    private static readonly Color ViewedPlayer = new Color(0.22f, 0.31f, 0.34f, 1f);
+    private static readonly Color Panel = new Color(0.11f, 0.105f, 0.095f, 1f);
+    private static readonly Color Active = new Color(0.40f, 0.32f, 0.17f, 1f);
+    private static readonly Color Local = new Color(0.20f, 0.29f, 0.32f, 1f);
 
     private void Awake()
     {
         if (_nextPhaseButton != null)
             _nextPhaseButton.onClick.AddListener(RequestNextPhase);
-        if (_reserveButton != null)
-            _reserveButton.onClick.AddListener(ShowReserve);
-        if (_trashedButton != null)
-            _trashedButton.onClick.AddListener(() => ShowSimpleGlobalZone("CARTES ÉCARTÉES", "Aucune carte écartée pour le moment."));
-        if (_exiledButton != null)
-            _exiledButton.onClick.AddListener(() => ShowSimpleGlobalZone("CARTES EXILÉES", "Aucune carte exilée pour le moment."));
-        if (_globalOverlayCloseButton != null)
-            _globalOverlayCloseButton.onClick.AddListener(HideGlobalOverlay);
         if (_zoomCloseButton != null)
             _zoomCloseButton.onClick.AddListener(HideZoom);
 
-        if (_globalOverlay != null)
-            _globalOverlay.SetActive(false);
         if (_zoomOverlay != null)
             _zoomOverlay.SetActive(false);
 
@@ -96,128 +76,70 @@ public sealed class GameScreenController : MonoBehaviour
 
     private void Refresh(GameStateSnapshot state)
     {
+        RefreshPlayerPills(state);
+
         if (!_kingdomBuilt)
             BuildKingdomSupply();
 
         if (state == null || state.Players == null || state.Players.Count == 0)
         {
-            RefreshPlayerPills(state);
-            ShowWaitingState();
+            if (_turnText != null) _turnText.text = "En attente de la partie";
+            if (_boardTitle != null) _boardTitle.text = "PLATEAU";
+            if (_phaseText != null) _phaseText.text = "PHASE  —";
+            if (_actionsText != null) _actionsText.text = "Actions  —";
+            if (_buysText != null) _buysText.text = "Achats  —";
+            if (_coinsText != null) _coinsText.text = "Pièces  —";
+            if (_deckText != null) _deckText.text = "Pioche\n—";
+            if (_discardText != null) _discardText.text = "Défausse\n—";
+            if (_handCountText != null) _handCountText.text = "Main  —";
+            if (_statusText != null) _statusText.text = "Synchronisation du GameState…";
+            if (_nextPhaseButton != null) _nextPhaseButton.interactable = false;
             return;
         }
 
         PlayerStateSnapshot activePlayer = state.Players.Find(p => p != null && p.PlayerId == state.ActivePlayerId);
-
-        if (string.IsNullOrEmpty(_viewedPlayerId) || state.Players.Find(p => p != null && p.PlayerId == _viewedPlayerId) == null)
-            _viewedPlayerId = activePlayer != null ? activePlayer.PlayerId : state.Players[0].PlayerId;
-
-        PlayerStateSnapshot viewedPlayer = state.Players.Find(p => p != null && p.PlayerId == _viewedPlayerId);
         PlayerStateSnapshot localPlayer = state.Players.Find(p => p != null && p.PlayerId == NetworkGameState.LocalPlayerId);
-
-        RefreshPlayerPills(state);
 
         if (_turnText != null)
         {
             string activeName = activePlayer != null && !string.IsNullOrEmpty(activePlayer.NickName) ? activePlayer.NickName : "Joueur";
-            _turnText.text = "Tour " + state.TurnNumber + " • " + activeName;
+            _turnText.text = "TOUR " + state.TurnNumber + "  •  " + activeName;
         }
-
-        RefreshObservedPlayer(state, viewedPlayer);
-        RefreshLocalTurnControls(state, localPlayer);
-        RefreshJournal(state, activePlayer);
-    }
-
-    private void RefreshObservedPlayer(GameStateSnapshot state, PlayerStateSnapshot player)
-    {
-        Clear(_inPlayCards);
-
-        if (player == null)
-            return;
 
         if (_boardTitle != null)
-            _boardTitle.text = string.IsNullOrEmpty(player.NickName) ? "JOUEUR" : player.NickName.ToUpperInvariant();
-        if (_phaseText != null)
-            _phaseText.text = "Phase : " + PhaseLabel(state.Phase);
-        if (_actionsText != null)
-            _actionsText.text = "Actions : " + player.Actions;
-        if (_buysText != null)
-            _buysText.text = "Achats : " + player.Buys;
-        if (_coinsText != null)
-            _coinsText.text = "Pièces : " + player.Coins;
-        if (_handCountText != null)
-            _handCountText.text = "Main : " + SafeCount(player.Hand) + " carte" + (SafeCount(player.Hand) > 1 ? "s" : string.Empty);
-        if (_deckText != null)
-            _deckText.text = "PIOCHE\n[" + SafeCount(player.Deck) + "]";
-        if (_discardText != null)
-            _discardText.text = "DÉFAUSSE\n[" + SafeCount(player.Discard) + "]";
-        if (_specialZonesText != null)
-            _specialZonesText.text = "ZONES SPÉCIALES\n—";
+            _boardTitle.text = activePlayer != null ? "PLATEAU — " + activePlayer.NickName : "PLATEAU";
 
-        if (_statusText != null)
+        if (_phaseText != null) _phaseText.text = "PHASE  " + PhaseLabel(state.Phase);
+
+        PlayerStateSnapshot counters = localPlayer ?? activePlayer;
+        if (counters != null)
         {
-            bool viewedIsActive = player.PlayerId == state.ActivePlayerId;
-            _statusText.text = !player.IsConnected
-                ? "Joueur déconnecté"
-                : viewedIsActive ? "Joueur actif" : "Joueur observé";
+            if (_actionsText != null) _actionsText.text = "Actions  " + counters.Actions;
+            if (_buysText != null) _buysText.text = "Achats  " + counters.Buys;
+            if (_coinsText != null) _coinsText.text = "Pièces  " + counters.Coins;
+            if (_deckText != null) _deckText.text = "PIOCHE\n" + SafeCount(counters.Deck);
+            if (_discardText != null) _discardText.text = "DÉFAUSSE\n" + SafeCount(counters.Discard);
+            if (_handCountText != null) _handCountText.text = "Main  " + SafeCount(counters.Hand);
         }
 
-        if (_inPlayRoot == null)
-            return;
-
-        if (player.InPlay == null || player.InPlay.Count == 0)
-        {
-            Text empty = RuntimeText("Aucune carte en jeu", _inPlayRoot, 18, TextAnchor.MiddleCenter);
-            LayoutElement element = empty.gameObject.AddComponent<LayoutElement>();
-            element.preferredWidth = 260f;
-            _inPlayCards.Add(empty.gameObject);
-            return;
-        }
-
-        foreach (int instanceId in player.InPlay)
-        {
-            GameObject placeholder = RuntimePanel("Card_" + instanceId, _inPlayRoot);
-            LayoutElement layout = placeholder.AddComponent<LayoutElement>();
-            layout.preferredWidth = 110f;
-            layout.preferredHeight = 170f;
-            Text label = RuntimeText("#" + instanceId, placeholder.transform, 16, TextAnchor.MiddleCenter);
-            Stretch(label.rectTransform, 6f);
-            _inPlayCards.Add(placeholder);
-        }
-    }
-
-    private void RefreshLocalTurnControls(GameStateSnapshot state, PlayerStateSnapshot localPlayer)
-    {
         bool localTurn = state.ActivePlayerId == NetworkGameState.LocalPlayerId;
-
         if (_nextPhaseButton != null)
             _nextPhaseButton.interactable = localTurn && state.IsStarted && !state.IsPaused;
         if (_nextPhaseButtonText != null)
             _nextPhaseButtonText.text = NextPhaseLabel(state.Phase, localTurn);
 
-        // The bottom hand always belongs to the local player, independently of the observed board.
-        if (_handRoot != null && _handRoot.childCount == 0)
+        if (_statusText != null)
         {
-            string handLabel = localPlayer == null || SafeCount(localPlayer.Hand) == 0
-                ? "Votre main apparaîtra ici"
-                : SafeCount(localPlayer.Hand) + " cartes en main";
-            Text placeholder = RuntimeText(handLabel, _handRoot, 18, TextAnchor.MiddleCenter);
-            placeholder.gameObject.name = "HandPlaceholder";
-        }
-    }
-
-    private void RefreshJournal(GameStateSnapshot state, PlayerStateSnapshot activePlayer)
-    {
-        if (_journalText == null)
-            return;
-
-        if (state.IsPaused)
-        {
-            _journalText.text = state.PauseReason;
-            return;
+            if (state.IsPaused)
+                _statusText.text = state.PauseReason;
+            else if (localTurn)
+                _statusText.text = "À vous de jouer";
+            else
+                _statusText.text = "En attente du joueur actif";
         }
 
-        string activeName = activePlayer != null && !string.IsNullOrEmpty(activePlayer.NickName) ? activePlayer.NickName : "Joueur";
-        _journalText.text = "Tour " + state.TurnNumber + "\n\n" + activeName + " — phase " + PhaseLabel(state.Phase) + ".";
+        if (_journalText != null && activePlayer != null)
+            _journalText.text = "Tour " + state.TurnNumber + "\n\n" + activePlayer.NickName + " — phase " + PhaseLabel(state.Phase) + ".";
     }
 
     private void RefreshPlayerPills(GameStateSnapshot state)
@@ -232,41 +154,32 @@ public sealed class GameScreenController : MonoBehaviour
                 continue;
 
             bool active = player.PlayerId == state.ActivePlayerId;
-            bool viewed = player.PlayerId == _viewedPlayerId;
-            string capturedPlayerId = player.PlayerId;
-
-            GameObject pill = new GameObject("Player_" + player.ActorNumber, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+            bool local = player.PlayerId == NetworkGameState.LocalPlayerId;
+            GameObject pill = new GameObject("Player_" + player.ActorNumber, typeof(RectTransform), typeof(Image), typeof(LayoutElement));
             pill.transform.SetParent(_playersRoot, false);
 
             Image background = pill.GetComponent<Image>();
-            background.color = viewed ? ViewedPlayer : active ? ActivePlayer : NormalPlayer;
-
-            Button button = pill.GetComponent<Button>();
-            button.targetGraphic = background;
-            button.onClick.AddListener(() => SelectViewedPlayer(capturedPlayerId));
+            background.color = active ? Active : local ? Local : Panel;
 
             LayoutElement layout = pill.GetComponent<LayoutElement>();
-            layout.preferredWidth = 170f;
-            layout.minWidth = 135f;
+            layout.preferredWidth = 180f;
+            layout.minWidth = 150f;
 
-            Text label = RuntimeText("Name", pill.transform, 17, TextAnchor.MiddleCenter);
-            Stretch(label.rectTransform, 7f);
-            label.text = player.NickName
-                + (active ? "  ★" : string.Empty)
-                + (viewed ? "  ◉" : string.Empty)
-                + (!player.IsConnected ? "  ×" : string.Empty);
+            GameObject labelObject = new GameObject("Name", typeof(RectTransform), typeof(Text));
+            labelObject.transform.SetParent(pill.transform, false);
+            RectTransform labelRect = labelObject.GetComponent<RectTransform>();
+            Stretch(labelRect, 8f);
+
+            Text label = labelObject.GetComponent<Text>();
+            label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            label.fontSize = 18;
+            label.alignment = TextAnchor.MiddleCenter;
+            label.color = Color.white;
+            label.raycastTarget = false;
+            label.text = player.NickName + (active ? "  ★" : string.Empty) + (!player.IsConnected ? "  • hors ligne" : string.Empty);
 
             _playerPills.Add(pill);
         }
-    }
-
-    private void SelectViewedPlayer(string playerId)
-    {
-        if (string.IsNullOrEmpty(playerId))
-            return;
-
-        _viewedPlayerId = playerId;
-        Refresh(NetworkGameState.State);
     }
 
     private void BuildKingdomSupply()
@@ -299,55 +212,14 @@ public sealed class GameScreenController : MonoBehaviour
 
             Button button = cardObject.GetComponent<Button>();
             button.targetGraphic = image;
-            Sprite capturedSprite = sprite;
-            if (capturedSprite != null)
-                button.onClick.AddListener(() => ShowZoom(capturedSprite));
+            Sprite captured = sprite;
+            if (captured != null)
+                button.onClick.AddListener(() => ShowZoom(captured));
 
             _kingdomCards.Add(cardObject);
         }
 
         _kingdomBuilt = _kingdomCards.Count > 0;
-    }
-
-    private void ShowReserve()
-    {
-        if (_globalOverlay == null)
-            return;
-
-        if (_globalOverlayTitle != null)
-            _globalOverlayTitle.text = "RÉSERVE";
-        if (_reserveContent != null)
-            _reserveContent.SetActive(true);
-        if (_globalPlaceholderText != null)
-            _globalPlaceholderText.gameObject.SetActive(false);
-
-        _globalOverlay.SetActive(true);
-        _globalOverlay.transform.SetAsLastSibling();
-    }
-
-    private void ShowSimpleGlobalZone(string title, string text)
-    {
-        if (_globalOverlay == null)
-            return;
-
-        if (_globalOverlayTitle != null)
-            _globalOverlayTitle.text = title;
-        if (_reserveContent != null)
-            _reserveContent.SetActive(false);
-        if (_globalPlaceholderText != null)
-        {
-            _globalPlaceholderText.gameObject.SetActive(true);
-            _globalPlaceholderText.text = text;
-        }
-
-        _globalOverlay.SetActive(true);
-        _globalOverlay.transform.SetAsLastSibling();
-    }
-
-    private void HideGlobalOverlay()
-    {
-        if (_globalOverlay != null)
-            _globalOverlay.SetActive(false);
     }
 
     private void ShowZoom(Sprite sprite)
@@ -373,30 +245,14 @@ public sealed class GameScreenController : MonoBehaviour
             PlayersTurnsHandler.Instance.AdvancePhase();
     }
 
-    private void ShowWaitingState()
-    {
-        if (_turnText != null) _turnText.text = "En attente";
-        if (_boardTitle != null) _boardTitle.text = "JOUEUR";
-        if (_phaseText != null) _phaseText.text = "Phase : —";
-        if (_actionsText != null) _actionsText.text = "Actions : —";
-        if (_buysText != null) _buysText.text = "Achats : —";
-        if (_coinsText != null) _coinsText.text = "Pièces : —";
-        if (_handCountText != null) _handCountText.text = "Main : —";
-        if (_deckText != null) _deckText.text = "PIOCHE\n[—]";
-        if (_discardText != null) _discardText.text = "DÉFAUSSE\n[—]";
-        if (_specialZonesText != null) _specialZonesText.text = "ZONES SPÉCIALES\n—";
-        if (_statusText != null) _statusText.text = "Synchronisation…";
-        if (_nextPhaseButton != null) _nextPhaseButton.interactable = false;
-    }
-
     private static string PhaseLabel(string phase)
     {
         switch (phase)
         {
-            case NetworkGameState.ActionPhase: return "Action";
-            case NetworkGameState.BuyPhase: return "Achat";
-            case NetworkGameState.CleanupPhase: return "Ajustement";
-            default: return string.IsNullOrEmpty(phase) ? "—" : phase;
+            case NetworkGameState.ActionPhase: return "ACTION";
+            case NetworkGameState.BuyPhase: return "ACHAT";
+            case NetworkGameState.CleanupPhase: return "AJUSTEMENT";
+            default: return string.IsNullOrEmpty(phase) ? "—" : phase.ToUpperInvariant();
         }
     }
 
@@ -417,28 +273,6 @@ public sealed class GameScreenController : MonoBehaviour
     private static int SafeCount<T>(List<T> list)
     {
         return list != null ? list.Count : 0;
-    }
-
-    private static GameObject RuntimePanel(string name, Transform parent)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(Image));
-        go.transform.SetParent(parent, false);
-        go.GetComponent<Image>().color = NormalPlayer;
-        return go;
-    }
-
-    private static Text RuntimeText(string value, Transform parent, int fontSize, TextAnchor alignment)
-    {
-        GameObject go = new GameObject("Text", typeof(RectTransform), typeof(Text));
-        go.transform.SetParent(parent, false);
-        Text text = go.GetComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        text.fontSize = fontSize;
-        text.alignment = alignment;
-        text.color = Color.white;
-        text.raycastTarget = false;
-        text.text = value;
-        return text;
     }
 
     private static void Clear(List<GameObject> objects)
