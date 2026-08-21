@@ -65,6 +65,12 @@ public static class EditableGameBootstrap
         if (root.GetComponent<BuyPhaseGameplayController>() == null)
             root.AddComponent<BuyPhaseGameplayController>();
 
+        // BuyPhaseGameplayController owns the Buy/Cleanup animation on this button.
+        // This small binding restores the missing Action -> Buy transition without
+        // replacing that existing listener.
+        if (root.GetComponent<PhaseAdvanceButtonBinding>() == null)
+            root.AddComponent<PhaseAdvanceButtonBinding>();
+
         // One generic popup/availability controller for all future blocking effects
         // (discard, trash, gain, reveal, choose-one, attack reactions, etc.).
         if (root.GetComponent<PendingChoiceUiController>() == null)
