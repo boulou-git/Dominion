@@ -1,13 +1,13 @@
 using System;
-using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
 /// <summary>
 /// Adds gameplay meaning to an existing hand-card visual without owning the hand layout.
-/// Left click plays an allowed card; dragging it onto the play area does the same.
+/// Short left click plays an allowed card. Left-drag is reserved exclusively for
+/// reordering the local hand and never plays the card.
 /// </summary>
-public sealed class HandGameplayInteraction : MonoBehaviour, IEndDragHandler
+public sealed class HandGameplayInteraction : MonoBehaviour, IBeginDragHandler, IEndDragHandler
 {
     private int _instanceId;
     private RectTransform _playTarget;
@@ -16,6 +16,8 @@ public sealed class HandGameplayInteraction : MonoBehaviour, IEndDragHandler
     private HandCardMotion _motion;
     private bool _playable;
     private bool _requestPending;
+    private bool _dragging;
+    private int _suppressPrimaryUntilFrame = -1;
 
     public void Bind(int instanceId, RectTransform playTarget, Action<int> playRequested, bool playable)
     {
@@ -40,30 +42,27 @@ public sealed class HandGameplayInteraction : MonoBehaviour, IEndDragHandler
 
     private void OnPrimaryAction()
     {
-        if (!_playable || _requestPending)
+        // Unity may emit a PointerClick immediately after EndDrag. Suppress that click
+        // so dragging a Treasure to reorder the hand can never accidentally play it.
+        if (!_playable || _requestPending || _dragging || Time.frameCount <= _suppressPrimaryUntilFrame)
             return;
 
         StartPlayAnimation();
     }
 
-    public void OnEndDrag(PointerEventData eventData)
+    public void OnBeginDrag(PointerEventData eventData)
     {
-        if (!_playable || _requestPending || _playTarget == null || eventData.button != PointerEventData.InputButton.Left)
-            return;
-
-        if (!RectTransformUtility.RectangleContainsScreenPoint(_playTarget, eventData.position, eventData.pressEventCamera))
-            return;
-
-        // HandCardMotion also receives OnEndDrag. Waiting one frame guarantees its
-        // local reorder cleanup is finished before the play animation starts.
-        StartCoroutine(PlayAfterDragFrame());
+        if (eventData.button == PointerEventData.InputButton.Left)
+            _dragging = true;
     }
 
-    private IEnumerator PlayAfterDragFrame()
+    public void OnEndDrag(PointerEventData eventData)
     {
-        yield return null;
-        if (_playable && !_requestPending)
-            StartPlayAnimation();
+        if (eventData.button != PointerEventData.InputButton.Left)
+            return;
+
+        _dragging = false;
+        _suppressPrimaryUntilFrame = Time.frameCount + 1;
     }
 
     private void StartPlayAnimation()
