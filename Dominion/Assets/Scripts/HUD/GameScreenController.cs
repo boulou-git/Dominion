@@ -45,6 +45,7 @@ public sealed class GameScreenController : MonoBehaviour
 
     private readonly List<GameObject> _playerPills = new List<GameObject>();
     private readonly List<GameObject> _kingdomCards = new List<GameObject>();
+    private readonly List<GameObject> _handCards = new List<GameObject>();
     private bool _kingdomBuilt;
 
     private static readonly Color Panel = new Color(0.11f, 0.105f, 0.095f, 1f);
@@ -83,6 +84,7 @@ public sealed class GameScreenController : MonoBehaviour
 
         if (state == null || state.Players == null || state.Players.Count == 0)
         {
+            Clear(_handCards);
             if (_turnText != null) _turnText.text = "En attente de la partie";
             if (_boardTitle != null) _boardTitle.text = "PLATEAU";
             if (_phaseText != null) _phaseText.text = "PHASE  —";
@@ -121,6 +123,8 @@ public sealed class GameScreenController : MonoBehaviour
             if (_discardText != null) _discardText.text = "DÉFAUSSE\n" + SafeCount(counters.Discard);
             if (_handCountText != null) _handCountText.text = "Main  " + SafeCount(counters.Hand);
         }
+
+        RebuildLocalHand(state, localPlayer);
 
         bool localTurn = state.ActivePlayerId == NetworkGameState.LocalPlayerId;
         if (_nextPhaseButton != null)
@@ -180,6 +184,93 @@ public sealed class GameScreenController : MonoBehaviour
 
             _playerPills.Add(pill);
         }
+    }
+
+    /// <summary>
+    /// Renders only the local player's Hand zone. Other players expose their hand count
+    /// through the game state, never their card faces through this UI.
+    /// </summary>
+    private void RebuildLocalHand(GameStateSnapshot state, PlayerStateSnapshot localPlayer)
+    {
+        Clear(_handCards);
+        if (_handRoot == null)
+            return;
+
+        if (localPlayer == null || localPlayer.Hand == null || localPlayer.Hand.Count == 0)
+        {
+            CreateHandMessage("Main vide");
+            return;
+        }
+
+        foreach (int instanceId in localPlayer.Hand)
+        {
+            CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
+            if (instance == null || string.IsNullOrEmpty(instance.DefinitionId))
+            {
+                Debug.LogWarning("Hand contains unknown card instance #" + instanceId + ".");
+                continue;
+            }
+
+            ExtensionPackageData extension;
+            ExtensionCardData definition;
+            if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition))
+            {
+                Debug.LogWarning("Could not resolve hand card definition: " + instance.DefinitionId);
+                continue;
+            }
+
+            Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition);
+            GameObject cardObject = new GameObject(
+                "Hand_" + instanceId + "_" + definition.id,
+                typeof(RectTransform),
+                typeof(Image),
+                typeof(Button),
+                typeof(LayoutElement));
+            cardObject.transform.SetParent(_handRoot, false);
+
+            Image image = cardObject.GetComponent<Image>();
+            image.sprite = sprite;
+            image.color = sprite != null ? Color.white : new Color(0.16f, 0.08f, 0.08f, 1f);
+            image.preserveAspect = true;
+            image.raycastTarget = true;
+
+            // 59:91 card ratio, sized to fit the existing hand strip.
+            LayoutElement layout = cardObject.GetComponent<LayoutElement>();
+            layout.preferredWidth = 130f;
+            layout.minWidth = 130f;
+            layout.preferredHeight = 200f;
+            layout.minHeight = 200f;
+
+            Button button = cardObject.GetComponent<Button>();
+            button.targetGraphic = image;
+            Sprite capturedSprite = sprite;
+            if (capturedSprite != null)
+                button.onClick.AddListener(() => ShowZoom(capturedSprite));
+
+            _handCards.Add(cardObject);
+        }
+
+        if (_handCards.Count == 0)
+            CreateHandMessage("Aucune carte affichable");
+    }
+
+    private void CreateHandMessage(string message)
+    {
+        GameObject messageObject = new GameObject("HandMessage", typeof(RectTransform), typeof(Text), typeof(LayoutElement));
+        messageObject.transform.SetParent(_handRoot, false);
+
+        Text text = messageObject.GetComponent<Text>();
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.fontSize = 18;
+        text.alignment = TextAnchor.MiddleCenter;
+        text.color = Color.white;
+        text.raycastTarget = false;
+        text.text = message;
+
+        LayoutElement layout = messageObject.GetComponent<LayoutElement>();
+        layout.preferredWidth = 260f;
+        layout.minWidth = 260f;
+        _handCards.Add(messageObject);
     }
 
     private void BuildKingdomSupply()
