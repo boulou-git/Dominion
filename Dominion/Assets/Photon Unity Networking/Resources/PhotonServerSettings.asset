@@ -46,6 +46,8 @@ MonoBehaviour:
   - SetupRealmCards
   - StartTurn
   - StartNewTurn
+  - RpcRequestFinishTurn
+  - RpcRequestAdvancePhase
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 0

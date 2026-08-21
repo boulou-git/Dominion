@@ -8,7 +8,7 @@
       "name": "Cave",
       "cost": 2,
       "types": ["Action"],
-      "image": "",
+      "image": "cave.png",
       "text": "+1 Action\n\nDéfaussez autant de cartes que vous le souhaitez, puis piochez autant de cartes."
     },
     {
@@ -16,7 +16,7 @@
       "name": "Chapelle",
       "cost": 2,
       "types": ["Action"],
-      "image": "",
+      "image": "chapelle.png",
       "text": "Écartez jusqu’à 4 cartes de votre main."
     },
     {
@@ -24,7 +24,7 @@
       "name": "Douves",
       "cost": 2,
       "types": ["Action", "Réaction"],
-      "image": "",
+      "image": "douves.png",
       "text": "+2 Cartes\n\n———\n\nLorsqu’un autre joueur joue une carte Attaque, vous pouvez d’abord révéler cette carte de votre main pour ne pas être affecté par cette Attaque."
     },
     {
@@ -32,7 +32,7 @@
       "name": "Messagère",
       "cost": 3,
       "types": ["Action"],
-      "image": "",
+      "image": "messagere.png",
       "text": "+1 Carte\n+1 Action\n\nRegardez dans votre défausse. Vous pouvez placer une carte de votre défausse sur votre pioche."
     },
     {
@@ -40,7 +40,7 @@
       "name": "Marchande",
       "cost": 3,
       "types": ["Action"],
-      "image": "",
+      "image": "marchande.png",
       "text": "+1 Carte\n+1 Action\n\nLa première fois que vous jouez un Argent pendant ce tour, +1 🪙."
     },
     {
@@ -48,7 +48,7 @@
       "name": "Vassal",
       "cost": 3,
       "types": ["Action"],
-      "image": "",
+      "image": "vassal.png",
       "text": "+2 🪙\n\nDéfaussez la première carte de votre pioche. Si c’est une carte Action, vous pouvez la jouer."
     },
     {
@@ -56,7 +56,7 @@
       "name": "Village",
       "cost": 3,
       "types": ["Action"],
-      "image": "",
+      "image": "village.png",
       "text": "+1 Carte\n+2 Actions"
     },
     {
@@ -64,7 +64,7 @@
       "name": "Atelier",
       "cost": 3,
       "types": ["Action"],
-      "image": "",
+      "image": "atelier.png",
       "text": "Recevez une carte coûtant jusqu’à 4 🪙."
     },
     {
@@ -72,7 +72,7 @@
       "name": "Bureaucrate",
       "cost": 4,
       "types": ["Action", "Attaque"],
-      "image": "",
+      "image": "bureaucrate.png",
       "text": "Recevez un Argent et placez-le sur votre pioche.\n\nChaque autre joueur révèle une carte Victoire de sa main et la place sur sa pioche (ou révèle une main ne contenant aucune carte Victoire)."
     },
     {
@@ -80,7 +80,7 @@
       "name": "Jardins",
       "cost": 4,
       "types": ["Victoire"],
-      "image": "",
+      "image": "jardins.png",
       "text": "Vaut 1 VP par tranche de 10 cartes dans votre deck (arrondi à l’entier inférieur)."
     },
     {
@@ -88,15 +88,15 @@
       "name": "Milice",
       "cost": 4,
       "types": ["Action", "Attaque"],
-      "image": "",
+      "image": "milice.png",
       "text": "+2 🪙\n\nChaque autre joueur se défausse jusqu’à n’avoir plus que 3 cartes en main."
     },
     {
-      "id": "preteur_sur_gages",
-      "name": "Prêteur sur gages",
+      "id": "preteur_sur_gage",
+      "name": "Prêteur sur gage",
       "cost": 4,
       "types": ["Action"],
-      "image": "",
+      "image": "preteur_sur_gage.png",
       "text": "Vous pouvez écarter un Cuivre de votre main. Dans ce cas, +3 🪙."
     },
     {
@@ -104,7 +104,7 @@
       "name": "Braconnière",
       "cost": 4,
       "types": ["Action"],
-      "image": "",
+      "image": "braconniere.png",
       "text": "+1 Carte\n+1 Action\n+1 🪙\n\nDéfaussez une carte par pile vide de la Réserve."
     },
     {
@@ -112,7 +112,7 @@
       "name": "Rénovation",
       "cost": 4,
       "types": ["Action"],
-      "image": "",
+      "image": "renovation.png",
       "text": "Écartez une carte de votre main.\n\nRecevez une carte coûtant jusqu’à 2 🪙 de plus que la carte écartée."
     },
     {
@@ -120,7 +120,7 @@
       "name": "Forge",
       "cost": 4,
       "types": ["Action"],
-      "image": "",
+      "image": "forge.png",
       "text": "+3 Cartes"
     },
     {
@@ -128,7 +128,7 @@
       "name": "Salle du trône",
       "cost": 4,
       "types": ["Action"],
-      "image": "",
+      "image": "salle_du_trone.png",
       "text": "Vous pouvez jouer deux fois une carte Action de votre main."
     },
     {
@@ -136,7 +136,7 @@
       "name": "Brigand",
       "cost": 5,
       "types": ["Action", "Attaque"],
-      "image": "",
+      "image": "brigand.png",
       "text": "Recevez un Or.\n\nChaque autre joueur révèle les 2 premières cartes de sa pioche, écarte une carte Trésor révélée autre qu’un Cuivre et défausse les autres cartes révélées."
     },
     {
@@ -144,7 +144,7 @@
       "name": "Salle du conseil",
       "cost": 5,
       "types": ["Action"],
-      "image": "",
+      "image": "salle_du_conseil.png",
       "text": "+4 Cartes\n+1 Achat\n\nChaque autre joueur pioche une carte."
     },
     {
@@ -152,7 +152,7 @@
       "name": "Festival",
       "cost": 5,
       "types": ["Action"],
-      "image": "",
+      "image": "festival.png",
       "text": "+2 Actions\n+1 Achat\n+2 🪙"
     },
     {
@@ -160,7 +160,7 @@
       "name": "Laboratoire",
       "cost": 5,
       "types": ["Action"],
-      "image": "",
+      "image": "laboratoire.png",
       "text": "+2 Cartes\n+1 Action"
     },
     {
@@ -168,7 +168,7 @@
       "name": "Bibliothèque",
       "cost": 5,
       "types": ["Action"],
-      "image": "",
+      "image": "bibliotheque.png",
       "text": "Piochez jusqu’à avoir 7 cartes en main.\n\nVous pouvez ignorer les cartes Action que vous piochez. Mettez-les de côté et défaussez-les ensuite."
     },
     {
@@ -176,7 +176,7 @@
       "name": "Marché",
       "cost": 5,
       "types": ["Action"],
-      "image": "",
+      "image": "marche.png",
       "text": "+1 Carte\n+1 Action\n+1 Achat\n+1 🪙"
     },
     {
@@ -184,15 +184,15 @@
       "name": "Mine",
       "cost": 5,
       "types": ["Action"],
-      "image": "",
+      "image": "mine.png",
       "text": "Vous pouvez écarter une carte Trésor de votre main.\n\nRecevez dans votre main une carte Trésor coûtant jusqu’à 3 🪙 de plus que la carte écartée."
     },
     {
-      "id": "garde",
-      "name": "Garde",
+      "id": "soldat",
+      "name": "Soldat",
       "cost": 5,
       "types": ["Action"],
-      "image": "",
+      "image": "soldat.png",
       "text": "+1 Carte\n+1 Action\n\nRegardez les 2 premières cartes de votre pioche.\n\nÉcartez et/ou défaussez autant de ces cartes que vous le souhaitez. Replacez les autres sur votre pioche dans l’ordre de votre choix."
     },
     {
@@ -200,7 +200,7 @@
       "name": "Sorcière",
       "cost": 5,
       "types": ["Action", "Attaque"],
-      "image": "",
+      "image": "sorciere.png",
       "text": "+2 Cartes\n\nChaque autre joueur reçoit une Malédiction."
     },
     {
@@ -208,7 +208,7 @@
       "name": "Artisane",
       "cost": 6,
       "types": ["Action"],
-      "image": "",
+      "image": "artisane.png",
       "text": "Recevez dans votre main une carte coûtant jusqu’à 5 🪙.\n\nPlacez une carte de votre main sur votre pioche."
     }
   ]
