@@ -33,7 +33,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     [SerializeField] private RectTransform _revealCardsRoot;
     [SerializeField] private Text _revealStatus;
     [SerializeField] private Button _startButton;
-    [SerializeField] private CardSelectionTileView _revealCardPrefab;
+    [SerializeField] private CardSelectionTileView _revealCardPrefab; // Legacy reference; reveal rendering no longer depends on it.
 
     private readonly List<GameObject> _spawnedExtensions = new List<GameObject>();
     private readonly List<GameObject> _spawnedCards = new List<GameObject>();
@@ -267,10 +267,12 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private void RebuildReveal()
     {
         Clear(_spawnedRevealCards);
-        if (_revealCardsRoot == null || _revealCardPrefab == null)
+        if (_revealCardsRoot == null)
             return;
 
         int resolved = 0;
+        int visualsLoaded = 0;
+
         if (_config.kingdomCardIds != null)
         {
             foreach (string cardRef in _config.kingdomCardIds)
@@ -278,22 +280,85 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
                 ExtensionPackageData extension;
                 ExtensionCardData card;
                 if (!RoomGameSetup.TryResolveCard(cardRef, out extension, out card))
+                {
+                    Debug.LogWarning("Reveal could not resolve Kingdom card reference: " + cardRef);
                     continue;
+                }
 
-                CardSelectionTileView tile = Instantiate(_revealCardPrefab, _revealCardsRoot);
-                tile.Bind(extension, card, true, false, null);
-                _spawnedRevealCards.Add(tile.gameObject);
+                bool artworkLoaded;
+                GameObject tile = CreateRevealCard(extension, card, out artworkLoaded);
+                tile.transform.SetParent(_revealCardsRoot, false);
+                _spawnedRevealCards.Add(tile);
                 resolved++;
+                if (artworkLoaded)
+                    visualsLoaded++;
             }
         }
 
         bool host = PhotonNetwork.IsMasterClient;
         if (_startButton != null)
             _startButton.gameObject.SetActive(host);
+
         if (_revealStatus != null)
+        {
+            string visualStatus = visualsLoaded == resolved
+                ? resolved + "/10 cartes"
+                : resolved + "/10 cartes — " + visualsLoaded + " visuels chargés";
+
             _revealStatus.text = host
-                ? resolved + "/10 cartes — vérifiez le Royaume puis démarrez la partie."
-                : resolved + "/10 cartes — en attente du démarrage par l’hôte.";
+                ? visualStatus + " — vérifiez le Royaume puis démarrez la partie."
+                : visualStatus + " — en attente du démarrage par l’hôte.";
+        }
+    }
+
+    private static GameObject CreateRevealCard(ExtensionPackageData extension, ExtensionCardData card, out bool artworkLoaded)
+    {
+        GameObject root = new GameObject(
+            string.IsNullOrEmpty(card.id) ? "RevealCard" : "RevealCard_" + card.id,
+            typeof(RectTransform),
+            typeof(Image));
+
+        Image image = root.GetComponent<Image>();
+        Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, card);
+        artworkLoaded = sprite != null;
+
+        image.sprite = sprite;
+        image.preserveAspect = true;
+        image.raycastTarget = false;
+        image.color = sprite != null ? Color.white : new Color(0.11f, 0.11f, 0.11f, 1f);
+
+        if (sprite != null)
+            return root;
+
+        GameObject fallbackObject = new GameObject("MissingArtwork", typeof(RectTransform), typeof(Text));
+        fallbackObject.transform.SetParent(root.transform, false);
+        RectTransform fallbackRect = fallbackObject.GetComponent<RectTransform>();
+        fallbackRect.anchorMin = Vector2.zero;
+        fallbackRect.anchorMax = Vector2.one;
+        fallbackRect.offsetMin = new Vector2(8f, 8f);
+        fallbackRect.offsetMax = new Vector2(-8f, -8f);
+
+        Text fallback = fallbackObject.GetComponent<Text>();
+        fallback.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        fallback.alignment = TextAnchor.MiddleCenter;
+        fallback.fontSize = 17;
+        fallback.color = new Color(0.92f, 0.72f, 0.55f, 1f);
+        fallback.raycastTarget = false;
+        fallback.text = (string.IsNullOrEmpty(card.name) ? card.id : card.name)
+            + "\n\nIMAGE MANQUANTE\nimages/"
+            + card.id
+            + ".png";
+
+        Debug.LogWarning(
+            "No reveal artwork found for "
+            + (extension != null ? extension.id : "?")
+            + ":"
+            + card.id
+            + " (name: "
+            + card.name
+            + ").");
+
+        return root;
     }
 
     private void SetExtensionEnabled(string extensionId, bool enabled)
