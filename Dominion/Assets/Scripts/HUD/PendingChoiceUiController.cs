@@ -19,7 +19,6 @@ public sealed class PendingChoiceUiController : MonoBehaviour
     private Text _counterText;
     private Button _finishButton;
     private RectTransform _handRoot;
-    private string _lastChoiceId;
 
     private void Awake()
     {
@@ -32,6 +31,9 @@ public sealed class PendingChoiceUiController : MonoBehaviour
     private void OnDestroy()
     {
         NetworkGameState.StateChanged -= Refresh;
+        if (_finishButton != null)
+            _finishButton.onClick.RemoveListener(ResolveChoice);
+        ClearChoiceBindings();
     }
 
     private void ResolveUi()
@@ -80,6 +82,8 @@ public sealed class PendingChoiceUiController : MonoBehaviour
         Image buttonImage = buttonObject.GetComponent<Image>();
         buttonImage.color = new Color(0.38f, 0.30f, 0.14f, 1f);
         _finishButton = buttonObject.GetComponent<Button>();
+        _finishButton.onClick.AddListener(ResolveChoice);
+
         Text buttonText = CreateText(buttonObject.transform, "Text", "TERMINER", 16, FontStyle.Bold);
         buttonText.alignment = TextAnchor.MiddleCenter;
         SetAnchors(buttonText.rectTransform, Vector2.zero, Vector2.one);
@@ -95,16 +99,19 @@ public sealed class PendingChoiceUiController : MonoBehaviour
         PendingChoiceSnapshot choice = state != null ? state.PendingChoice : null;
         bool mine = choice != null && choice.IsFor(NetworkGameState.LocalPlayerId);
         if (_popup != null)
+        {
             _popup.SetActive(mine);
+            if (mine)
+                _popup.transform.SetAsLastSibling();
+        }
 
         if (!mine)
         {
-            _lastChoiceId = null;
+            ClearChoiceBindings();
             RestoreHandVisuals();
             return;
         }
 
-        _lastChoiceId = choice.ChoiceId;
         if (_promptText != null)
             _promptText.text = string.IsNullOrWhiteSpace(choice.Prompt) ? "Choisissez une carte." : choice.Prompt;
 
@@ -143,6 +150,24 @@ public sealed class PendingChoiceUiController : MonoBehaviour
             HandGameplayInteraction gameplay = card.GetComponent<HandGameplayInteraction>();
             if (gameplay != null)
                 gameplay.SetPlayable(false);
+
+            PendingChoiceCardBinding choiceBinding = card.GetComponent<PendingChoiceCardBinding>();
+            if (choiceBinding == null)
+                choiceBinding = card.gameObject.AddComponent<PendingChoiceCardBinding>();
+            choiceBinding.Bind(motion.InstanceId, isValid, ToggleCard);
+        }
+    }
+
+    private void ClearChoiceBindings()
+    {
+        if (_handRoot == null)
+            return;
+
+        for (int i = 0; i < _handRoot.childCount; i++)
+        {
+            PendingChoiceCardBinding binding = _handRoot.GetChild(i).GetComponent<PendingChoiceCardBinding>();
+            if (binding != null)
+                binding.Clear();
         }
     }
 
@@ -157,6 +182,18 @@ public sealed class PendingChoiceUiController : MonoBehaviour
             if (image != null)
                 image.color = NormalCardColor;
         }
+    }
+
+    private void ToggleCard(int instanceId)
+    {
+        if (PlayersTurnsHandler.Instance != null)
+            PlayersTurnsHandler.Instance.TogglePendingChoiceCard(instanceId);
+    }
+
+    private void ResolveChoice()
+    {
+        if (PlayersTurnsHandler.Instance != null)
+            PlayersTurnsHandler.Instance.ResolvePendingChoice();
     }
 
     private static Text CreateText(Transform parent, string name, string value, int size, FontStyle style)
