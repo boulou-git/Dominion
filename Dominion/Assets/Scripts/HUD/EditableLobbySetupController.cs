@@ -41,6 +41,10 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     private GameSetupConfig _config;
     private string _viewedExtensionId;
+    private bool _lastInRoom;
+    private bool _lastHost;
+    private string _lastStage;
+    private float _nextPhotonStateCheck;
 
     private void Awake()
     {
@@ -52,6 +56,40 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             _validateButton.onClick.AddListener(ValidateSelection);
         if (_startButton != null)
             _startButton.onClick.AddListener(StartGame);
+
+        CapturePhotonState();
+        RefreshAll();
+    }
+
+    private void Update()
+    {
+        // This prefab can be instantiated after Photon already fired OnJoinedRoom.
+        // Poll only the tiny connection/authority state so a late-created lobby still
+        // switches from Waiting to HostSelection as soon as Photon is ready.
+        if (Time.unscaledTime < _nextPhotonStateCheck)
+            return;
+
+        _nextPhotonStateCheck = Time.unscaledTime + 0.20f;
+
+        bool inRoom = PhotonNetwork.InRoom;
+        bool host = inRoom && PhotonNetwork.IsMasterClient;
+        string stage = _config != null ? _config.stage : null;
+
+        if (inRoom == _lastInRoom && host == _lastHost && string.Equals(stage, _lastStage, StringComparison.Ordinal))
+            return;
+
+        _lastInRoom = inRoom;
+        _lastHost = host;
+        _lastStage = stage;
+
+        if (inRoom)
+        {
+            _config = RoomGameSetup.ReadCurrent();
+            PickInitialExtension();
+
+            if (host && PhotonNetwork.CurrentRoom != null && !PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(RoomGameSetup.RoomPropertyKey))
+                RoomGameSetup.Publish(_config);
+        }
 
         RefreshAll();
     }
@@ -70,12 +108,21 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         if (PhotonNetwork.IsMasterClient && PhotonNetwork.CurrentRoom != null && !PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(RoomGameSetup.RoomPropertyKey))
             RoomGameSetup.Publish(_config);
 
+        CapturePhotonState();
+        RefreshAll();
+    }
+
+    public override void OnLeftRoom()
+    {
+        _config = RoomGameSetup.ReadCurrent();
+        CapturePhotonState();
         RefreshAll();
     }
 
     public override void OnMasterClientSwitched(Player newMasterClient)
     {
         _config = RoomGameSetup.ReadCurrent();
+        CapturePhotonState();
         RefreshAll();
     }
 
@@ -85,7 +132,15 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             return;
 
         _config = RoomGameSetup.ReadCurrent();
+        CapturePhotonState();
         RefreshAll();
+    }
+
+    private void CapturePhotonState()
+    {
+        _lastInRoom = PhotonNetwork.InRoom;
+        _lastHost = _lastInRoom && PhotonNetwork.IsMasterClient;
+        _lastStage = _config != null ? _config.stage : null;
     }
 
     private void RefreshAll()
