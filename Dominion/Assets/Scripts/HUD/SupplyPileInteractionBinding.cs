@@ -1,10 +1,11 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
 /// Small reusable runtime binding for one Reserve pile: quantity, buy highlight,
-/// left-click purchase and right-click inspection.
+/// left-click purchase, right-click inspection and purchase feedback animation.
 /// </summary>
 public sealed class SupplyPileInteractionBinding : MonoBehaviour
 {
@@ -17,6 +18,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     private Action<string> _buyRequested;
     private Action<Sprite> _inspectRequested;
     private bool _buyable;
+    private bool _purchaseAnimationRunning;
 
     public string DefinitionId => _definitionId;
 
@@ -81,13 +83,87 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     {
         _buyable = buyable;
         if (_outline != null)
-            _outline.enabled = buyable;
+            _outline.enabled = buyable && !_purchaseAnimationRunning;
     }
 
     private void OnPrimaryAction()
     {
-        if (_buyable && !string.IsNullOrEmpty(_definitionId))
-            _buyRequested?.Invoke(_definitionId);
+        if (!_buyable || _purchaseAnimationRunning || string.IsNullOrEmpty(_definitionId))
+            return;
+
+        // The gameplay command remains authoritative. This coroutine only gives immediate
+        // visual feedback and never mutates the hand, discard or Reserve itself.
+        if (_sprite != null)
+            StartCoroutine(PurchaseAnimationRoutine());
+
+        _buyRequested?.Invoke(_definitionId);
+    }
+
+    private IEnumerator PurchaseAnimationRoutine()
+    {
+        _purchaseAnimationRunning = true;
+        if (_outline != null)
+            _outline.enabled = false;
+
+        RectTransform source = transform as RectTransform;
+        RectTransform discard = FindDeepChild(transform.root, "Discard") as RectTransform;
+        Canvas canvas = GetComponentInParent<Canvas>();
+
+        if (source == null || discard == null || canvas == null || _sprite == null)
+        {
+            _purchaseAnimationRunning = false;
+            if (_outline != null)
+                _outline.enabled = _buyable;
+            yield break;
+        }
+
+        GameObject flyingObject = new GameObject(
+            "PurchasedCardAnimation_" + _definitionId.Replace(':', '_'),
+            typeof(RectTransform),
+            typeof(Image));
+        flyingObject.transform.SetParent(canvas.transform, false);
+        flyingObject.transform.SetAsLastSibling();
+
+        RectTransform flying = flyingObject.GetComponent<RectTransform>();
+        Vector2 sourceSize = source.rect.size;
+        if (sourceSize.x <= 1f || sourceSize.y <= 1f)
+            sourceSize = new Vector2(96f, 148f);
+        flying.sizeDelta = sourceSize;
+        flying.pivot = new Vector2(0.5f, 0.5f);
+
+        Image flyingImage = flyingObject.GetComponent<Image>();
+        flyingImage.sprite = _sprite;
+        flyingImage.preserveAspect = true;
+        flyingImage.raycastTarget = false;
+        flyingImage.color = Color.white;
+
+        Vector3 startWorld = source.TransformPoint(source.rect.center);
+        Vector3 targetWorld = discard.TransformPoint(discard.rect.center);
+        flying.position = startWorld;
+
+        const float duration = 0.34f;
+        float elapsed = 0f;
+        while (elapsed < duration && flying != null)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = 1f - Mathf.Pow(1f - t, 3f);
+
+            Vector3 position = Vector3.Lerp(startWorld, targetWorld, eased);
+            // A very small arc keeps the movement readable without making it flashy.
+            position.y += Mathf.Sin(t * Mathf.PI) * 24f;
+            flying.position = position;
+            flying.localScale = Vector3.Lerp(Vector3.one, Vector3.one * 0.58f, eased);
+
+            yield return null;
+        }
+
+        if (flyingObject != null)
+            Destroy(flyingObject);
+
+        _purchaseAnimationRunning = false;
+        if (_outline != null)
+            _outline.enabled = _buyable;
     }
 
     private void OnInspect()
@@ -148,5 +224,24 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
         outline.effectDistance = new Vector2(1f, -1f);
         return text;
+    }
+
+    private static Transform FindDeepChild(Transform parent, string childName)
+    {
+        if (parent == null)
+            return null;
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform child = parent.GetChild(i);
+            if (string.Equals(child.name, childName, StringComparison.Ordinal))
+                return child;
+
+            Transform nested = FindDeepChild(child, childName);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
     }
 }
