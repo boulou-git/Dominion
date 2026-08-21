@@ -15,11 +15,22 @@ using Hashtable = ExitGames.Client.Photon.Hashtable;
 public static class NetworkGameState
 {
     private const string StatePropertyKey = "dominion.gameState.v1";
+
     private const string CopperDefinitionId = "base:cuivre";
+    private const string SilverDefinitionId = "base:argent";
+    private const string GoldDefinitionId = "base:or";
     private const string EstateDefinitionId = "base:domaine";
+    private const string DuchyDefinitionId = "base:duche";
+    private const string ProvinceDefinitionId = "base:province";
+    private const string CurseDefinitionId = "base:malediction";
+
     private const int StartingCopperCount = 7;
     private const int StartingEstateCount = 3;
     private const int StartingHandSize = 5;
+
+    private const int TotalCopperCount = 60;
+    private const int SilverSupplyCount = 40;
+    private const int GoldSupplyCount = 30;
 
     public const string ActionPhase = "Action";
     public const string BuyPhase = "Buy";
@@ -74,6 +85,21 @@ public static class NetworkGameState
         return state.CardInstances.Find(card => card != null && card.InstanceId == instanceId);
     }
 
+    public static SupplyPileSnapshot FindSupplyPile(string definitionId)
+    {
+        return FindSupplyPile(_state, definitionId);
+    }
+
+    public static SupplyPileSnapshot FindSupplyPile(GameStateSnapshot state, string definitionId)
+    {
+        if (state == null || state.SupplyPiles == null || string.IsNullOrEmpty(definitionId))
+            return null;
+
+        return state.SupplyPiles.Find(pile =>
+            pile != null &&
+            string.Equals(pile.DefinitionId, definitionId, StringComparison.OrdinalIgnoreCase));
+    }
+
     public static bool HydrateFromRoom(bool force = false)
     {
         if (!PhotonNetwork.InRoom || PhotonNetwork.CurrentRoom == null)
@@ -100,9 +126,9 @@ public static class NetworkGameState
     }
 
     /// <summary>
-    /// Creates the first authoritative snapshot for a match. Starter decks and opening
-    /// hands are generated here once, before the Game scene opens, so reconnecting never
-    /// recreates or redraws a player's deck.
+    /// Creates the first authoritative snapshot for a match. Starter decks, the base
+    /// Reserve and opening hands are generated here once, before the Game scene opens,
+    /// so reconnecting never recreates or redraws them.
     /// </summary>
     public static bool InitialiseAuthoritativeState()
     {
@@ -147,6 +173,7 @@ public static class NetworkGameState
             });
         }
 
+        CreateBaseSupply(state, roomPlayers.Count);
         CreateStarterDecksAndOpeningHands(state);
         UpdatePauseState(state);
 
@@ -297,6 +324,45 @@ public static class NetworkGameState
             return false;
 
         return AdvanceToNextPlayer(Clone(_state));
+    }
+
+    private static void CreateBaseSupply(GameStateSnapshot state, int playerCount)
+    {
+        if (state == null)
+            return;
+
+        if (state.SupplyPiles == null)
+            state.SupplyPiles = new List<SupplyPileSnapshot>();
+        else
+            state.SupplyPiles.Clear();
+
+        int players = Math.Max(1, playerCount);
+        int victoryPileSize = GetVictoryPileSize(players);
+
+        AddSupplyPile(state, CopperDefinitionId, Math.Max(0, TotalCopperCount - (StartingCopperCount * players)));
+        AddSupplyPile(state, SilverDefinitionId, SilverSupplyCount);
+        AddSupplyPile(state, GoldDefinitionId, GoldSupplyCount);
+        AddSupplyPile(state, EstateDefinitionId, victoryPileSize);
+        AddSupplyPile(state, DuchyDefinitionId, victoryPileSize);
+        AddSupplyPile(state, ProvinceDefinitionId, victoryPileSize);
+        AddSupplyPile(state, CurseDefinitionId, Math.Max(0, 10 * (players - 1)));
+    }
+
+    private static int GetVictoryPileSize(int playerCount)
+    {
+        if (playerCount <= 2)
+            return 8;
+        if (playerCount <= 4)
+            return 12;
+
+        // Supports the project's larger Photon rooms while preserving the standard
+        // 5-player/6-player progression of three Victory cards per player.
+        return playerCount * 3;
+    }
+
+    private static void AddSupplyPile(GameStateSnapshot state, string definitionId, int remainingCount)
+    {
+        state.SupplyPiles.Add(new SupplyPileSnapshot(definitionId, Math.Max(0, remainingCount)));
     }
 
     private static void CreateStarterDecksAndOpeningHands(GameStateSnapshot state)
@@ -486,6 +552,8 @@ public static class NetworkGameState
 
         if (state.CardInstances == null)
             state.CardInstances = new List<CardInstance>();
+        if (state.SupplyPiles == null)
+            state.SupplyPiles = new List<SupplyPileSnapshot>();
         if (state.NextCardInstanceId < 1)
             state.NextCardInstanceId = state.CardInstances.Count > 0
                 ? state.CardInstances.Max(card => card != null ? card.InstanceId : 0) + 1
