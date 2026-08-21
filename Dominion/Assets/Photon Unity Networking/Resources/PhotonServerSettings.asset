@@ -48,6 +48,8 @@ MonoBehaviour:
   - StartNewTurn
   - RpcRequestFinishTurn
   - RpcRequestAdvancePhase
+  - RpcRequestBuyCard
+  - RpcRequestPlayTreasure
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 0
