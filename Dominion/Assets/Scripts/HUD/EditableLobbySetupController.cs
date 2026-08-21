@@ -67,8 +67,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     private void Update()
     {
-        // The editable prefab can appear before or after Photon's room callbacks.
-        // Poll only the small state needed to keep the correct screen visible.
         if (Time.unscaledTime < _nextPhotonStateCheck)
             return;
 
@@ -273,9 +271,10 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     {
         Clear(_spawnedRevealCards);
 
-        if (_revealCardsRoot == null || _cardTilePrefab == null)
+        RectTransform revealRoot = ResolveRevealCardsRoot();
+        if (revealRoot == null || _cardTilePrefab == null)
         {
-            Debug.LogError("Reveal UI is missing its cards root or CardSelectionTile prefab reference.");
+            Debug.LogError("Reveal UI is missing its card grid or CardSelectionTile prefab reference.");
             return;
         }
 
@@ -293,9 +292,9 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
                     continue;
                 }
 
-                // Reuse the exact same card prefab and artwork binding that already works
-                // in the host-selection screen. Display-only mode hides the checkbox.
-                CardSelectionTileView tile = Instantiate(_cardTilePrefab, _revealCardsRoot);
+                // Same prefab, same loader, same binding as the selection screen.
+                // toggle == null puts the tile in display-only mode and hides its checkbox.
+                CardSelectionTileView tile = Instantiate(_cardTilePrefab, revealRoot);
                 tile.Bind(extension, card, true, false, null);
                 _spawnedRevealCards.Add(tile.gameObject);
                 shown++;
@@ -313,6 +312,21 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
                 ? shown + "/10 cartes — démarrez la partie quand vous êtes prêt."
                 : shown + "/10 cartes — en attente de l’hôte.";
         }
+    }
+
+    private RectTransform ResolveRevealCardsRoot()
+    {
+        if (_revealCardsRoot != null)
+            return _revealCardsRoot;
+
+        if (_revealScreen == null)
+            return null;
+
+        GridLayoutGroup grid = _revealScreen.GetComponentInChildren<GridLayoutGroup>(true);
+        if (grid != null)
+            _revealCardsRoot = grid.transform as RectTransform;
+
+        return _revealCardsRoot;
     }
 
     private void SetExtensionEnabled(string extensionId, bool enabled)
