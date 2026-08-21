@@ -54,22 +54,21 @@ public static class EditableGameBootstrap
         if (root == null)
             return;
 
-        // Base piles are built first so the gameplay decorator can immediately bind
-        // quantities, inspection and purchasing to every visible Reserve pile.
         if (root.GetComponent<BaseSupplyController>() == null)
             root.AddComponent<BaseSupplyController>();
 
-        // Decorate the existing Pioche panel with the shared card back. The GameState
-        // remains authoritative for the actual deck contents and count.
         if (root.GetComponent<DeckPileVisualController>() == null)
             root.AddComponent<DeckPileVisualController>();
 
-        // Older/local GameScreen prefabs still give BaseSupply a HorizontalLayoutGroup.
-        // BuyPhaseGameplayController expects a grid, so remove that legacy layout first.
         RemoveLegacyBaseSupplyLayout(root.transform);
 
         if (root.GetComponent<BuyPhaseGameplayController>() == null)
             root.AddComponent<BuyPhaseGameplayController>();
+
+        // One generic popup/availability controller for all future blocking effects
+        // (discard, trash, gain, reveal, choose-one, attack reactions, etc.).
+        if (root.GetComponent<PendingChoiceUiController>() == null)
+            root.AddComponent<PendingChoiceUiController>();
 
         ConfigureFixedReserveLayout(root.transform);
     }
@@ -85,12 +84,6 @@ public static class EditableGameBootstrap
             UnityEngine.Object.DestroyImmediate(legacyLayout);
     }
 
-    /// <summary>
-    /// Displays the whole Reserve at once instead of scrolling it:
-    /// left = 7 base piles, right = 10 Kingdom piles.
-    /// Base uses a deliberate empty fourth slot on row one so the order is:
-    /// Cuivre / Argent / Or, then Domaine / Duché / Province / Malédiction.
-    /// </summary>
     private static void ConfigureFixedReserveLayout(Transform root)
     {
         Transform supplyPanel = FindDeepChild(root, "SupplyPanel");
@@ -102,8 +95,6 @@ public static class EditableGameBootstrap
         if (supplyPanel == null || baseSupply == null || kingdomSupply == null)
             return;
 
-        // BuyPhaseGameplayController currently creates a runtime ScrollRect first.
-        // Move the useful children back to SupplyPanel, then remove the empty scroll shell.
         if (baseLabel != null)
             baseLabel.SetParent(supplyPanel, false);
         baseSupply.SetParent(supplyPanel, false);
@@ -119,13 +110,11 @@ public static class EditableGameBootstrap
             UnityEngine.Object.Destroy(scrollViewport.gameObject);
         }
 
-        // Left side: base cards.
         SetAnchors(baseLabel as RectTransform, new Vector2(0.025f, 0.80f), new Vector2(0.39f, 0.88f));
         SetAnchors(baseSupply, new Vector2(0.025f, 0.055f), new Vector2(0.39f, 0.79f));
         ConfigureGrid(baseSupply, 4, new Vector2(82f, 127f), TextAnchor.UpperLeft);
         EnsureBaseFirstRowGap(baseSupply);
 
-        // Right side: the ten Kingdom cards in a clean 5 x 2 grid.
         SetAnchors(kingdomLabel as RectTransform, new Vector2(0.41f, 0.80f), new Vector2(0.975f, 0.88f));
         SetAnchors(kingdomSupply, new Vector2(0.41f, 0.055f), new Vector2(0.975f, 0.79f));
         ConfigureGrid(kingdomSupply, 5, new Vector2(82f, 127f), TextAnchor.UpperLeft);
@@ -178,8 +167,6 @@ public static class EditableGameBootstrap
             gap = gapObject.transform;
         }
 
-        // C / A / O / [vide]
-        // D / Du / P / M
         gap.SetSiblingIndex(Mathf.Min(3, baseSupply.childCount - 1));
     }
 
