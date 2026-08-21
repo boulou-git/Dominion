@@ -1,0 +1,299 @@
+using System;
+using System.Collections.Generic;
+using Photon.Pun;
+using Photon.Realtime;
+using UnityEngine;
+using UnityEngine.UI;
+using Hashtable = ExitGames.Client.Photon.Hashtable;
+
+/// <summary>
+/// Data/network controller for the editable Unity lobby prefab.
+/// All layout and styling live in prefabs; this component only binds extension data and Photon state.
+/// </summary>
+public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
+{
+    [Header("Screens")]
+    [SerializeField] private GameObject _hostSelectionScreen;
+    [SerializeField] private GameObject _waitingScreen;
+    [SerializeField] private GameObject _revealScreen;
+
+    [Header("Host selection")]
+    [SerializeField] private RectTransform _extensionsRoot;
+    [SerializeField] private RectTransform _cardsRoot;
+    [SerializeField] private Text _cardsTitle;
+    [SerializeField] private Text _selectionSummary;
+    [SerializeField] private Button _validateButton;
+    [SerializeField] private ExtensionTileView _extensionTilePrefab;
+    [SerializeField] private CardSelectionTileView _cardTilePrefab;
+
+    [Header("Waiting")]
+    [SerializeField] private Text _waitingText;
+
+    [Header("Reveal")]
+    [SerializeField] private RectTransform _revealCardsRoot;
+    [SerializeField] private Text _revealStatus;
+    [SerializeField] private Button _startButton;
+    [SerializeField] private CardSelectionTileView _revealCardPrefab;
+
+    private readonly List<GameObject> _spawnedExtensions = new List<GameObject>();
+    private readonly List<GameObject> _spawnedCards = new List<GameObject>();
+    private readonly List<GameObject> _spawnedRevealCards = new List<GameObject>();
+
+    private GameSetupConfig _config;
+    private string _viewedExtensionId;
+
+    private void Awake()
+    {
+        ExtensionCatalog.Reload();
+        _config = RoomGameSetup.ReadCurrent();
+        PickInitialExtension();
+
+        if (_validateButton != null)
+            _validateButton.onClick.AddListener(ValidateSelection);
+        if (_startButton != null)
+            _startButton.onClick.AddListener(StartGame);
+
+        RefreshAll();
+    }
+
+    private void OnDestroy()
+    {
+        ExtensionVisualLoader.ClearCache();
+    }
+
+    public override void OnJoinedRoom()
+    {
+        ExtensionCatalog.Reload();
+        _config = RoomGameSetup.ReadCurrent();
+        PickInitialExtension();
+
+        if (PhotonNetwork.IsMasterClient && PhotonNetwork.CurrentRoom != null && !PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(RoomGameSetup.RoomPropertyKey))
+            RoomGameSetup.Publish(_config);
+
+        RefreshAll();
+    }
+
+    public override void OnMasterClientSwitched(Player newMasterClient)
+    {
+        _config = RoomGameSetup.ReadCurrent();
+        RefreshAll();
+    }
+
+    public override void OnRoomPropertiesUpdate(Hashtable propertiesThatChanged)
+    {
+        if (propertiesThatChanged == null || !propertiesThatChanged.ContainsKey(RoomGameSetup.RoomPropertyKey))
+            return;
+
+        _config = RoomGameSetup.ReadCurrent();
+        RefreshAll();
+    }
+
+    private void RefreshAll()
+    {
+        if (_config == null)
+            _config = RoomGameSetup.ReadCurrent();
+
+        bool reveal = string.Equals(_config.stage, RoomGameSetup.RevealStage, StringComparison.Ordinal);
+        bool host = PhotonNetwork.InRoom && PhotonNetwork.IsMasterClient;
+
+        SetActive(_hostSelectionScreen, !reveal && host);
+        SetActive(_waitingScreen, !reveal && !host);
+        SetActive(_revealScreen, reveal);
+
+        if (reveal)
+        {
+            RebuildReveal();
+            return;
+        }
+
+        if (!host)
+        {
+            if (_waitingText != null)
+                _waitingText.text = "En attente de l’hôte…\n\nL’hôte choisit les extensions et prépare les 10 cartes Royaume.";
+            return;
+        }
+
+        RebuildExtensions();
+        RebuildCards();
+        RefreshSummary();
+    }
+
+    private void RebuildExtensions()
+    {
+        Clear(_spawnedExtensions);
+        if (_extensionsRoot == null || _extensionTilePrefab == null)
+            return;
+
+        foreach (ExtensionPackageData extension in ExtensionCatalog.All)
+        {
+            if (extension == null)
+                continue;
+
+            ExtensionSetupSelection selection = RoomGameSetup.FindExtension(_config, extension.id);
+            bool enabled = selection != null && selection.enabled;
+            ExtensionTileView tile = Instantiate(_extensionTilePrefab, _extensionsRoot);
+            string extensionId = extension.id;
+            tile.Bind(extension, enabled,
+                () =>
+                {
+                    _viewedExtensionId = extensionId;
+                    RebuildCards();
+                },
+                value => SetExtensionEnabled(extensionId, value));
+            _spawnedExtensions.Add(tile.gameObject);
+        }
+    }
+
+    private void RebuildCards()
+    {
+        Clear(_spawnedCards);
+        if (_cardsRoot == null || _cardTilePrefab == null)
+            return;
+
+        ExtensionPackageData extension = ExtensionCatalog.Find(_viewedExtensionId);
+        ExtensionSetupSelection selection = RoomGameSetup.FindExtension(_config, _viewedExtensionId);
+        if (extension == null || selection == null)
+            return;
+
+        if (_cardsTitle != null)
+            _cardsTitle.text = string.IsNullOrEmpty(extension.name) ? extension.id : extension.name;
+
+        bool extensionEnabled = selection.enabled;
+        if (extension.cards == null)
+            return;
+
+        foreach (ExtensionCardData card in extension.cards)
+        {
+            if (card == null || string.IsNullOrEmpty(card.id))
+                continue;
+
+            bool storedSelected = selection.selectedCardIds != null && selection.selectedCardIds.Contains(card.id);
+            bool effectiveSelected = extensionEnabled && storedSelected;
+            string cardId = card.id;
+
+            CardSelectionTileView tile = Instantiate(_cardTilePrefab, _cardsRoot);
+            tile.Bind(extension, card, effectiveSelected, extensionEnabled,
+                value => SetCardSelected(extension.id, cardId, value));
+            _spawnedCards.Add(tile.gameObject);
+        }
+    }
+
+    private void RefreshSummary()
+    {
+        int selected = RoomGameSetup.CountSelectedCards(_config);
+        if (_selectionSummary != null)
+            _selectionSummary.text = selected + " cartes dans le pool — 10 seront tirées pour la partie.";
+        if (_validateButton != null)
+            _validateButton.interactable = selected >= RoomGameSetup.KingdomCardCount;
+    }
+
+    private void RebuildReveal()
+    {
+        Clear(_spawnedRevealCards);
+        if (_revealCardsRoot == null || _revealCardPrefab == null)
+            return;
+
+        int resolved = 0;
+        if (_config.kingdomCardIds != null)
+        {
+            foreach (string cardRef in _config.kingdomCardIds)
+            {
+                ExtensionPackageData extension;
+                ExtensionCardData card;
+                if (!RoomGameSetup.TryResolveCard(cardRef, out extension, out card))
+                    continue;
+
+                CardSelectionTileView tile = Instantiate(_revealCardPrefab, _revealCardsRoot);
+                tile.Bind(extension, card, true, false, null);
+                _spawnedRevealCards.Add(tile.gameObject);
+                resolved++;
+            }
+        }
+
+        bool host = PhotonNetwork.InRoom && PhotonNetwork.IsMasterClient;
+        if (_startButton != null)
+            _startButton.gameObject.SetActive(host);
+        if (_revealStatus != null)
+            _revealStatus.text = host
+                ? resolved + "/10 cartes — vérifiez le Royaume puis démarrez la partie."
+                : resolved + "/10 cartes — en attente du démarrage par l’hôte.";
+    }
+
+    private void SetExtensionEnabled(string extensionId, bool enabled)
+    {
+        if (!PhotonNetwork.IsMasterClient)
+            return;
+
+        ExtensionSetupSelection selection = RoomGameSetup.FindExtension(_config, extensionId);
+        if (selection == null)
+            return;
+
+        selection.enabled = enabled;
+        RoomGameSetup.Publish(_config);
+        RefreshAll();
+    }
+
+    private void SetCardSelected(string extensionId, string cardId, bool selected)
+    {
+        if (!PhotonNetwork.IsMasterClient)
+            return;
+
+        ExtensionSetupSelection extension = RoomGameSetup.FindExtension(_config, extensionId);
+        if (extension == null)
+            return;
+
+        if (extension.selectedCardIds == null)
+            extension.selectedCardIds = new List<string>();
+
+        if (selected)
+        {
+            if (!extension.selectedCardIds.Contains(cardId))
+                extension.selectedCardIds.Add(cardId);
+        }
+        else
+        {
+            extension.selectedCardIds.Remove(cardId);
+        }
+
+        RoomGameSetup.Publish(_config);
+        RebuildCards();
+        RefreshSummary();
+    }
+
+    private void ValidateSelection()
+    {
+        if (PhotonNetwork.IsMasterClient)
+            RoomGameSetup.FinaliseKingdom(_config);
+    }
+
+    private void StartGame()
+    {
+        if (PhotonNetwork.IsMasterClient && RoomConnectionHandler.Instance != null)
+            RoomConnectionHandler.Instance.StartGameMaster();
+    }
+
+    private void PickInitialExtension()
+    {
+        if (!string.IsNullOrEmpty(_viewedExtensionId) && ExtensionCatalog.Find(_viewedExtensionId) != null)
+            return;
+
+        if (ExtensionCatalog.All.Count > 0)
+            _viewedExtensionId = ExtensionCatalog.All[0].id;
+    }
+
+    private static void SetActive(GameObject target, bool active)
+    {
+        if (target != null)
+            target.SetActive(active);
+    }
+
+    private static void Clear(List<GameObject> objects)
+    {
+        foreach (GameObject item in objects)
+        {
+            if (item != null)
+                Destroy(item);
+        }
+        objects.Clear();
+    }
+}
