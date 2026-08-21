@@ -85,11 +85,14 @@ public sealed class GameLayoutController : MonoBehaviour
     private Text _logText;
     private Button _nextPhaseButton;
     private Text _nextPhaseButtonText;
+    private Toggle _autoFollowToggle;
     private GameObject _overlay;
     private Text _overlayTitle;
     private Text _overlayContent;
 
     private string _viewedPlayerId;
+    private string _lastActivePlayerId;
+    private bool _autoFollowActivePlayer = true;
 
     private static readonly Color Background = new Color(0.075f, 0.075f, 0.075f, 1f);
     private static readonly Color Panel = new Color(0.13f, 0.13f, 0.13f, 1f);
@@ -150,6 +153,17 @@ public sealed class GameLayoutController : MonoBehaviour
         globalsLayout.childControlWidth = false;
         globalsLayout.childControlHeight = true;
         globalsLayout.childForceExpandWidth = false;
+
+        _autoFollowToggle = CreateToggle("Suivre le tour", globals, 165f, true, value =>
+        {
+            _autoFollowActivePlayer = value;
+            if (value && NetworkGameState.State != null)
+            {
+                _viewedPlayerId = NetworkGameState.State.ActivePlayerId;
+                _lastActivePlayerId = NetworkGameState.State.ActivePlayerId;
+                Refresh(NetworkGameState.State);
+            }
+        });
 
         CreateButton("Réserve", globals, 125f, () => ShowGlobalOverlay("Réserve", "Les piles de la Réserve seront affichées ici."));
         CreateButton("Écartées", globals, 125f, () => ShowGlobalOverlay("Cartes écartées", "Zone globale commune à tous les joueurs."));
@@ -279,6 +293,15 @@ public sealed class GameLayoutController : MonoBehaviour
 
     private void Refresh(GameStateSnapshot state)
     {
+        if (state != null && state.Players != null && state.Players.Count > 0)
+        {
+            bool activePlayerChanged = !string.Equals(_lastActivePlayerId, state.ActivePlayerId, StringComparison.Ordinal);
+            if (_autoFollowActivePlayer && activePlayerChanged && !string.IsNullOrEmpty(state.ActivePlayerId))
+                _viewedPlayerId = state.ActivePlayerId;
+
+            _lastActivePlayerId = state.ActivePlayerId;
+        }
+
         RebuildPlayerTabs(state);
 
         if (state == null || state.Players == null || state.Players.Count == 0)
@@ -560,6 +583,35 @@ public sealed class GameLayoutController : MonoBehaviour
         Text text = CreateText("Label", rect, label, 18, TextAnchor.MiddleCenter);
         Stretch(text.rectTransform, 6f);
         return button;
+    }
+
+    private static Toggle CreateToggle(string label, RectTransform parent, float preferredWidth, bool initialValue, Action<bool> onChanged)
+    {
+        GameObject root = new GameObject(label + "Toggle", typeof(RectTransform), typeof(LayoutElement), typeof(Toggle));
+        RectTransform rootRect = root.GetComponent<RectTransform>();
+        rootRect.SetParent(parent, false);
+
+        LayoutElement layout = root.GetComponent<LayoutElement>();
+        layout.preferredWidth = preferredWidth;
+        layout.minWidth = preferredWidth;
+
+        RectTransform box = CreatePanel("Box", rootRect, new Vector2(0f, 0.24f), new Vector2(0.22f, 0.76f), ButtonColor);
+        RectTransform check = CreatePanel("Check", box, new Vector2(0.18f, 0.18f), new Vector2(0.82f, 0.82f), Color.white);
+
+        Text text = CreateText("Label", rootRect, label, 16, TextAnchor.MiddleLeft);
+        text.rectTransform.anchorMin = new Vector2(0.27f, 0f);
+        text.rectTransform.anchorMax = Vector2.one;
+        text.rectTransform.offsetMin = Vector2.zero;
+        text.rectTransform.offsetMax = Vector2.zero;
+
+        Toggle toggle = root.GetComponent<Toggle>();
+        toggle.targetGraphic = box.GetComponent<Image>();
+        toggle.graphic = check.GetComponent<Image>();
+        toggle.isOn = initialValue;
+        if (onChanged != null)
+            toggle.onValueChanged.AddListener(value => onChanged(value));
+
+        return toggle;
     }
 
     private static void AddImage(GameObject go, Color color)
