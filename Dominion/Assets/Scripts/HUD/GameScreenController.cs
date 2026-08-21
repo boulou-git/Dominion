@@ -46,6 +46,8 @@ public sealed class GameScreenController : MonoBehaviour
     private readonly List<GameObject> _playerPills = new List<GameObject>();
     private readonly List<GameObject> _kingdomCards = new List<GameObject>();
     private readonly List<GameObject> _handCards = new List<GameObject>();
+    private readonly List<int> _localHandOrder = new List<int>();
+    private readonly List<int> _renderedHandIds = new List<int>();
     private bool _kingdomBuilt;
 
     private static readonly Color Panel = new Color(0.11f, 0.105f, 0.095f, 1f);
@@ -84,7 +86,8 @@ public sealed class GameScreenController : MonoBehaviour
 
         if (state == null || state.Players == null || state.Players.Count == 0)
         {
-            Clear(_handCards);
+            // Do not destroy an already rendered hand during a transient Photon hydrate.
+            // The Game scene will disappear naturally when the player actually leaves the room.
             if (_turnText != null) _turnText.text = "En attente de la partie";
             if (_boardTitle != null) _boardTitle.text = "PLATEAU";
             if (_phaseText != null) _phaseText.text = "PHASE  —";
@@ -124,7 +127,7 @@ public sealed class GameScreenController : MonoBehaviour
             if (_handCountText != null) _handCountText.text = "Main  " + SafeCount(counters.Hand);
         }
 
-        RebuildLocalHand(state, localPlayer);
+        RefreshLocalHand(state, localPlayer);
 
         bool localTurn = state.ActivePlayerId == NetworkGameState.LocalPlayerId;
         if (_nextPhaseButton != null)
@@ -187,22 +190,74 @@ public sealed class GameScreenController : MonoBehaviour
     }
 
     /// <summary>
-    /// Renders only the local player's Hand zone. Other players expose their hand count
-    /// through the game state, never their card faces through this UI.
+    /// Keeps the same card GameObjects alive while the authoritative hand contents are
+    /// unchanged. This prevents Photon state refreshes from visually deleting/recreating
+    /// the hand and also preserves the player's local drag ordering.
     /// </summary>
-    private void RebuildLocalHand(GameStateSnapshot state, PlayerStateSnapshot localPlayer)
+    private void RefreshLocalHand(GameStateSnapshot state, PlayerStateSnapshot localPlayer)
     {
-        Clear(_handCards);
-        if (_handRoot == null)
+        if (_handRoot == null || localPlayer == null)
             return;
 
-        if (localPlayer == null || localPlayer.Hand == null || localPlayer.Hand.Count == 0)
+        SynchroniseLocalHandOrder(localPlayer.Hand);
+
+        if (RenderedHandMatchesLocalOrder())
+            return;
+
+        RebuildLocalHand(state);
+    }
+
+    private void SynchroniseLocalHandOrder(List<int> authoritativeHand)
+    {
+        if (authoritativeHand == null)
+            authoritativeHand = new List<int>();
+
+        for (int i = _localHandOrder.Count - 1; i >= 0; i--)
+        {
+            if (!authoritativeHand.Contains(_localHandOrder[i]))
+                _localHandOrder.RemoveAt(i);
+        }
+
+        foreach (int instanceId in authoritativeHand)
+        {
+            if (!_localHandOrder.Contains(instanceId))
+                _localHandOrder.Add(instanceId);
+        }
+    }
+
+    private bool RenderedHandMatchesLocalOrder()
+    {
+        if (_localHandOrder.Count == 0)
+        {
+            return _handCards.Count == 1 &&
+                   _handCards[0] != null &&
+                   _handCards[0].name == "HandMessage";
+        }
+
+        if (_handCards.Count != _localHandOrder.Count || _renderedHandIds.Count != _localHandOrder.Count)
+            return false;
+
+        for (int i = 0; i < _localHandOrder.Count; i++)
+        {
+            if (_handCards[i] == null || _renderedHandIds[i] != _localHandOrder[i])
+                return false;
+        }
+
+        return true;
+    }
+
+    private void RebuildLocalHand(GameStateSnapshot state)
+    {
+        Clear(_handCards);
+        _renderedHandIds.Clear();
+
+        if (_localHandOrder.Count == 0)
         {
             CreateHandMessage("Main vide");
             return;
         }
 
-        foreach (int instanceId in localPlayer.Hand)
+        foreach (int instanceId in _localHandOrder)
         {
             CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
             if (instance == null || string.IsNullOrEmpty(instance.DefinitionId))
@@ -224,8 +279,8 @@ public sealed class GameScreenController : MonoBehaviour
                 "Hand_" + instanceId + "_" + definition.id,
                 typeof(RectTransform),
                 typeof(Image),
-                typeof(Button),
-                typeof(LayoutElement));
+                typeof(LayoutElement),
+                typeof(CardPointerInteraction));
             cardObject.transform.SetParent(_handRoot, false);
 
             Image image = cardObject.GetComponent<Image>();
@@ -234,24 +289,61 @@ public sealed class GameScreenController : MonoBehaviour
             image.preserveAspect = true;
             image.raycastTarget = true;
 
-            // 59:91 card ratio, sized to fit the existing hand strip.
             LayoutElement layout = cardObject.GetComponent<LayoutElement>();
             layout.preferredWidth = 130f;
             layout.minWidth = 130f;
             layout.preferredHeight = 200f;
             layout.minHeight = 200f;
+            layout.flexibleWidth = 0f;
+            layout.flexibleHeight = 0f;
 
-            Button button = cardObject.GetComponent<Button>();
-            button.targetGraphic = image;
+            // Hand convention: right click = inspect. Left click is intentionally left free
+            // for contextual play later; holding left and moving is handled by HandCardMotion.
+            CardPointerInteraction pointer = cardObject.GetComponent<CardPointerInteraction>();
+            pointer.InspectOnLongPress = false;
             Sprite capturedSprite = sprite;
             if (capturedSprite != null)
-                button.onClick.AddListener(() => ShowZoom(capturedSprite));
+                pointer.InspectRequested += () => ShowZoom(capturedSprite);
+
+            HandCardMotion motion = cardObject.AddComponent<HandCardMotion>();
+            motion.BindInstance(instanceId, HandleHandOrderChanged);
 
             _handCards.Add(cardObject);
+            _renderedHandIds.Add(instanceId);
         }
 
         if (_handCards.Count == 0)
             CreateHandMessage("Aucune carte affichable");
+    }
+
+    private void HandleHandOrderChanged()
+    {
+        if (_handRoot == null)
+            return;
+
+        List<int> order = new List<int>();
+        for (int i = 0; i < _handRoot.childCount; i++)
+        {
+            HandCardMotion motion = _handRoot.GetChild(i).GetComponent<HandCardMotion>();
+            if (motion != null && motion.InstanceId > 0)
+                order.Add(motion.InstanceId);
+        }
+
+        if (order.Count == 0)
+            return;
+
+        _localHandOrder.Clear();
+        _localHandOrder.AddRange(order);
+        _renderedHandIds.Clear();
+        _renderedHandIds.AddRange(order);
+
+        // Keep the tracked GameObject list in the same order as the visible hand.
+        _handCards.Sort((left, right) =>
+        {
+            if (left == null || right == null)
+                return 0;
+            return left.transform.GetSiblingIndex().CompareTo(right.transform.GetSiblingIndex());
+        });
     }
 
     private void CreateHandMessage(string message)
@@ -292,7 +384,12 @@ public sealed class GameScreenController : MonoBehaviour
                 continue;
 
             Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, card);
-            GameObject cardObject = new GameObject("Supply_" + card.id, typeof(RectTransform), typeof(Image), typeof(Button));
+            GameObject cardObject = new GameObject(
+                "Supply_" + card.id,
+                typeof(RectTransform),
+                typeof(Image),
+                typeof(Button),
+                typeof(CardPointerInteraction));
             cardObject.transform.SetParent(_kingdomSupplyRoot, false);
 
             Image image = cardObject.GetComponent<Image>();
@@ -306,6 +403,10 @@ public sealed class GameScreenController : MonoBehaviour
             Sprite captured = sprite;
             if (captured != null)
                 button.onClick.AddListener(() => ShowZoom(captured));
+
+            CardPointerInteraction pointer = cardObject.GetComponent<CardPointerInteraction>();
+            if (captured != null)
+                pointer.InspectRequested += () => ShowZoom(captured);
 
             _kingdomCards.Add(cardObject);
         }
