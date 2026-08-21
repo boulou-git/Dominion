@@ -33,6 +33,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
     private bool _tryingToRejoin;
     private bool _resumeAttemptedThisConnection;
+    private bool _joinAfterFailedRejoin;
     private string _lastRoomName;
     private bool _gameSceneTransitionInProgress;
     private bool _lobbySceneTransitionInProgress;
@@ -76,7 +77,30 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
             return;
         }
 
+        if (PhotonNetwork.InRoom)
+            return;
+
+        // In the Editor, stopping Play Mode often leaves the same UserId inactive
+        // in the room for PlayerTtl. Rejoin that slot first instead of issuing a normal
+        // JoinOrCreate, which Photon rejects with error 32749.
+        string rememberedRoom = PlayerPrefs.GetString(LastRoomPrefKey, string.Empty);
+        if (string.Equals(rememberedRoom, RoomName, StringComparison.Ordinal))
+        {
+            _lastRoomName = rememberedRoom;
+            _tryingToRejoin = true;
+            _joinAfterFailedRejoin = true;
+            Debug.Log($"Trying to rejoin inactive player slot in '{RoomName}' before normal join.");
+            PhotonNetwork.RejoinRoom(RoomName);
+            return;
+        }
+
+        JoinOrCreateLobbyRoom();
+    }
+
+    private void JoinOrCreateLobbyRoom()
+    {
         _tryingToRejoin = false;
+        _joinAfterFailedRejoin = false;
         PhotonNetwork.JoinOrCreateRoom(RoomName, RoomOptions, TypedLobby);
     }
 
@@ -109,6 +133,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         _lastRoomName = PhotonNetwork.CurrentRoom.Name;
         SaveLastRoom(_lastRoomName);
         _tryingToRejoin = false;
+        _joinAfterFailedRejoin = false;
         _resumeAttemptedThisConnection = true;
 
         bool hasGameState = NetworkGameState.HydrateFromRoom(true);
@@ -135,6 +160,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
             return;
 
         _tryingToRejoin = true;
+        _joinAfterFailedRejoin = false;
         _resumeAttemptedThisConnection = false;
 
         if (!PhotonNetwork.ReconnectAndRejoin())
@@ -154,6 +180,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
         _resumeAttemptedThisConnection = true;
         _tryingToRejoin = true;
+        _joinAfterFailedRejoin = false;
         Debug.Log($"Trying to resume previous room '{_lastRoomName}'.");
         PhotonNetwork.RejoinRoom(_lastRoomName);
     }
@@ -162,16 +189,36 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
     {
         if (!_tryingToRejoin)
         {
+            // Defensive fallback for the exact Photon case where a normal join encounters
+            // our still-inactive UserId. Retry as a rejoin instead of making the user wait.
+            if (returnCode == 32749 && PhotonNetwork.IsConnectedAndReady)
+            {
+                _tryingToRejoin = true;
+                _joinAfterFailedRejoin = false;
+                Debug.LogWarning("Normal join found an inactive local UserId. Retrying as RejoinRoom.");
+                PhotonNetwork.RejoinRoom(RoomName);
+                return;
+            }
+
             Debug.LogError($"Could not join room: {returnCode} - {message}");
             return;
         }
 
         Debug.LogWarning($"Previous match could not be resumed: {returnCode} - {message}");
+
+        bool shouldJoinFreshLobby = _joinAfterFailedRejoin;
         _tryingToRejoin = false;
+        _joinAfterFailedRejoin = false;
         _lastRoomName = null;
         ClearLastRoom();
         NetworkGameState.ResetLocalState();
         EnsureLobbySceneLoaded();
+
+        if (shouldJoinFreshLobby && PhotonNetwork.IsConnectedAndReady)
+        {
+            Debug.Log("No inactive slot could be resumed. Joining/creating a fresh Dominion lobby.");
+            JoinOrCreateLobbyRoom();
+        }
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
@@ -221,6 +268,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
     {
         _lastRoomName = null;
         _tryingToRejoin = false;
+        _joinAfterFailedRejoin = false;
         _resumeAttemptedThisConnection = true;
         ClearLastRoom();
         NetworkGameState.ResetLocalState();
