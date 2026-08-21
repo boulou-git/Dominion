@@ -8,7 +8,7 @@ using Hashtable = ExitGames.Client.Photon.Hashtable;
 /// <summary>
 /// Persistent Photon session manager.
 /// Handles connection, stable player identity, room lifetime, reconnect/rejoin,
-/// Master Client migration and game/lobby scene recovery.
+/// Master Client migration and safe additive scene transitions.
 /// </summary>
 public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 {
@@ -16,6 +16,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
     private const string RoomName = "Dominion";
     private const string PlayerIdPrefKey = "Dominion.PlayerId";
+    private const string LastRoomPrefKey = "Dominion.LastRoom";
     private const string GameStartedPropertyKey = "dominion.gameStarted";
 
     private static readonly TypedLobby TypedLobby = new TypedLobby("Lobby", LobbyType.Default);
@@ -26,22 +27,28 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         IsVisible = true,
         IsOpen = true,
 
-        // Keep an inactive player's actor in the room long enough to recover from
-        // a transient internet loss or application hiccup.
-        PlayerTtl = 60_000,
+        // Five minutes gives a player enough time to relaunch the executable after
+        // an internet loss/crash and reclaim the same Photon player slot.
+        PlayerTtl = 300_000,
 
-        // Keep the room alive briefly even if every client disconnects at once.
-        EmptyRoomTtl = 60_000,
+        // Keep the room alive for the same period if everybody temporarily drops.
+        EmptyRoomTtl = 300_000,
 
-        // Makes Player.UserId available to the other clients. We use it as the
-        // stable game identity instead of NickName or ActorNumber.
+        // Player.UserId is our stable game identity.
         PublishUserId = true
     };
 
     private bool _tryingToRejoin;
+    private bool _resumeAttemptedThisConnection;
     private string _lastRoomName;
 
+    // Prevents two Photon callbacks from loading the same additive scene before
+    // Unity has completed the first async scene operation.
+    private bool _gameSceneTransitionInProgress;
+    private bool _lobbySceneTransitionInProgress;
+
     public string LocalPlayerId { get; private set; }
+    public bool IsTryingToRejoin => _tryingToRejoin;
 
     private void Awake()
     {
@@ -57,6 +64,8 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         LocalPlayerId = LoadOrCreatePlayerId();
         PhotonNetwork.AuthValues = new AuthenticationValues(LocalPlayerId);
         PhotonNetwork.AutomaticallySyncScene = false;
+
+        _lastRoomName = PlayerPrefs.GetString(LastRoomPrefKey, string.Empty);
 
         EnsureLobbySceneLoaded();
 
@@ -77,6 +86,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
             return;
         }
 
+        _tryingToRejoin = false;
         PhotonNetwork.JoinOrCreateRoom(RoomName, RoomOptions, TypedLobby);
     }
 
@@ -98,22 +108,29 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         PhotonNetwork.CurrentRoom.IsOpen = false;
         PhotonNetwork.CurrentRoom.IsVisible = false;
 
+        // This room property is the single source of truth that tells every client
+        // to load Game. Do NOT also send an RPC for scene loading: two concurrent
+        // additive loads create duplicate scene PhotonView IDs.
         Hashtable roomProperties = new Hashtable
         {
             { GameStartedPropertyKey, true }
         };
         PhotonNetwork.CurrentRoom.SetCustomProperties(roomProperties);
-
-        PhotonView.Get(this).RPC(nameof(StartGameClients), RpcTarget.AllViaServer);
     }
 
     public override void OnJoinedRoom()
     {
         _lastRoomName = PhotonNetwork.CurrentRoom.Name;
+        SaveLastRoom(_lastRoomName);
         _tryingToRejoin = false;
+        _resumeAttemptedThisConnection = true;
 
         bool hasGameState = NetworkGameState.HydrateFromRoom(true);
         bool gameStarted = IsGameStartedInRoom() || (hasGameState && NetworkGameState.IsStarted);
+
+        Debug.Log(gameStarted
+            ? $"Joined/resumed match '{_lastRoomName}'."
+            : $"Joined lobby '{_lastRoomName}'.");
 
         if (gameStarted)
             EnsureGameSceneLoaded();
@@ -125,30 +142,53 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
     {
         Debug.LogWarning($"Photon disconnected: {cause}");
 
-        // Keep Unity game state and scenes alive. ReconnectAndRejoin will restore the
-        // same room actor while PlayerTtl is still valid.
+        // Keep Unity scenes and the local snapshot alive. The room GameState will pause
+        // the match for the remaining players when Photon marks us inactive.
+        if (string.IsNullOrEmpty(_lastRoomName))
+            _lastRoomName = PlayerPrefs.GetString(LastRoomPrefKey, string.Empty);
+
         if (string.IsNullOrEmpty(_lastRoomName))
             return;
 
         _tryingToRejoin = true;
+        _resumeAttemptedThisConnection = false;
 
+        // Fast path: Photon can often reconnect and reclaim the inactive actor directly.
         if (!PhotonNetwork.ReconnectAndRejoin())
             PhotonNetwork.Reconnect();
     }
 
     public override void OnConnectedToMaster()
     {
-        if (!_tryingToRejoin || string.IsNullOrEmpty(_lastRoomName))
+        if (_resumeAttemptedThisConnection)
             return;
 
+        if (string.IsNullOrEmpty(_lastRoomName))
+            _lastRoomName = PlayerPrefs.GetString(LastRoomPrefKey, string.Empty);
+
+        if (string.IsNullOrEmpty(_lastRoomName))
+            return;
+
+        // This also covers a complete application restart. The stable Photon UserId and
+        // PlayerTtl allow RejoinRoom to reclaim the previous inactive player slot.
+        _resumeAttemptedThisConnection = true;
+        _tryingToRejoin = true;
+        Debug.Log($"Trying to resume previous room '{_lastRoomName}'.");
         PhotonNetwork.RejoinRoom(_lastRoomName);
     }
 
     public override void OnJoinRoomFailed(short returnCode, string message)
     {
-        Debug.LogError($"Could not rejoin room '{_lastRoomName}': {returnCode} - {message}");
+        if (!_tryingToRejoin)
+        {
+            Debug.LogError($"Could not join room: {returnCode} - {message}");
+            return;
+        }
+
+        Debug.LogWarning($"Previous match could not be resumed: {returnCode} - {message}");
         _tryingToRejoin = false;
         _lastRoomName = null;
+        ClearLastRoom();
         NetworkGameState.ResetLocalState();
         EnsureLobbySceneLoaded();
     }
@@ -159,6 +199,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
             return;
 
         NetworkGameState.SetPlayerConnectivity(newPlayer, true);
+        LogPauseState();
     }
 
     public override void OnPlayerLeftRoom(Player otherPlayer)
@@ -167,6 +208,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
             return;
 
         NetworkGameState.SetPlayerConnectivity(otherPlayer, false);
+        LogPauseState();
     }
 
     public override void OnMasterClientSwitched(Player newMasterClient)
@@ -177,12 +219,18 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
             return;
 
         if (NetworkGameState.HandleMasterMigration())
+        {
             Debug.Log($"Host migration complete. Authority epoch: {NetworkGameState.AuthorityEpoch}.");
+            LogPauseState();
+        }
     }
 
     public override void OnRoomPropertiesUpdate(Hashtable propertiesThatChanged)
     {
-        NetworkGameState.ApplyRoomProperties(propertiesThatChanged);
+        bool stateChanged = NetworkGameState.ApplyRoomProperties(propertiesThatChanged);
+
+        if (stateChanged)
+            LogPauseState();
 
         if (IsGameStartedInRoom())
             EnsureGameSceneLoaded();
@@ -190,17 +238,25 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
     public override void OnLeftRoom()
     {
+        // OnLeftRoom represents an explicit/definitive room leave. A transport disconnect
+        // goes through OnDisconnected instead, so its resume token is preserved.
         _lastRoomName = null;
         _tryingToRejoin = false;
+        _resumeAttemptedThisConnection = true;
+        ClearLastRoom();
         NetworkGameState.ResetLocalState();
         EnsureLobbySceneLoaded();
     }
 
-    [PunRPC]
-    private void StartGameClients()
+    private void LogPauseState()
     {
-        NetworkGameState.HydrateFromRoom(true);
-        EnsureGameSceneLoaded();
+        if (NetworkGameState.State == null || !NetworkGameState.IsStarted)
+            return;
+
+        if (NetworkGameState.IsPaused)
+            Debug.LogWarning("Dominion match paused: at least one player is disconnected.");
+        else
+            Debug.Log("All players are connected. Dominion match resumed.");
     }
 
     private bool IsGameStartedInRoom()
@@ -227,21 +283,70 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         return id;
     }
 
-    private static void EnsureLobbySceneLoaded()
+    private static void SaveLastRoom(string roomName)
     {
-        if (!SceneManager.GetSceneByName("Lobby").isLoaded)
-            SceneManager.LoadScene("Lobby", LoadSceneMode.Additive);
+        if (string.IsNullOrEmpty(roomName))
+            return;
 
-        if (SceneManager.GetSceneByName("Game").isLoaded)
-            SceneManager.UnloadSceneAsync("Game");
+        PlayerPrefs.SetString(LastRoomPrefKey, roomName);
+        PlayerPrefs.Save();
     }
 
-    private static void EnsureGameSceneLoaded()
+    private static void ClearLastRoom()
     {
-        if (!SceneManager.GetSceneByName("Game").isLoaded)
-            SceneManager.LoadScene("Game", LoadSceneMode.Additive);
+        PlayerPrefs.DeleteKey(LastRoomPrefKey);
+        PlayerPrefs.Save();
+    }
 
-        if (SceneManager.GetSceneByName("Lobby").isLoaded)
-            SceneManager.UnloadSceneAsync("Lobby");
+    private void EnsureLobbySceneLoaded()
+    {
+        if (_lobbySceneTransitionInProgress)
+            return;
+
+        if (!SceneManager.GetSceneByName("Lobby").isLoaded)
+        {
+            _lobbySceneTransitionInProgress = true;
+            AsyncOperation load = SceneManager.LoadSceneAsync("Lobby", LoadSceneMode.Additive);
+            if (load != null)
+                load.completed += delegate { _lobbySceneTransitionInProgress = false; };
+            else
+                _lobbySceneTransitionInProgress = false;
+        }
+
+        if (SceneManager.GetSceneByName("Game").isLoaded && !_gameSceneTransitionInProgress)
+        {
+            _gameSceneTransitionInProgress = true;
+            AsyncOperation unload = SceneManager.UnloadSceneAsync("Game");
+            if (unload != null)
+                unload.completed += delegate { _gameSceneTransitionInProgress = false; };
+            else
+                _gameSceneTransitionInProgress = false;
+        }
+    }
+
+    private void EnsureGameSceneLoaded()
+    {
+        if (_gameSceneTransitionInProgress)
+            return;
+
+        if (!SceneManager.GetSceneByName("Game").isLoaded)
+        {
+            _gameSceneTransitionInProgress = true;
+            AsyncOperation load = SceneManager.LoadSceneAsync("Game", LoadSceneMode.Additive);
+            if (load != null)
+                load.completed += delegate { _gameSceneTransitionInProgress = false; };
+            else
+                _gameSceneTransitionInProgress = false;
+        }
+
+        if (SceneManager.GetSceneByName("Lobby").isLoaded && !_lobbySceneTransitionInProgress)
+        {
+            _lobbySceneTransitionInProgress = true;
+            AsyncOperation unload = SceneManager.UnloadSceneAsync("Lobby");
+            if (unload != null)
+                unload.completed += delegate { _lobbySceneTransitionInProgress = false; };
+            else
+                _lobbySceneTransitionInProgress = false;
+        }
     }
 }
