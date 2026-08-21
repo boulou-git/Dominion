@@ -383,10 +383,10 @@ public static class NetworkGameState
         player.Buys--;
         CreateOwnedCardInDiscard(next, player, definitionId);
 
-        // Requested convenience for the current Buy-only milestone: when no Treasure
-        // remains in hand and no buying power remains, cleanup starts automatically.
+        // Keep Cleanup as a short visible/interactable stage so the local UI can animate
+        // the hand and played cards into the discard pile before the authoritative draw.
         if (player.Coins <= 0 && !HandContainsTreasure(next, player))
-            PerformCleanupAndAdvance(next);
+            next.Phase = CleanupPhase;
 
         return CommitState(next);
     }
@@ -490,12 +490,12 @@ public static class NetworkGameState
         if (current == null)
             return;
 
-        // Played cards go down first. Hand is discarded right-to-left so the visually
-        // leftmost card is the final card added and therefore remains on top.
         foreach (int instanceId in current.InPlay)
             current.Discard.Add(instanceId);
         current.InPlay.Clear();
 
+        // Right-to-left ensures the card visually furthest left is appended last and
+        // therefore remains the visible top card of the discard pile.
         for (int i = current.Hand.Count - 1; i >= 0; i--)
             current.Discard.Add(current.Hand[i]);
         current.Hand.Clear();
