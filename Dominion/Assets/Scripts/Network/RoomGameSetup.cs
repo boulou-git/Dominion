@@ -97,8 +97,6 @@ public static class RoomGameSetup
             return false;
         }
 
-        // Fisher-Yates shuffle on the host. The chosen result is then persisted in room state,
-        // so every client sees exactly the same ten cards.
         System.Random random = new System.Random(unchecked(Environment.TickCount * 397 ^ PhotonNetwork.CurrentRoom.Name.GetHashCode()));
         for (int i = pool.Count - 1; i > 0; i--)
         {
@@ -152,6 +150,11 @@ public static class RoomGameSetup
         return (extensionId ?? string.Empty) + ":" + (cardId ?? string.Empty);
     }
 
+    /// <summary>
+    /// Resolves any qualified card reference belonging to an extension. This includes
+    /// both Kingdom cards and base/shared cards. Only extension.cards are ever used to
+    /// build the random Kingdom pool, so resolving base cards here cannot affect setup.
+    /// </summary>
     public static bool TryResolveCard(string cardRef, out ExtensionPackageData extension, out ExtensionCardData card)
     {
         extension = null;
@@ -166,10 +169,10 @@ public static class RoomGameSetup
         string extensionId = cardRef.Substring(0, separator);
         string cardId = cardRef.Substring(separator + 1);
         extension = ExtensionCatalog.Find(extensionId);
-        if (extension == null || extension.cards == null)
+        if (extension == null)
             return false;
 
-        card = extension.cards.Find(item => item != null && string.Equals(item.id, cardId, StringComparison.OrdinalIgnoreCase));
+        card = ExtensionCatalog.FindCard(extension, cardId);
         return card != null;
     }
 
@@ -211,6 +214,7 @@ public static class RoomGameSetup
             enabled = string.Equals(extension.id, "base", StringComparison.OrdinalIgnoreCase)
         };
 
+        // Deliberately Kingdom cards only. baseCards never appear in this list.
         if (extension.cards != null)
         {
             foreach (ExtensionCardData card in extension.cards)
