@@ -6,10 +6,6 @@ using Photon.Realtime;
 using UnityEngine;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 
-/// <summary>
-/// Replicated Dominion game state stored in Photon room custom properties.
-/// The Master Client is the only writer, but every client keeps the latest snapshot.
-/// </summary>
 public static class NetworkGameState
 {
     private const string StatePropertyKey = "dominion.gameState.v1";
@@ -25,7 +21,6 @@ public static class NetworkGameState
     private const int StartingCopperCount = 7;
     private const int StartingEstateCount = 3;
     private const int StartingHandSize = 5;
-
     private const int TotalCopperCount = 60;
     private const int SilverSupplyCount = 40;
     private const int GoldSupplyCount = 30;
@@ -64,10 +59,8 @@ public static class NetworkGameState
     {
         if (player == null)
             return string.Empty;
-
         if (!string.IsNullOrEmpty(player.UserId))
             return player.UserId;
-
         return "actor:" + player.ActorNumber;
     }
 
@@ -80,7 +73,6 @@ public static class NetworkGameState
     {
         if (state == null || state.CardInstances == null)
             return null;
-
         return state.CardInstances.Find(card => card != null && card.InstanceId == instanceId);
     }
 
@@ -103,7 +95,6 @@ public static class NetworkGameState
     {
         if (!PhotonNetwork.InRoom || PhotonNetwork.CurrentRoom == null)
             return false;
-
         if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(StatePropertyKey))
             return false;
 
@@ -114,7 +105,6 @@ public static class NetworkGameState
     {
         if (changedProperties == null || !changedProperties.ContainsKey(StatePropertyKey))
             return false;
-
         return ApplyJson(changedProperties[StatePropertyKey] as string, false);
     }
 
@@ -149,8 +139,6 @@ public static class NetworkGameState
             IsPaused = roomPlayers.Any(player => player.IsInactive),
             ManualPauseRequested = false,
             TurnNumber = 1,
-            // Action phase will become the normal start as soon as Action-card play is wired.
-            // Keeping Buy here preserves the currently playable milestone.
             Phase = BuyPhase,
             NextCardInstanceId = 1
         };
@@ -183,7 +171,6 @@ public static class NetworkGameState
     {
         if (!CanWrite() || _state == null)
             return false;
-
         if (_state.IsInitialised)
             return true;
 
@@ -196,7 +183,6 @@ public static class NetworkGameState
     {
         if (!CanWrite() || _state == null || !_state.IsStarted)
             return false;
-
         if (_state.ManualPauseRequested == paused)
             return true;
 
@@ -214,7 +200,6 @@ public static class NetworkGameState
         GameStateSnapshot next = Clone(_state);
         string playerId = GetPlayerId(photonPlayer);
         PlayerStateSnapshot playerState = next.Players.Find(player => player.PlayerId == playerId);
-
         if (playerState == null)
             return false;
 
@@ -265,7 +250,7 @@ public static class NetworkGameState
             Player photonPlayer = PhotonNetwork.CurrentRoom.Players.Values.FirstOrDefault(
                 player => GetPlayerId(player) == playerState.PlayerId);
 
-            bool connected = photonPlayer != null && !player.IsInactive;
+            bool connected = photonPlayer != null && !photonPlayer.IsInactive;
             playerState.IsConnected = connected;
 
             if (photonPlayer != null)
@@ -287,18 +272,15 @@ public static class NetworkGameState
             return false;
 
         GameStateSnapshot next = Clone(_state);
-
         switch (next.Phase)
         {
             case ActionPhase:
                 next.Phase = BuyPhase;
                 return CommitState(next);
-
             case BuyPhase:
             case CleanupPhase:
                 PerformCleanupAndAdvance(next);
                 return CommitState(next);
-
             default:
                 return false;
         }
@@ -348,7 +330,6 @@ public static class NetworkGameState
         player.Hand.Remove(instanceId);
         player.InPlay.Add(instanceId);
         player.Coins += value;
-
         return CommitState(next);
     }
 
@@ -387,12 +368,6 @@ public static class NetworkGameState
         return CommitState(next);
     }
 
-    /// <summary>
-    /// Authoritative entry point for a sequence of atomic card effects. Immediate effects
-    /// resolve in order. Resolution stops as soon as an effect creates a PendingChoice.
-    /// The remaining effects will be supplied by the Action-card executor once that layer
-    /// is connected; this method intentionally owns only the generic primitives.
-    /// </summary>
     public static bool TryApplyGenericEffects(
         string requesterPlayerId,
         List<GenericCardEffect> effects,
@@ -464,11 +439,10 @@ public static class NetworkGameState
             return;
 
         state.SupplyPiles = new List<SupplyPileSnapshot>();
-
         int players = Math.Max(1, playerCount);
         int victoryPileSize = GetVictoryPileSize(players);
 
-        AddSupplyPile(state, CopperDefinitionId, Math.Max(0, TotalCopperCount - (StartingCopperCount * players)));
+        AddSupplyPile(state, CopperDefinitionId, Math.Max(0, TotalCopperCount - StartingCopperCount * players));
         AddSupplyPile(state, SilverDefinitionId, SilverSupplyCount);
         AddSupplyPile(state, GoldDefinitionId, GoldSupplyCount);
         AddSupplyPile(state, EstateDefinitionId, victoryPileSize);
@@ -477,23 +451,20 @@ public static class NetworkGameState
         AddSupplyPile(state, CurseDefinitionId, Math.Max(0, 10 * (players - 1)));
 
         GameSetupConfig setup = RoomGameSetup.ReadCurrent();
-        if (setup != null && setup.kingdomCardIds != null)
+        if (setup == null || setup.kingdomCardIds == null)
+            return;
+
+        foreach (string definitionId in setup.kingdomCardIds)
         {
-            foreach (string definitionId in setup.kingdomCardIds)
-            {
-                if (!string.IsNullOrEmpty(definitionId))
-                    AddSupplyPile(state, definitionId, KingdomPileCount);
-            }
+            if (!string.IsNullOrEmpty(definitionId))
+                AddSupplyPile(state, definitionId, KingdomPileCount);
         }
     }
 
     private static int GetVictoryPileSize(int playerCount)
     {
-        if (playerCount <= 2)
-            return 8;
-        if (playerCount <= 4)
-            return 12;
-
+        if (playerCount <= 2) return 8;
+        if (playerCount <= 4) return 12;
         return playerCount * 3;
     }
 
@@ -512,7 +483,6 @@ public static class NetworkGameState
             return;
 
         System.Random random = NewRandom();
-
         foreach (PlayerStateSnapshot player in state.Players)
         {
             if (player == null)
@@ -525,7 +495,6 @@ public static class NetworkGameState
 
             for (int i = 0; i < StartingCopperCount; i++)
                 CreateOwnedCardInDeck(state, player, CopperDefinitionId);
-
             for (int i = 0; i < StartingEstateCount; i++)
                 CreateOwnedCardInDeck(state, player, EstateDefinitionId);
 
@@ -568,7 +537,6 @@ public static class NetworkGameState
         current.Actions = 1;
         current.Buys = 1;
         current.Coins = 0;
-
         DrawCardsWithReshuffle(current, StartingHandSize, NewRandom());
 
         int currentIndex = state.Players.FindIndex(player => player != null && player.PlayerId == state.ActivePlayerId);
@@ -632,7 +600,6 @@ public static class NetworkGameState
     {
         if (state == null || state.Players == null)
             return null;
-
         return state.Players.Find(player => player != null && player.PlayerId == playerId);
     }
 
@@ -674,10 +641,8 @@ public static class NetworkGameState
     {
         if (!CanWrite() || _state == null || !_state.IsStarted || _state.IsPaused)
             return false;
-
         if (_state.Version != expectedVersion || _state.AuthorityEpoch != expectedAuthorityEpoch)
             return false;
-
         return _state.ActivePlayerId == requesterPlayerId && _state.Players.Count > 0;
     }
 
@@ -685,10 +650,8 @@ public static class NetworkGameState
     {
         if (!CanWrite() || _state == null || !_state.IsStarted || _state.IsPaused || _state.PendingChoice == null)
             return false;
-
         if (_state.Version != expectedVersion || _state.AuthorityEpoch != expectedAuthorityEpoch)
             return false;
-
         return _state.PendingChoice.IsFor(requesterPlayerId);
     }
 
@@ -729,11 +692,7 @@ public static class NetworkGameState
         committed.Version = Math.Max(previousVersion, committed.Version) + 1;
 
         string json = JsonUtility.ToJson(committed);
-        Hashtable properties = new Hashtable
-        {
-            { StatePropertyKey, json }
-        };
-
+        Hashtable properties = new Hashtable { { StatePropertyKey, json } };
         bool queued = PhotonNetwork.CurrentRoom.SetCustomProperties(properties);
         if (!queued)
             return false;
@@ -752,7 +711,6 @@ public static class NetworkGameState
             return false;
 
         NormaliseCollections(incoming);
-
         if (!force && _state != null && incoming.Version <= _state.Version)
             return false;
 
@@ -781,31 +739,24 @@ public static class NetworkGameState
         if (state == null)
             return;
 
-        if (state.CardInstances == null)
-            state.CardInstances = new List<CardInstance>();
-        if (state.SupplyPiles == null)
-            state.SupplyPiles = new List<SupplyPileSnapshot>();
-        if (state.TrashedCards == null)
-            state.TrashedCards = new List<int>();
+        if (state.CardInstances == null) state.CardInstances = new List<CardInstance>();
+        if (state.SupplyPiles == null) state.SupplyPiles = new List<SupplyPileSnapshot>();
+        if (state.TrashedCards == null) state.TrashedCards = new List<int>();
         if (state.PendingChoice != null)
         {
-            if (state.PendingChoice.ValidInstanceIds == null)
-                state.PendingChoice.ValidInstanceIds = new List<int>();
-            if (state.PendingChoice.SelectedInstanceIds == null)
-                state.PendingChoice.SelectedInstanceIds = new List<int>();
+            if (state.PendingChoice.ValidInstanceIds == null) state.PendingChoice.ValidInstanceIds = new List<int>();
+            if (state.PendingChoice.SelectedInstanceIds == null) state.PendingChoice.SelectedInstanceIds = new List<int>();
         }
         if (state.NextCardInstanceId < 1)
             state.NextCardInstanceId = state.CardInstances.Count > 0
                 ? state.CardInstances.Max(card => card != null ? card.InstanceId : 0) + 1
                 : 1;
-        if (state.Players == null)
-            state.Players = new List<PlayerStateSnapshot>();
+        if (state.Players == null) state.Players = new List<PlayerStateSnapshot>();
 
         foreach (PlayerStateSnapshot player in state.Players)
         {
             if (player == null)
                 continue;
-
             if (player.Deck == null) player.Deck = new List<int>();
             if (player.Hand == null) player.Hand = new List<int>();
             if (player.Discard == null) player.Discard = new List<int>();
