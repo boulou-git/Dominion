@@ -3,25 +3,39 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Serializable snapshot of the authoritative Dominion game state.
-/// Keep this class free of Unity scene references so it can be rebuilt after reconnects.
+/// Keep this class free of Unity scene references so it can survive reconnects,
+/// Master Client migration, save/load and future replay support.
 /// </summary>
 [Serializable]
 public class GameStateSnapshot
 {
-    public int Version;
-    public int ActivePlayerActorNumber;
-    public string Phase = "Setup";
-    public List<PlayerStateSnapshot> Players = new List<PlayerStateSnapshot>();
+    public string MatchId;
 
-    public void IncrementVersion()
-    {
-        Version++;
-    }
+    // Monotonic version of the entire authoritative state.
+    public int Version;
+
+    // Increments whenever Photon elects a new Master Client.
+    public int AuthorityEpoch;
+
+    public bool IsStarted;
+    public bool IsInitialised;
+    public bool IsPaused;
+
+    public string ActivePlayerId;
+    public int TurnNumber;
+    public string Phase = "Setup";
+
+    // Player order is fixed once the match starts.
+    public List<PlayerStateSnapshot> Players = new List<PlayerStateSnapshot>();
 }
 
 [Serializable]
 public class PlayerStateSnapshot
 {
+    // Stable identity used by game rules and reconnection.
+    public string PlayerId;
+
+    // Photon actor number is useful for diagnostics and current-session routing only.
     public int ActorNumber;
     public string NickName;
     public bool IsConnected = true;
