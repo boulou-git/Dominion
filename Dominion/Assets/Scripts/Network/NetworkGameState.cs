@@ -124,10 +124,6 @@ public static class NetworkGameState
         StateChanged?.Invoke(null);
     }
 
-    /// <summary>
-    /// Creates the first authoritative snapshot for a match. For the current gameplay
-    /// milestone we deliberately begin directly in Buy phase; Action will be enabled later.
-    /// </summary>
     public static bool InitialiseAuthoritativeState()
     {
         if (!CanWrite())
@@ -153,6 +149,8 @@ public static class NetworkGameState
             IsPaused = roomPlayers.Any(player => player.IsInactive),
             ManualPauseRequested = false,
             TurnNumber = 1,
+            // Action phase will become the normal start as soon as Action-card play is wired.
+            // Keeping Buy here preserves the currently playable milestone.
             Phase = BuyPhase,
             NextCardInstanceId = 1
         };
@@ -267,7 +265,7 @@ public static class NetworkGameState
             Player photonPlayer = PhotonNetwork.CurrentRoom.Players.Values.FirstOrDefault(
                 player => GetPlayerId(player) == playerState.PlayerId);
 
-            bool connected = photonPlayer != null && !photonPlayer.IsInactive;
+            bool connected = photonPlayer != null && !player.IsInactive;
             playerState.IsConnected = connected;
 
             if (photonPlayer != null)
@@ -281,13 +279,11 @@ public static class NetworkGameState
         return CommitState(next);
     }
 
-    /// <summary>
-    /// Current temporary flow: Buy -> cleanup/draw -> next player's Buy.
-    /// Action remains supported as a compatibility phase and simply enters Buy.
-    /// </summary>
     public static bool TryAdvancePhase(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
     {
         if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
+            return false;
+        if (_state.PendingChoice != null)
             return false;
 
         GameStateSnapshot next = Clone(_state);
@@ -312,6 +308,8 @@ public static class NetworkGameState
     {
         if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
             return false;
+        if (_state.PendingChoice != null)
+            return false;
 
         GameStateSnapshot next = Clone(_state);
         PerformCleanupAndAdvance(next);
@@ -326,7 +324,7 @@ public static class NetworkGameState
     {
         if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
             return false;
-        if (!string.Equals(_state.Phase, BuyPhase, StringComparison.Ordinal))
+        if (_state.PendingChoice != null || !string.Equals(_state.Phase, BuyPhase, StringComparison.Ordinal))
             return false;
 
         GameStateSnapshot next = Clone(_state);
@@ -362,7 +360,7 @@ public static class NetworkGameState
     {
         if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
             return false;
-        if (!string.Equals(_state.Phase, BuyPhase, StringComparison.Ordinal))
+        if (_state.PendingChoice != null || !string.Equals(_state.Phase, BuyPhase, StringComparison.Ordinal))
             return false;
 
         GameStateSnapshot next = Clone(_state);
@@ -383,10 +381,79 @@ public static class NetworkGameState
         player.Buys--;
         CreateOwnedCardInDiscard(next, player, definitionId);
 
-        // Keep Cleanup as a short visible/interactable stage so the local UI can animate
-        // the hand and played cards into the discard pile before the authoritative draw.
         if (player.Coins <= 0 && !HandContainsTreasure(next, player))
             next.Phase = CleanupPhase;
+
+        return CommitState(next);
+    }
+
+    /// <summary>
+    /// Authoritative entry point for a sequence of atomic card effects. Immediate effects
+    /// resolve in order. Resolution stops as soon as an effect creates a PendingChoice.
+    /// The remaining effects will be supplied by the Action-card executor once that layer
+    /// is connected; this method intentionally owns only the generic primitives.
+    /// </summary>
+    public static bool TryApplyGenericEffects(
+        string requesterPlayerId,
+        List<GenericCardEffect> effects,
+        int sourceCardInstanceId,
+        int expectedVersion,
+        int expectedAuthorityEpoch)
+    {
+        if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
+            return false;
+        if (_state.PendingChoice != null || effects == null)
+            return false;
+
+        GameStateSnapshot next = Clone(_state);
+        PlayerStateSnapshot player = FindPlayer(next, requesterPlayerId);
+        if (player == null)
+            return false;
+
+        bool changed = false;
+        foreach (GenericCardEffect effect in effects)
+        {
+            if (effect == null)
+                continue;
+
+            if (!GenericEffectResolver.ApplyImmediateOrCreateChoice(next, player, effect, sourceCardInstanceId))
+                return false;
+
+            changed = true;
+            if (next.PendingChoice != null)
+                break;
+        }
+
+        return changed && CommitState(next);
+    }
+
+    public static bool TryTogglePendingChoiceSelection(
+        string requesterPlayerId,
+        int instanceId,
+        int expectedVersion,
+        int expectedAuthorityEpoch)
+    {
+        if (!ValidateChoiceCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
+            return false;
+
+        GameStateSnapshot next = Clone(_state);
+        if (!GenericEffectResolver.ToggleChoiceSelection(next, requesterPlayerId, instanceId))
+            return false;
+
+        return CommitState(next);
+    }
+
+    public static bool TryResolvePendingChoice(
+        string requesterPlayerId,
+        int expectedVersion,
+        int expectedAuthorityEpoch)
+    {
+        if (!ValidateChoiceCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
+            return false;
+
+        GameStateSnapshot next = Clone(_state);
+        if (!GenericEffectResolver.ResolvePendingChoice(next, requesterPlayerId))
+            return false;
 
         return CommitState(next);
     }
@@ -483,7 +550,7 @@ public static class NetworkGameState
 
     private static void PerformCleanupAndAdvance(GameStateSnapshot state)
     {
-        if (state == null || state.Players == null || state.Players.Count == 0)
+        if (state == null || state.Players == null || state.Players.Count == 0 || state.PendingChoice != null)
             return;
 
         PlayerStateSnapshot current = FindPlayer(state, state.ActivePlayerId);
@@ -494,8 +561,6 @@ public static class NetworkGameState
             current.Discard.Add(instanceId);
         current.InPlay.Clear();
 
-        // Right-to-left ensures the card visually furthest left is appended last and
-        // therefore remains the visible top card of the discard pile.
         for (int i = current.Hand.Count - 1; i >= 0; i--)
             current.Discard.Add(current.Hand[i]);
         current.Hand.Clear();
@@ -616,6 +681,17 @@ public static class NetworkGameState
         return _state.ActivePlayerId == requesterPlayerId && _state.Players.Count > 0;
     }
 
+    private static bool ValidateChoiceCommand(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
+    {
+        if (!CanWrite() || _state == null || !_state.IsStarted || _state.IsPaused || _state.PendingChoice == null)
+            return false;
+
+        if (_state.Version != expectedVersion || _state.AuthorityEpoch != expectedAuthorityEpoch)
+            return false;
+
+        return _state.PendingChoice.IsFor(requesterPlayerId);
+    }
+
     private static void UpdatePauseState(GameStateSnapshot state)
     {
         if (state == null)
@@ -709,6 +785,15 @@ public static class NetworkGameState
             state.CardInstances = new List<CardInstance>();
         if (state.SupplyPiles == null)
             state.SupplyPiles = new List<SupplyPileSnapshot>();
+        if (state.TrashedCards == null)
+            state.TrashedCards = new List<int>();
+        if (state.PendingChoice != null)
+        {
+            if (state.PendingChoice.ValidInstanceIds == null)
+                state.PendingChoice.ValidInstanceIds = new List<int>();
+            if (state.PendingChoice.SelectedInstanceIds == null)
+                state.PendingChoice.SelectedInstanceIds = new List<int>();
+        }
         if (state.NextCardInstanceId < 1)
             state.NextCardInstanceId = state.CardInstances.Count > 0
                 ? state.CardInstances.Max(card => card != null ? card.InstanceId : 0) + 1
