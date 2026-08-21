@@ -10,12 +10,14 @@ public sealed class ExtensionTileView : MonoBehaviour
     [SerializeField] private Toggle _enabledToggle;
     [SerializeField] private Button _openButton;
 
-    private bool _suppressToggle;
+    private Action<bool> _toggleCallback;
 
     public void Bind(ExtensionPackageData extension, bool enabled, Action open, Action<bool> toggle)
     {
         if (extension == null)
             return;
+
+        _toggleCallback = toggle;
 
         if (_nameText != null)
             _nameText.text = string.IsNullOrEmpty(extension.name) ? extension.id : extension.name;
@@ -30,15 +32,9 @@ public sealed class ExtensionTileView : MonoBehaviour
 
         if (_enabledToggle != null)
         {
-            _suppressToggle = true;
-            _enabledToggle.isOn = enabled;
-            _suppressToggle = false;
+            _enabledToggle.SetIsOnWithoutNotify(enabled);
             _enabledToggle.onValueChanged.RemoveAllListeners();
-            _enabledToggle.onValueChanged.AddListener(value =>
-            {
-                if (!_suppressToggle)
-                    toggle?.Invoke(value);
-            });
+            _enabledToggle.onValueChanged.AddListener(OnToggleChanged);
         }
 
         if (_openButton != null)
@@ -46,5 +42,13 @@ public sealed class ExtensionTileView : MonoBehaviour
             _openButton.onClick.RemoveAllListeners();
             _openButton.onClick.AddListener(() => open?.Invoke());
         }
+    }
+
+    private void OnToggleChanged(bool enabled)
+    {
+        if (_selectionVisual != null)
+            _selectionVisual.SetSelected(enabled);
+
+        _toggleCallback?.Invoke(enabled);
     }
 }
