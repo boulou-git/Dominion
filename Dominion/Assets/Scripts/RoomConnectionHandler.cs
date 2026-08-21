@@ -26,24 +26,14 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         MaxPlayers = 8,
         IsVisible = true,
         IsOpen = true,
-
-        // Five minutes gives a player enough time to relaunch the executable after
-        // an internet loss/crash and reclaim the same Photon player slot.
         PlayerTtl = 300_000,
-
-        // Keep the room alive for the same period if everybody temporarily drops.
         EmptyRoomTtl = 300_000,
-
-        // Player.UserId is our stable game identity.
         PublishUserId = true
     };
 
     private bool _tryingToRejoin;
     private bool _resumeAttemptedThisConnection;
     private string _lastRoomName;
-
-    // Prevents two Photon callbacks from loading the same additive scene before
-    // Unity has completed the first async scene operation.
     private bool _gameSceneTransitionInProgress;
     private bool _lobbySceneTransitionInProgress;
 
@@ -104,13 +94,9 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
             return;
         }
 
-        // No late joins after the immutable game player order has been created.
         PhotonNetwork.CurrentRoom.IsOpen = false;
         PhotonNetwork.CurrentRoom.IsVisible = false;
 
-        // This room property is the single source of truth that tells every client
-        // to load Game. Do NOT also send an RPC for scene loading: two concurrent
-        // additive loads create duplicate scene PhotonView IDs.
         Hashtable roomProperties = new Hashtable
         {
             { GameStartedPropertyKey, true }
@@ -142,8 +128,6 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
     {
         Debug.LogWarning($"Photon disconnected: {cause}");
 
-        // Keep Unity scenes and the local snapshot alive. The room GameState will pause
-        // the match for the remaining players when Photon marks us inactive.
         if (string.IsNullOrEmpty(_lastRoomName))
             _lastRoomName = PlayerPrefs.GetString(LastRoomPrefKey, string.Empty);
 
@@ -153,7 +137,6 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         _tryingToRejoin = true;
         _resumeAttemptedThisConnection = false;
 
-        // Fast path: Photon can often reconnect and reclaim the inactive actor directly.
         if (!PhotonNetwork.ReconnectAndRejoin())
             PhotonNetwork.Reconnect();
     }
@@ -169,8 +152,6 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         if (string.IsNullOrEmpty(_lastRoomName))
             return;
 
-        // This also covers a complete application restart. The stable Photon UserId and
-        // PlayerTtl allow RejoinRoom to reclaim the previous inactive player slot.
         _resumeAttemptedThisConnection = true;
         _tryingToRejoin = true;
         Debug.Log($"Trying to resume previous room '{_lastRoomName}'.");
@@ -238,8 +219,6 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
     public override void OnLeftRoom()
     {
-        // OnLeftRoom represents an explicit/definitive room leave. A transport disconnect
-        // goes through OnDisconnected instead, so its resume token is preserved.
         _lastRoomName = null;
         _tryingToRejoin = false;
         _resumeAttemptedThisConnection = true;
@@ -254,7 +233,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
             return;
 
         if (NetworkGameState.IsPaused)
-            Debug.LogWarning("Dominion match paused: at least one player is disconnected.");
+            Debug.LogWarning(NetworkGameState.State.PauseReason);
         else
             Debug.Log("All players are connected. Dominion match resumed.");
     }
