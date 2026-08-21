@@ -53,7 +53,12 @@ public static class EditableGameBootstrap
         if (root == null)
             return;
 
+        // Base piles are built first so the gameplay decorator can immediately bind
+        // quantities, inspection and purchasing to every visible Reserve pile.
         if (root.GetComponent<BaseSupplyController>() == null)
             root.AddComponent<BaseSupplyController>();
+
+        if (root.GetComponent<BuyPhaseGameplayController>() == null)
+            root.AddComponent<BuyPhaseGameplayController>();
     }
 }
