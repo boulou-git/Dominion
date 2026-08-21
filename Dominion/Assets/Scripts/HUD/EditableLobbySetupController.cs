@@ -52,6 +52,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     {
         _canvas = GetComponent<Canvas>();
         _raycaster = GetComponent<GraphicRaycaster>();
+        ResolveRevealReferences();
 
         ExtensionCatalog.Reload();
         _config = RoomGameSetup.ReadCurrent();
@@ -146,6 +147,33 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         _lastInRoom = PhotonNetwork.InRoom;
         _lastHost = _lastInRoom && PhotonNetwork.IsMasterClient;
         _lastStage = _config != null ? _config.stage : null;
+    }
+
+    private void ResolveRevealReferences()
+    {
+        if (_revealScreen == null)
+        {
+            Transform revealTransform = transform.Find("Reveal");
+            if (revealTransform != null)
+                _revealScreen = revealTransform.gameObject;
+        }
+
+        if (_revealScreen == null)
+            return;
+
+        KingdomRevealScreenView view = _revealScreen.GetComponent<KingdomRevealScreenView>();
+        if (view == null)
+            view = _revealScreen.GetComponentInChildren<KingdomRevealScreenView>(true);
+
+        if (view == null)
+            return;
+
+        if (_revealCardsRoot == null)
+            _revealCardsRoot = view.CardsRoot;
+        if (_revealStatus == null)
+            _revealStatus = view.StatusText;
+        if (_startButton == null)
+            _startButton = view.StartButton;
     }
 
     private void RefreshAll()
@@ -266,9 +294,15 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     private void RebuildReveal()
     {
+        ResolveRevealReferences();
         Clear(_spawnedRevealCards);
+
         if (_revealCardsRoot == null)
+        {
+            Debug.LogError(
+                "Kingdom reveal has no CardsRoot. Run Dominion/UI/Create or Reconnect Kingdom Reveal Prefab, then open Assets/Resources/UI/KingdomRevealScreen.prefab.");
             return;
+        }
 
         int resolved = 0;
         int visualsLoaded = 0;
@@ -356,6 +390,8 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             + card.id
             + " (name: "
             + card.name
+            + ", package: "
+            + (extension != null ? extension.packageDirectory : "?")
             + ").");
 
         return root;
