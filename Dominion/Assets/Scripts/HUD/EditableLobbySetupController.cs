@@ -96,11 +96,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         RefreshAll();
     }
 
-    private void OnDestroy()
-    {
-        ExtensionVisualLoader.ClearCache();
-    }
-
     public override void OnJoinedRoom()
     {
         ExtensionCatalog.Reload();
