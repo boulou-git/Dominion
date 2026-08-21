@@ -70,7 +70,10 @@ public static class EditableLobbyBootstrap
         if (existing != null)
         {
             if (existing.GetComponent<ConnectionScreenController>() != null)
+            {
+                EnsureQuitButton(existing.transform);
                 return;
+            }
 
             UnityEngine.Object.Destroy(existing);
         }
@@ -78,5 +81,35 @@ public static class EditableLobbyBootstrap
         GameObject instance = UnityEngine.Object.Instantiate(prefab);
         instance.name = ConnectionRootName;
         SceneManager.MoveGameObjectToScene(instance, scene);
+        EnsureQuitButton(instance.transform);
+    }
+
+    private static void EnsureQuitButton(Transform root)
+    {
+        Transform quitButton = FindDeepChild(root, "QuitButton");
+        if (quitButton == null)
+            return;
+
+        if (quitButton.GetComponent<QuitApplicationButton>() == null)
+            quitButton.gameObject.AddComponent<QuitApplicationButton>();
+    }
+
+    private static Transform FindDeepChild(Transform parent, string childName)
+    {
+        if (parent == null)
+            return null;
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform child = parent.GetChild(i);
+            if (string.Equals(child.name, childName, StringComparison.Ordinal))
+                return child;
+
+            Transform nested = FindDeepChild(child, childName);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
     }
 }
