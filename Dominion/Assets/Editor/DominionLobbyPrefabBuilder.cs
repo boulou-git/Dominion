@@ -123,6 +123,9 @@ public static class DominionLobbyPrefabBuilder
         GameObject reveal = Screen(root.transform, "Reveal");
         ChildText(reveal.transform, "Title", "LES 10 CARTES ROYAUME", 34, TextAnchor.MiddleCenter, new Vector2(0.05f, 0.91f), new Vector2(0.95f, 0.985f));
         RectTransform revealContent = ScrollContent(reveal.transform as RectTransform, "RevealCards", new Vector2(0.05f, 0.17f), new Vector2(0.95f, 0.89f), true, new Vector2(210f, 320f), 18f);
+        GridLayoutGroup revealGrid = revealContent.GetComponent<GridLayoutGroup>();
+        if (revealGrid != null)
+            revealGrid.constraintCount = 5;
         Text revealStatus = ChildText(reveal.transform, "Status", string.Empty, 18, TextAnchor.MiddleLeft, new Vector2(0.05f, 0.045f), new Vector2(0.65f, 0.13f));
         Button start = ChildButton(reveal.transform, "StartButton", "DÉMARRER LA PARTIE", new Vector2(0.70f, 0.035f), new Vector2(0.95f, 0.135f));
 
@@ -141,7 +144,6 @@ public static class DominionLobbyPrefabBuilder
         SetSerialized(controller, "_revealCardsRoot", revealContent);
         SetSerialized(controller, "_revealStatus", revealStatus);
         SetSerialized(controller, "_startButton", start);
-        SetSerialized(controller, "_revealCardPrefab", cardPrefab);
 
         PrefabUtility.SaveAsPrefabAsset(root, LobbyPrefabPath);
         Object.DestroyImmediate(root);
