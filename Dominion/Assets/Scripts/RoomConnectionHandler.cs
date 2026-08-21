@@ -308,13 +308,14 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
     public override void OnRoomPropertiesUpdate(Hashtable propertiesThatChanged)
     {
-        // Host deliberately closed the match. Clients leave normally (not inactive),
-        // so the room can be destroyed and its fixed name reused immediately.
+        // A deliberate shutdown is authoritative room state. Any player that is still
+        // present must leave permanently, even if Photon has just promoted that player
+        // to Master Client after the original host left.
         if (propertiesThatChanged != null &&
             propertiesThatChanged.ContainsKey(RoomClosingPropertyKey) &&
             propertiesThatChanged[RoomClosingPropertyKey] is bool closing && closing)
         {
-            if (!PhotonNetwork.IsMasterClient && PhotonNetwork.InRoom)
+            if (PhotonNetwork.InRoom)
             {
                 _leavingBecauseRoomClosed = true;
                 _lastRoomName = null;
