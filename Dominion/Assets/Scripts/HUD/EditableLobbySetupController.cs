@@ -7,8 +7,8 @@ using UnityEngine.UI;
 using Hashtable = ExitGames.Client.Photon.Hashtable;
 
 /// <summary>
-/// Data/network controller for the editable Unity lobby prefab.
-/// All layout and styling live in prefabs; this component only binds extension data and Photon state.
+/// Binds the editable lobby UI to extension data and Photon room state.
+/// Flow: host selects cards -> host draws 10 -> everybody sees the same 10 -> host starts.
 /// </summary>
 public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 {
@@ -29,11 +29,10 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     [Header("Waiting")]
     [SerializeField] private Text _waitingText;
 
-    [Header("Reveal")]
+    [Header("10-card reveal")]
     [SerializeField] private RectTransform _revealCardsRoot;
     [SerializeField] private Text _revealStatus;
     [SerializeField] private Button _startButton;
-    [SerializeField] private CardSelectionTileView _revealCardPrefab; // Legacy reference; reveal rendering no longer depends on it.
 
     private readonly List<GameObject> _spawnedExtensions = new List<GameObject>();
     private readonly List<GameObject> _spawnedCards = new List<GameObject>();
@@ -52,7 +51,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     {
         _canvas = GetComponent<Canvas>();
         _raycaster = GetComponent<GraphicRaycaster>();
-        ResolveRevealReferences();
 
         ExtensionCatalog.Reload();
         _config = RoomGameSetup.ReadCurrent();
@@ -69,9 +67,8 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     private void Update()
     {
-        // This prefab can exist before the player has joined a room, and can also be
-        // instantiated after Photon already fired OnJoinedRoom. Poll only the tiny
-        // connection/authority state so the editable screen appears at the right moment.
+        // The editable prefab can appear before or after Photon's room callbacks.
+        // Poll only the small state needed to keep the correct screen visible.
         if (Time.unscaledTime < _nextPhotonStateCheck)
             return;
 
@@ -149,39 +146,10 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         _lastStage = _config != null ? _config.stage : null;
     }
 
-    private void ResolveRevealReferences()
-    {
-        if (_revealScreen == null)
-        {
-            Transform revealTransform = transform.Find("Reveal");
-            if (revealTransform != null)
-                _revealScreen = revealTransform.gameObject;
-        }
-
-        if (_revealScreen == null)
-            return;
-
-        KingdomRevealScreenView view = _revealScreen.GetComponent<KingdomRevealScreenView>();
-        if (view == null)
-            view = _revealScreen.GetComponentInChildren<KingdomRevealScreenView>(true);
-
-        if (view == null)
-            return;
-
-        if (_revealCardsRoot == null)
-            _revealCardsRoot = view.CardsRoot;
-        if (_revealStatus == null)
-            _revealStatus = view.StatusText;
-        if (_startButton == null)
-            _startButton = view.StartButton;
-    }
-
     private void RefreshAll()
     {
         bool inRoom = PhotonNetwork.InRoom;
 
-        // Before joining/creating a Photon room, keep this full-screen editable setup
-        // completely hidden so the ordinary Lobby connection/pseudo UI remains usable.
         if (_canvas != null)
             _canvas.enabled = inRoom;
         if (_raycaster != null)
@@ -238,13 +206,17 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             bool enabled = selection != null && selection.enabled;
             ExtensionTileView tile = Instantiate(_extensionTilePrefab, _extensionsRoot);
             string extensionId = extension.id;
-            tile.Bind(extension, enabled,
+
+            tile.Bind(
+                extension,
+                enabled,
                 () =>
                 {
                     _viewedExtensionId = extensionId;
                     RebuildCards();
                 },
                 value => SetExtensionEnabled(extensionId, value));
+
             _spawnedExtensions.Add(tile.gameObject);
         }
     }
@@ -257,15 +229,13 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         ExtensionPackageData extension = ExtensionCatalog.Find(_viewedExtensionId);
         ExtensionSetupSelection selection = RoomGameSetup.FindExtension(_config, _viewedExtensionId);
-        if (extension == null || selection == null)
+        if (extension == null || selection == null || extension.cards == null)
             return;
 
         if (_cardsTitle != null)
             _cardsTitle.text = string.IsNullOrEmpty(extension.name) ? extension.id : extension.name;
 
         bool extensionEnabled = selection.enabled;
-        if (extension.cards == null)
-            return;
 
         foreach (ExtensionCardData card in extension.cards)
         {
@@ -277,8 +247,13 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             string cardId = card.id;
 
             CardSelectionTileView tile = Instantiate(_cardTilePrefab, _cardsRoot);
-            tile.Bind(extension, card, effectiveSelected, extensionEnabled,
+            tile.Bind(
+                extension,
+                card,
+                effectiveSelected,
+                extensionEnabled,
                 value => SetCardSelected(extension.id, cardId, value));
+
             _spawnedCards.Add(tile.gameObject);
         }
     }
@@ -286,26 +261,25 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private void RefreshSummary()
     {
         int selected = RoomGameSetup.CountSelectedCards(_config);
+
         if (_selectionSummary != null)
             _selectionSummary.text = selected + " cartes dans le pool — 10 seront tirées pour la partie.";
+
         if (_validateButton != null)
             _validateButton.interactable = selected >= RoomGameSetup.KingdomCardCount;
     }
 
     private void RebuildReveal()
     {
-        ResolveRevealReferences();
         Clear(_spawnedRevealCards);
 
-        if (_revealCardsRoot == null)
+        if (_revealCardsRoot == null || _cardTilePrefab == null)
         {
-            Debug.LogError(
-                "Kingdom reveal has no CardsRoot. Run Dominion/UI/Create or Reconnect Kingdom Reveal Prefab, then open Assets/Resources/UI/KingdomRevealScreen.prefab.");
+            Debug.LogError("Reveal UI is missing its cards root or CardSelectionTile prefab reference.");
             return;
         }
 
-        int resolved = 0;
-        int visualsLoaded = 0;
+        int shown = 0;
 
         if (_config.kingdomCardIds != null)
         {
@@ -315,86 +289,30 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
                 ExtensionCardData card;
                 if (!RoomGameSetup.TryResolveCard(cardRef, out extension, out card))
                 {
-                    Debug.LogWarning("Reveal could not resolve Kingdom card reference: " + cardRef);
+                    Debug.LogWarning("Could not resolve revealed Kingdom card: " + cardRef);
                     continue;
                 }
 
-                bool artworkLoaded;
-                GameObject tile = CreateRevealCard(extension, card, out artworkLoaded);
-                tile.transform.SetParent(_revealCardsRoot, false);
-                _spawnedRevealCards.Add(tile);
-                resolved++;
-                if (artworkLoaded)
-                    visualsLoaded++;
+                // Reuse the exact same card prefab and artwork binding that already works
+                // in the host-selection screen. Display-only mode hides the checkbox.
+                CardSelectionTileView tile = Instantiate(_cardTilePrefab, _revealCardsRoot);
+                tile.Bind(extension, card, true, false, null);
+                _spawnedRevealCards.Add(tile.gameObject);
+                shown++;
             }
         }
 
         bool host = PhotonNetwork.IsMasterClient;
+
         if (_startButton != null)
             _startButton.gameObject.SetActive(host);
 
         if (_revealStatus != null)
         {
-            string visualStatus = visualsLoaded == resolved
-                ? resolved + "/10 cartes"
-                : resolved + "/10 cartes — " + visualsLoaded + " visuels chargés";
-
             _revealStatus.text = host
-                ? visualStatus + " — vérifiez le Royaume puis démarrez la partie."
-                : visualStatus + " — en attente du démarrage par l’hôte.";
+                ? shown + "/10 cartes — démarrez la partie quand vous êtes prêt."
+                : shown + "/10 cartes — en attente de l’hôte.";
         }
-    }
-
-    private static GameObject CreateRevealCard(ExtensionPackageData extension, ExtensionCardData card, out bool artworkLoaded)
-    {
-        GameObject root = new GameObject(
-            string.IsNullOrEmpty(card.id) ? "RevealCard" : "RevealCard_" + card.id,
-            typeof(RectTransform),
-            typeof(Image));
-
-        Image image = root.GetComponent<Image>();
-        Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, card);
-        artworkLoaded = sprite != null;
-
-        image.sprite = sprite;
-        image.preserveAspect = true;
-        image.raycastTarget = false;
-        image.color = sprite != null ? Color.white : new Color(0.11f, 0.11f, 0.11f, 1f);
-
-        if (sprite != null)
-            return root;
-
-        GameObject fallbackObject = new GameObject("MissingArtwork", typeof(RectTransform), typeof(Text));
-        fallbackObject.transform.SetParent(root.transform, false);
-        RectTransform fallbackRect = fallbackObject.GetComponent<RectTransform>();
-        fallbackRect.anchorMin = Vector2.zero;
-        fallbackRect.anchorMax = Vector2.one;
-        fallbackRect.offsetMin = new Vector2(8f, 8f);
-        fallbackRect.offsetMax = new Vector2(-8f, -8f);
-
-        Text fallback = fallbackObject.GetComponent<Text>();
-        fallback.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        fallback.alignment = TextAnchor.MiddleCenter;
-        fallback.fontSize = 17;
-        fallback.color = new Color(0.92f, 0.72f, 0.55f, 1f);
-        fallback.raycastTarget = false;
-        fallback.text = (string.IsNullOrEmpty(card.name) ? card.id : card.name)
-            + "\n\nIMAGE MANQUANTE\nimages/"
-            + card.id
-            + ".png";
-
-        Debug.LogWarning(
-            "No reveal artwork found for "
-            + (extension != null ? extension.id : "?")
-            + ":"
-            + card.id
-            + " (name: "
-            + card.name
-            + ", package: "
-            + (extension != null ? extension.packageDirectory : "?")
-            + ").");
-
-        return root;
     }
 
     private void SetExtensionEnabled(string extensionId, bool enabled)
@@ -472,6 +390,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             if (item != null)
                 Destroy(item);
         }
+
         objects.Clear();
     }
 }
