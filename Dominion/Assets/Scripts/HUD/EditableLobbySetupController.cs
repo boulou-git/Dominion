@@ -49,6 +49,10 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private Text _revealStatus;
     private Button _revealStartButton;
 
+    // Local-only card inspection for the reveal screen.
+    private GameObject _revealZoomOverlay;
+    private Image _revealZoomImage;
+
     private void Awake()
     {
         _canvas = GetComponent<Canvas>();
@@ -156,6 +160,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             SetActive(_waitingScreen, false);
             SetActive(_revealScreen, false);
             SetActive(_revealOverlay, false);
+            SetActive(_revealZoomOverlay, false);
             return;
         }
 
@@ -176,6 +181,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         }
 
         SetActive(_revealOverlay, false);
+        SetActive(_revealZoomOverlay, false);
 
         if (!host)
         {
@@ -313,12 +319,12 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         if (_revealStatus != null)
         {
             _revealStatus.text = host
-                ? shown + "/10 cartes — démarrez la partie quand vous êtes prêt."
-                : shown + "/10 cartes — en attente de l’hôte.";
+                ? shown + "/10 cartes — cliquez sur une carte pour l’agrandir."
+                : shown + "/10 cartes — cliquez sur une carte pour l’agrandir. En attente de l’hôte.";
         }
     }
 
-    private static GameObject CreateRevealCard(ExtensionCardData card, Sprite sprite)
+    private GameObject CreateRevealCard(ExtensionCardData card, Sprite sprite)
     {
         string id = card != null && !string.IsNullOrEmpty(card.id) ? card.id : "unknown";
         GameObject cardObject = UiObject("RevealCard_" + id, typeof(Image));
@@ -327,10 +333,17 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         image.sprite = sprite;
         image.color = sprite != null ? Color.white : new Color(0.15f, 0.05f, 0.05f, 1f);
         image.preserveAspect = true;
-        image.raycastTarget = false;
+        image.raycastTarget = sprite != null;
         image.enabled = true;
 
-        if (sprite == null)
+        if (sprite != null)
+        {
+            Button button = cardObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(() => ShowRevealZoom(sprite));
+        }
+        else
         {
             Text missing = ChildText(
                 cardObject.transform,
@@ -400,6 +413,69 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             new Vector2(0.68f, 0.04f),
             new Vector2(0.92f, 0.14f));
         _revealStartButton.onClick.AddListener(StartGame);
+
+        BuildRevealZoomOverlay();
+    }
+
+    private void BuildRevealZoomOverlay()
+    {
+        _revealZoomOverlay = UiObject("CardZoomOverlay", typeof(Image), typeof(Button));
+        _revealZoomOverlay.transform.SetParent(_revealOverlay.transform, false);
+        Stretch(_revealZoomOverlay.GetComponent<RectTransform>());
+
+        Image dim = _revealZoomOverlay.GetComponent<Image>();
+        dim.color = new Color(0f, 0f, 0f, 0.84f);
+        dim.raycastTarget = true;
+
+        Button closeButton = _revealZoomOverlay.GetComponent<Button>();
+        closeButton.targetGraphic = dim;
+        closeButton.transition = Selectable.Transition.None;
+        closeButton.onClick.AddListener(HideRevealZoom);
+
+        GameObject zoomCard = UiObject("ZoomedCard", typeof(Image));
+        zoomCard.transform.SetParent(_revealZoomOverlay.transform, false);
+        RectTransform zoomRect = zoomCard.GetComponent<RectTransform>();
+        zoomRect.anchorMin = new Vector2(0.5f, 0.5f);
+        zoomRect.anchorMax = new Vector2(0.5f, 0.5f);
+        zoomRect.pivot = new Vector2(0.5f, 0.5f);
+        zoomRect.anchoredPosition = Vector2.zero;
+        zoomRect.sizeDelta = new Vector2(500f, 771f);
+
+        _revealZoomImage = zoomCard.GetComponent<Image>();
+        _revealZoomImage.preserveAspect = true;
+        _revealZoomImage.raycastTarget = false;
+        _revealZoomImage.color = Color.white;
+
+        ChildText(
+            _revealZoomOverlay.transform,
+            "Hint",
+            "Cliquez pour fermer",
+            18,
+            TextAnchor.MiddleCenter,
+            new Vector2(0.35f, 0.035f),
+            new Vector2(0.65f, 0.085f));
+
+        _revealZoomOverlay.SetActive(false);
+    }
+
+    private void ShowRevealZoom(Sprite sprite)
+    {
+        if (sprite == null)
+            return;
+
+        EnsureRevealOverlay();
+        if (_revealZoomOverlay == null || _revealZoomImage == null)
+            return;
+
+        _revealZoomImage.sprite = sprite;
+        _revealZoomImage.enabled = true;
+        _revealZoomOverlay.SetActive(true);
+        _revealZoomOverlay.transform.SetAsLastSibling();
+    }
+
+    private void HideRevealZoom()
+    {
+        SetActive(_revealZoomOverlay, false);
     }
 
     private void SetExtensionEnabled(string extensionId, bool enabled)
