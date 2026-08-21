@@ -8,7 +8,7 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Gameplay behaviour layered onto the single editable GameScreen:
-/// Reserve scrolling/purchases, Treasure play, in-play stacks, discard top and cleanup animation.
+/// Reserve layout/purchases, Treasure play, in-play stacks, discard top and cleanup animation.
 /// It never owns rules; every mutation is routed to NetworkGameState through PlayersTurnsHandler.
 /// </summary>
 public sealed class BuyPhaseGameplayController : MonoBehaviour
@@ -27,14 +27,14 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
     private Image _zoomImage;
     private Button _nextPhaseButton;
 
-    private bool _reserveScrollReady;
+    private bool _reserveLayoutReady;
     private bool _cleanupAnimating;
     private int _lastAutoCleanupVersion = -1;
 
     private void Awake()
     {
         ResolveUi();
-        EnsureReserveScroll();
+        EnsureReserveLayout();
         HookCleanupButton();
 
         NetworkGameState.StateChanged += Refresh;
@@ -47,7 +47,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         // initial dynamic pile objects exist before bindings are decorated.
         yield return null;
         ResolveUi();
-        EnsureReserveScroll();
+        EnsureReserveLayout();
         Refresh(NetworkGameState.State);
     }
 
@@ -59,7 +59,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
     private void Refresh(GameStateSnapshot state)
     {
         ResolveUi();
-        EnsureReserveScroll();
+        EnsureReserveLayout();
         EnsureSupplyBindings();
 
         PlayerStateSnapshot localPlayer = ResolveLocalPlayer(state);
@@ -129,133 +129,92 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
     }
 
     /// <summary>
-    /// Turns the Reserve body into one vertically scrollable content area. Existing
-    /// BaseSupply/KingdomSupply objects are reused, so locally edited prefabs remain valid.
+    /// Shows the whole Reserve at once: the seven permanent base piles on the left and
+    /// the ten selected Kingdom piles on the right. No scrolling and no overlapping.
+    /// Existing BaseSupply/KingdomSupply objects are reused so local prefab edits survive.
     /// </summary>
-    private void EnsureReserveScroll()
+    private void EnsureReserveLayout()
     {
-        if (_reserveScrollReady)
+        if (_reserveLayoutReady)
             return;
 
-        Transform supplyPanel = FindDeepChild(transform, "SupplyPanel");
-        if (supplyPanel == null || _baseSupplyRoot == null || _kingdomSupplyRoot == null)
+        Transform supplyPanelTransform = FindDeepChild(transform, "SupplyPanel");
+        if (!(supplyPanelTransform is RectTransform supplyPanel) ||
+            _baseSupplyRoot == null || _kingdomSupplyRoot == null)
             return;
 
-        Transform existing = FindDirectChild(supplyPanel, "ReserveScrollViewport");
-        if (existing != null)
-        {
-            _reserveScrollReady = true;
-            return;
-        }
+        Transform baseLabel = FindDeepChild(supplyPanel, "BaseSupplyLabel");
+        Transform kingdomLabel = FindDeepChild(supplyPanel, "KingdomLabel");
 
-        Transform baseLabel = FindDirectChild(supplyPanel, "BaseSupplyLabel");
-        Transform kingdomLabel = FindDirectChild(supplyPanel, "KingdomLabel");
+        // Clean up a ReserveScrollViewport created by the previous layout if scripts
+        // are hot-reloaded while Play Mode is already running.
+        Transform oldViewport = FindDirectChild(supplyPanel, "ReserveScrollViewport");
 
-        GameObject viewportObject = new GameObject(
-            "ReserveScrollViewport",
-            typeof(RectTransform),
-            typeof(Image),
-            typeof(RectMask2D),
-            typeof(ScrollRect));
-        viewportObject.transform.SetParent(supplyPanel, false);
-        RectTransform viewport = viewportObject.GetComponent<RectTransform>();
-        SetAnchors(viewport, new Vector2(0.02f, 0.035f), new Vector2(0.98f, 0.89f));
+        if (baseLabel != null)
+            baseLabel.SetParent(supplyPanel, false);
+        if (kingdomLabel != null)
+            kingdomLabel.SetParent(supplyPanel, false);
+        _baseSupplyRoot.SetParent(supplyPanel, false);
+        _kingdomSupplyRoot.SetParent(supplyPanel, false);
 
-        Image hitArea = viewportObject.GetComponent<Image>();
-        hitArea.color = new Color(0f, 0f, 0f, 0.001f);
-        hitArea.raycastTarget = true;
+        if (oldViewport != null)
+            Destroy(oldViewport.gameObject);
 
-        GameObject contentObject = new GameObject(
-            "ReserveScrollContent",
-            typeof(RectTransform),
-            typeof(VerticalLayoutGroup),
-            typeof(ContentSizeFitter));
-        contentObject.transform.SetParent(viewport, false);
-        RectTransform content = contentObject.GetComponent<RectTransform>();
-        content.anchorMin = new Vector2(0f, 1f);
-        content.anchorMax = new Vector2(1f, 1f);
-        content.pivot = new Vector2(0.5f, 1f);
-        content.offsetMin = Vector2.zero;
-        content.offsetMax = Vector2.zero;
+        // Labels share the same row, matching their card groups below.
+        if (baseLabel is RectTransform baseLabelRect)
+            SetAnchors(baseLabelRect, new Vector2(0.025f, 0.82f), new Vector2(0.405f, 0.89f));
+        if (kingdomLabel is RectTransform kingdomLabelRect)
+            SetAnchors(kingdomLabelRect, new Vector2(0.43f, 0.82f), new Vector2(0.975f, 0.89f));
 
-        VerticalLayoutGroup vertical = contentObject.GetComponent<VerticalLayoutGroup>();
-        vertical.spacing = 7f;
-        vertical.padding = new RectOffset(5, 5, 5, 5);
-        vertical.childAlignment = TextAnchor.UpperCenter;
-        vertical.childControlWidth = true;
-        vertical.childForceExpandWidth = true;
-        vertical.childControlHeight = false;
-        vertical.childForceExpandHeight = false;
+        // 38% for 7 base piles (4 + 3), 54.5% for 10 Kingdom piles (5 + 5).
+        SetAnchors(_baseSupplyRoot, new Vector2(0.025f, 0.055f), new Vector2(0.405f, 0.81f));
+        SetAnchors(_kingdomSupplyRoot, new Vector2(0.43f, 0.055f), new Vector2(0.975f, 0.81f));
 
-        ContentSizeFitter fitter = contentObject.GetComponent<ContentSizeFitter>();
-        fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        ConfigureReserveGrid(_baseSupplyRoot, 4);
+        ConfigureReserveGrid(_kingdomSupplyRoot, 5);
 
-        ReparentSection(baseLabel, content, 24f);
-        ReparentGrid(_baseSupplyRoot, content, 4);
-        ReparentSection(kingdomLabel, content, 24f);
-        ReparentGrid(_kingdomSupplyRoot, content, 5);
-
-        ScrollRect scroll = viewportObject.GetComponent<ScrollRect>();
-        scroll.viewport = viewport;
-        scroll.content = content;
-        scroll.horizontal = false;
-        scroll.vertical = true;
-        scroll.inertia = true;
-        scroll.decelerationRate = 0.15f;
-        scroll.scrollSensitivity = 45f;
-        scroll.movementType = ScrollRect.MovementType.Clamped;
-
-        _reserveScrollReady = true;
-        LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+        _reserveLayoutReady = true;
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_baseSupplyRoot);
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_kingdomSupplyRoot);
+        LayoutRebuilder.ForceRebuildLayoutImmediate(supplyPanel);
         Canvas.ForceUpdateCanvases();
     }
 
-    private static void ReparentSection(Transform section, RectTransform content, float height)
-    {
-        if (section == null)
-            return;
-
-        section.SetParent(content, false);
-        LayoutElement element = section.GetComponent<LayoutElement>();
-        if (element == null)
-            element = section.gameObject.AddComponent<LayoutElement>();
-        element.preferredHeight = height;
-        element.minHeight = height;
-    }
-
-    private static void ReparentGrid(RectTransform root, RectTransform content, int columns)
+    private static void ConfigureReserveGrid(RectTransform root, int columns)
     {
         if (root == null)
             return;
 
-        root.SetParent(content, false);
-
-        LayoutGroup[] oldLayouts = root.GetComponents<LayoutGroup>();
-        foreach (LayoutGroup old in oldLayouts)
-            old.enabled = false;
-
+        // Only one LayoutGroup may drive a RectTransform. The bootstrap removes the
+        // legacy BaseSupply HorizontalLayoutGroup before this controller is attached.
         GridLayoutGroup grid = root.GetComponent<GridLayoutGroup>();
         if (grid == null)
+        {
+            LayoutGroup incompatible = root.GetComponent<LayoutGroup>();
+            if (incompatible != null)
+                incompatible.enabled = false;
+
             grid = root.gameObject.AddComponent<GridLayoutGroup>();
+        }
+
+        if (grid == null)
+        {
+            Debug.LogError("Could not configure Reserve grid on " + root.name + ".");
+            return;
+        }
+
         grid.enabled = true;
-        grid.cellSize = new Vector2(92f, 142f);
-        grid.spacing = new Vector2(10f, 10f);
-        grid.padding = new RectOffset(5, 5, 5, 5);
+        grid.cellSize = new Vector2(96f, 148f);
+        grid.spacing = new Vector2(8f, 8f);
+        grid.padding = new RectOffset(4, 4, 4, 4);
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         grid.constraintCount = columns;
-        grid.childAlignment = TextAnchor.UpperCenter;
+        grid.childAlignment = TextAnchor.MiddleCenter;
         grid.startAxis = GridLayoutGroup.Axis.Horizontal;
 
-        int expectedCards = root.name == "BaseSupply" ? 7 : 10;
-        int rows = Mathf.Max(1, Mathf.CeilToInt(expectedCards / (float)columns));
-        float height = 10f + rows * 142f + Mathf.Max(0, rows - 1) * 10f;
-
-        LayoutElement element = root.GetComponent<LayoutElement>();
-        if (element == null)
-            element = root.gameObject.AddComponent<LayoutElement>();
-        element.preferredHeight = height;
-        element.minHeight = height;
+        LayoutElement oldElement = root.GetComponent<LayoutElement>();
+        if (oldElement != null)
+            oldElement.enabled = false;
     }
 
     private void HookCleanupButton()
