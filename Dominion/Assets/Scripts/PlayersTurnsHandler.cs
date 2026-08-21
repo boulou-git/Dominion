@@ -2,8 +2,8 @@ using Photon.Pun;
 using UnityEngine;
 
 /// <summary>
-/// Thin turn presentation/controller layer.
-/// The authoritative turn and phase live in NetworkGameState instead of local Master-only memory.
+/// Thin turn command/presentation layer. Authoritative mutations live in NetworkGameState;
+/// this component only routes validated local requests to the Master Client.
 /// </summary>
 public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
 {
@@ -30,17 +30,10 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
         NetworkGameState.StateChanged -= OnGameStateChanged;
     }
 
-    /// <summary>
-    /// Requests the next phase for the local active player.
-    /// Action -> Buy -> Cleanup -> next player's Action phase.
-    /// </summary>
     public void AdvancePhase()
     {
         GameStateSnapshot state = NetworkGameState.State;
-        if (state == null || state.IsPaused || !state.IsStarted)
-            return;
-
-        if (state.ActivePlayerId != NetworkGameState.LocalPlayerId)
+        if (!CanSendActivePlayerCommand(state))
             return;
 
         photonView.RPC(
@@ -51,10 +44,36 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
             state.AuthorityEpoch);
     }
 
-    /// <summary>
-    /// Compatibility alias for the old HUD button. It now advances one phase instead of
-    /// skipping directly to the next player.
-    /// </summary>
+    public void PlayTreasure(int instanceId)
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (!CanSendActivePlayerCommand(state) || instanceId <= 0)
+            return;
+
+        photonView.RPC(
+            nameof(RpcRequestPlayTreasure),
+            RpcTarget.MasterClient,
+            NetworkGameState.LocalPlayerId,
+            instanceId,
+            state.Version,
+            state.AuthorityEpoch);
+    }
+
+    public void BuyCard(string definitionId)
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (!CanSendActivePlayerCommand(state) || string.IsNullOrEmpty(definitionId))
+            return;
+
+        photonView.RPC(
+            nameof(RpcRequestBuyCard),
+            RpcTarget.MasterClient,
+            NetworkGameState.LocalPlayerId,
+            definitionId,
+            state.Version,
+            state.AuthorityEpoch);
+    }
+
     public void FinishTurn()
     {
         AdvancePhase();
@@ -67,20 +86,62 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
         int expectedAuthorityEpoch,
         PhotonMessageInfo info)
     {
-        if (!PhotonNetwork.IsMasterClient || info.Sender == null)
+        if (!ValidateSender(requesterPlayerId, info))
             return;
-
-        string senderPlayerId = NetworkGameState.GetPlayerId(info.Sender);
-        if (senderPlayerId != requesterPlayerId)
-        {
-            Debug.LogWarning("Rejected phase command: Photon sender identity mismatch.");
-            return;
-        }
 
         if (!NetworkGameState.TryAdvancePhase(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
-        {
             Debug.LogWarning("Rejected stale or invalid AdvancePhase command.");
-        }
+    }
+
+    [PunRPC]
+    private void RpcRequestPlayTreasure(
+        string requesterPlayerId,
+        int instanceId,
+        int expectedVersion,
+        int expectedAuthorityEpoch,
+        PhotonMessageInfo info)
+    {
+        if (!ValidateSender(requesterPlayerId, info))
+            return;
+
+        if (!NetworkGameState.TryPlayTreasure(requesterPlayerId, instanceId, expectedVersion, expectedAuthorityEpoch))
+            Debug.LogWarning("Rejected stale or invalid PlayTreasure command.");
+    }
+
+    [PunRPC]
+    private void RpcRequestBuyCard(
+        string requesterPlayerId,
+        string definitionId,
+        int expectedVersion,
+        int expectedAuthorityEpoch,
+        PhotonMessageInfo info)
+    {
+        if (!ValidateSender(requesterPlayerId, info))
+            return;
+
+        if (!NetworkGameState.TryBuyCard(requesterPlayerId, definitionId, expectedVersion, expectedAuthorityEpoch))
+            Debug.LogWarning("Rejected stale or invalid BuyCard command for " + definitionId + ".");
+    }
+
+    private static bool CanSendActivePlayerCommand(GameStateSnapshot state)
+    {
+        return state != null &&
+               state.IsStarted &&
+               !state.IsPaused &&
+               state.ActivePlayerId == NetworkGameState.LocalPlayerId;
+    }
+
+    private static bool ValidateSender(string requesterPlayerId, PhotonMessageInfo info)
+    {
+        if (!PhotonNetwork.IsMasterClient || info.Sender == null)
+            return false;
+
+        string senderPlayerId = NetworkGameState.GetPlayerId(info.Sender);
+        if (senderPlayerId == requesterPlayerId)
+            return true;
+
+        Debug.LogWarning("Rejected gameplay command: Photon sender identity mismatch.");
+        return false;
     }
 
     private void OnGameStateChanged(GameStateSnapshot state)
@@ -97,7 +158,7 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
         if (!turnChanged || state.IsPaused)
             return;
 
-        if (state.ActivePlayerId == NetworkGameState.LocalPlayerId)
+        if (state.ActivePlayerId == NetworkGameState.LocalPlayerId && _playerHandler != null)
             _playerHandler.BeginTurn();
     }
 }
