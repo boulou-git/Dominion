@@ -27,6 +27,11 @@ public class GameStateSnapshot
     public int TurnNumber;
     public string Phase = "Setup";
 
+    // One registry for every physical card created during the match.
+    // Player zones only store InstanceId values referencing this registry.
+    public int NextCardInstanceId = 1;
+    public List<CardInstance> CardInstances = new List<CardInstance>();
+
     // Player order is fixed once the match starts.
     public List<PlayerStateSnapshot> Players = new List<PlayerStateSnapshot>();
 }
@@ -42,7 +47,7 @@ public class PlayerStateSnapshot
     public string NickName;
     public bool IsConnected = true;
 
-    // Card instance IDs will be stored here once the card runtime is implemented.
+    // All zones contain CardInstance.InstanceId values.
     public List<int> Deck = new List<int>();
     public List<int> Hand = new List<int>();
     public List<int> Discard = new List<int>();
