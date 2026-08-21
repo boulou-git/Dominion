@@ -49,6 +49,7 @@ public sealed class GameScreenController : MonoBehaviour
     private readonly List<int> _localHandOrder = new List<int>();
     private readonly List<int> _renderedHandIds = new List<int>();
     private bool _kingdomBuilt;
+    private bool _handRootFailureLogged;
 
     private static readonly Color Panel = new Color(0.11f, 0.105f, 0.095f, 1f);
     private static readonly Color Active = new Color(0.40f, 0.32f, 0.17f, 1f);
@@ -56,6 +57,8 @@ public sealed class GameScreenController : MonoBehaviour
 
     private void Awake()
     {
+        ResolveHandRoot();
+
         if (_nextPhaseButton != null)
             _nextPhaseButton.onClick.AddListener(RequestNextPhase);
         if (_zoomCloseButton != null)
@@ -79,6 +82,7 @@ public sealed class GameScreenController : MonoBehaviour
 
     private void Refresh(GameStateSnapshot state)
     {
+        ResolveHandRoot();
         RefreshPlayerPills(state);
 
         if (!_kingdomBuilt)
@@ -103,7 +107,7 @@ public sealed class GameScreenController : MonoBehaviour
         }
 
         PlayerStateSnapshot activePlayer = state.Players.Find(p => p != null && p.PlayerId == state.ActivePlayerId);
-        PlayerStateSnapshot localPlayer = state.Players.Find(p => p != null && p.PlayerId == NetworkGameState.LocalPlayerId);
+        PlayerStateSnapshot localPlayer = ResolveLocalPlayer(state);
 
         if (_turnText != null)
         {
@@ -147,6 +151,30 @@ public sealed class GameScreenController : MonoBehaviour
 
         if (_journalText != null && activePlayer != null)
             _journalText.text = "Tour " + state.TurnNumber + "\n\n" + activePlayer.NickName + " — phase " + PhaseLabel(state.Phase) + ".";
+    }
+
+    private PlayerStateSnapshot ResolveLocalPlayer(GameStateSnapshot state)
+    {
+        if (state == null || state.Players == null)
+            return null;
+
+        string localId = NetworkGameState.LocalPlayerId;
+        PlayerStateSnapshot localPlayer = state.Players.Find(p => p != null && p.PlayerId == localId);
+        if (localPlayer != null)
+            return localPlayer;
+
+        // UserId can briefly be unavailable during scene startup. ActorNumber is a safe
+        // local fallback and avoids hiding the hand during that short Photon window.
+        if (PhotonNetwork.LocalPlayer != null)
+        {
+            int actorNumber = PhotonNetwork.LocalPlayer.ActorNumber;
+            localPlayer = state.Players.Find(p => p != null && p.ActorNumber == actorNumber);
+            if (localPlayer != null)
+                return localPlayer;
+        }
+
+        // Explicit solo-test fallback. With one player there is no privacy ambiguity.
+        return state.Players.Count == 1 ? state.Players[0] : null;
     }
 
     private void RefreshPlayerPills(GameStateSnapshot state)
@@ -196,6 +224,7 @@ public sealed class GameScreenController : MonoBehaviour
     /// </summary>
     private void RefreshLocalHand(GameStateSnapshot state, PlayerStateSnapshot localPlayer)
     {
+        ResolveHandRoot();
         if (_handRoot == null || localPlayer == null)
             return;
 
@@ -205,6 +234,81 @@ public sealed class GameScreenController : MonoBehaviour
             return;
 
         RebuildLocalHand(state);
+    }
+
+    /// <summary>
+    /// The game UI prefab is deliberately editable and may exist locally in an older
+    /// version. Never rely exclusively on a serialized reference for the hand: recover
+    /// LocalHand/Cards by hierarchy name, and create the Cards container if necessary.
+    /// </summary>
+    private void ResolveHandRoot()
+    {
+        if (_handRoot != null)
+        {
+            _handRoot.gameObject.SetActive(true);
+            return;
+        }
+
+        Transform localHand = FindDeepChild(transform, "LocalHand");
+        if (localHand == null)
+        {
+            // Last-resort runtime fallback for an old local GameScreen prefab.
+            GameObject localHandObject = new GameObject("LocalHand", typeof(RectTransform), typeof(Image));
+            localHandObject.transform.SetParent(transform, false);
+            RectTransform localHandRect = localHandObject.GetComponent<RectTransform>();
+            SetAnchors(localHandRect, new Vector2(0.015f, 0.015f), new Vector2(0.985f, 0.277f));
+            localHandObject.GetComponent<Image>().color = new Color(0.115f, 0.108f, 0.095f, 0.98f);
+
+            GameObject headerObject = new GameObject("Header", typeof(RectTransform), typeof(Text));
+            headerObject.transform.SetParent(localHandObject.transform, false);
+            RectTransform headerRect = headerObject.GetComponent<RectTransform>();
+            SetAnchors(headerRect, new Vector2(0.018f, 0.82f), new Vector2(0.982f, 0.98f));
+            Text header = headerObject.GetComponent<Text>();
+            header.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            header.text = "VOTRE MAIN";
+            header.fontSize = 18;
+            header.fontStyle = FontStyle.Bold;
+            header.alignment = TextAnchor.MiddleLeft;
+            header.color = Color.white;
+            header.raycastTarget = false;
+
+            localHand = localHandObject.transform;
+            Debug.LogWarning("GameScreen had no LocalHand object. Created a runtime fallback hand panel.");
+        }
+
+        Transform cards = FindDirectChild(localHand, "Cards");
+        if (cards == null)
+        {
+            GameObject cardsObject = new GameObject("Cards", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            cardsObject.transform.SetParent(localHand, false);
+            RectTransform cardsRect = cardsObject.GetComponent<RectTransform>();
+            SetAnchors(cardsRect, new Vector2(0.018f, 0.055f), new Vector2(0.982f, 0.81f));
+
+            HorizontalLayoutGroup layout = cardsObject.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = 8f;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = false;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+
+            cards = cardsObject.transform;
+            Debug.LogWarning("GameScreen LocalHand had no Cards container. Created it at runtime.");
+        }
+
+        _handRoot = cards as RectTransform;
+        if (_handRoot != null)
+        {
+            _handRoot.gameObject.SetActive(true);
+            _handRootFailureLogged = false;
+            return;
+        }
+
+        if (!_handRootFailureLogged)
+        {
+            _handRootFailureLogged = true;
+            Debug.LogError("Could not resolve GameScreen LocalHand/Cards RectTransform.");
+        }
     }
 
     private void SynchroniseLocalHandOrder(List<int> authoritativeHand)
@@ -314,6 +418,9 @@ public sealed class GameScreenController : MonoBehaviour
 
         if (_handCards.Count == 0)
             CreateHandMessage("Aucune carte affichable");
+
+        Canvas.ForceUpdateCanvases();
+        Debug.Log("Local hand rendered: " + _renderedHandIds.Count + " card(s) in " + _handRoot.name + ".");
     }
 
     private void HandleHandOrderChanged()
@@ -337,7 +444,6 @@ public sealed class GameScreenController : MonoBehaviour
         _renderedHandIds.Clear();
         _renderedHandIds.AddRange(order);
 
-        // Keep the tracked GameObject list in the same order as the visible hand.
         _handCards.Sort((left, right) =>
         {
             if (left == null || right == null)
@@ -435,6 +541,48 @@ public sealed class GameScreenController : MonoBehaviour
     {
         if (PlayersTurnsHandler.Instance != null)
             PlayersTurnsHandler.Instance.AdvancePhase();
+    }
+
+    private static Transform FindDirectChild(Transform parent, string childName)
+    {
+        if (parent == null)
+            return null;
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform child = parent.GetChild(i);
+            if (string.Equals(child.name, childName, StringComparison.Ordinal))
+                return child;
+        }
+
+        return null;
+    }
+
+    private static Transform FindDeepChild(Transform parent, string childName)
+    {
+        if (parent == null)
+            return null;
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform child = parent.GetChild(i);
+            if (string.Equals(child.name, childName, StringComparison.Ordinal))
+                return child;
+
+            Transform nested = FindDeepChild(child, childName);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
+    }
+
+    private static void SetAnchors(RectTransform rect, Vector2 min, Vector2 max)
+    {
+        rect.anchorMin = min;
+        rect.anchorMax = max;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
     }
 
     private static string PhaseLabel(string phase)
