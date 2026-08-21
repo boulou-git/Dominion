@@ -20,6 +20,7 @@ public class GameStateSnapshot
     public bool IsStarted;
     public bool IsInitialised;
     public bool IsPaused;
+    public bool ManualPauseRequested;
     public string PauseReason;
 
     public string ActivePlayerId;
