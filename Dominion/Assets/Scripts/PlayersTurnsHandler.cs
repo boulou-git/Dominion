@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// Thin turn presentation/controller layer.
-/// The authoritative turn now lives in NetworkGameState instead of local Master-only memory.
+/// The authoritative turn and phase live in NetworkGameState instead of local Master-only memory.
 /// </summary>
 public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
 {
@@ -31,10 +31,10 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     }
 
     /// <summary>
-    /// Called by the local player's UI when their turn is complete.
-    /// The request is sent to the Master Client with the state version/epoch the player saw.
+    /// Requests the next phase for the local active player.
+    /// Action -> Buy -> Cleanup -> next player's Action phase.
     /// </summary>
-    public void FinishTurn()
+    public void AdvancePhase()
     {
         GameStateSnapshot state = NetworkGameState.State;
         if (state == null || state.IsPaused || !state.IsStarted)
@@ -44,15 +44,24 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
             return;
 
         photonView.RPC(
-            nameof(RpcRequestFinishTurn),
+            nameof(RpcRequestAdvancePhase),
             RpcTarget.MasterClient,
             NetworkGameState.LocalPlayerId,
             state.Version,
             state.AuthorityEpoch);
     }
 
+    /// <summary>
+    /// Compatibility alias for the old HUD button. It now advances one phase instead of
+    /// skipping directly to the next player.
+    /// </summary>
+    public void FinishTurn()
+    {
+        AdvancePhase();
+    }
+
     [PunRPC]
-    private void RpcRequestFinishTurn(
+    private void RpcRequestAdvancePhase(
         string requesterPlayerId,
         int expectedVersion,
         int expectedAuthorityEpoch,
@@ -64,13 +73,13 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
         string senderPlayerId = NetworkGameState.GetPlayerId(info.Sender);
         if (senderPlayerId != requesterPlayerId)
         {
-            Debug.LogWarning("Rejected turn command: Photon sender identity mismatch.");
+            Debug.LogWarning("Rejected phase command: Photon sender identity mismatch.");
             return;
         }
 
-        if (!NetworkGameState.TryAdvanceTurn(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
+        if (!NetworkGameState.TryAdvancePhase(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
         {
-            Debug.LogWarning("Rejected stale or invalid FinishTurn command.");
+            Debug.LogWarning("Rejected stale or invalid AdvancePhase command.");
         }
     }
 
