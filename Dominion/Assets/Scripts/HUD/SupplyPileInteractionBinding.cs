@@ -4,11 +4,15 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Small reusable runtime binding for one Reserve pile: quantity, buy highlight,
+/// Small reusable runtime binding for one Reserve pile: quantity, contextual availability,
 /// left-click purchase, right-click inspection and purchase feedback animation.
 /// </summary>
 public sealed class SupplyPileInteractionBinding : MonoBehaviour
 {
+    private static readonly Color AvailableColor = Color.white;
+    private static readonly Color UnavailableColor = new Color(0.68f, 0.68f, 0.68f, 1f);
+    private static readonly Color EmptyColor = new Color(0.42f, 0.42f, 0.42f, 1f);
+
     private string _definitionId;
     private Image _image;
     private Outline _outline;
@@ -18,6 +22,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     private Action<string> _buyRequested;
     private Action<Sprite> _inspectRequested;
     private bool _buyable;
+    private bool _hasCards = true;
     private bool _purchaseAnimationRunning;
 
     public string DefinitionId => _definitionId;
@@ -67,23 +72,39 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         _outline.enabled = false;
 
         _countText = FindOrCreateCountText(transform);
+        RefreshAvailabilityVisual();
     }
 
     public void SetRemaining(int remaining)
     {
         int value = Mathf.Max(0, remaining);
+        _hasCards = value > 0;
         if (_countText != null)
             _countText.text = value.ToString();
 
-        if (_image != null)
-            _image.color = value > 0 ? Color.white : new Color(0.46f, 0.46f, 0.46f, 1f);
+        RefreshAvailabilityVisual();
     }
 
     public void SetBuyable(bool buyable)
     {
         _buyable = buyable;
+        RefreshAvailabilityVisual();
+    }
+
+    private void RefreshAvailabilityVisual()
+    {
+        if (_image != null)
+        {
+            // During a player choice, cards that cannot satisfy that choice stay visible
+            // but are deliberately subdued. This same visual language can be reused by
+            // future discard/trash/gain selectors.
+            _image.color = !_hasCards
+                ? EmptyColor
+                : (_buyable ? AvailableColor : UnavailableColor);
+        }
+
         if (_outline != null)
-            _outline.enabled = buyable && !_purchaseAnimationRunning;
+            _outline.enabled = _hasCards && _buyable && !_purchaseAnimationRunning;
     }
 
     private void OnPrimaryAction()
@@ -102,8 +123,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     private IEnumerator PurchaseAnimationRoutine()
     {
         _purchaseAnimationRunning = true;
-        if (_outline != null)
-            _outline.enabled = false;
+        RefreshAvailabilityVisual();
 
         RectTransform source = transform as RectTransform;
         RectTransform discard = FindDeepChild(transform.root, "Discard") as RectTransform;
@@ -112,8 +132,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         if (source == null || discard == null || canvas == null || _sprite == null)
         {
             _purchaseAnimationRunning = false;
-            if (_outline != null)
-                _outline.enabled = _buyable;
+            RefreshAvailabilityVisual();
             yield break;
         }
 
@@ -150,7 +169,6 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
             float eased = 1f - Mathf.Pow(1f - t, 3f);
 
             Vector3 position = Vector3.Lerp(startWorld, targetWorld, eased);
-            // A very small arc keeps the movement readable without making it flashy.
             position.y += Mathf.Sin(t * Mathf.PI) * 24f;
             flying.position = position;
             flying.localScale = Vector3.Lerp(Vector3.one, Vector3.one * 0.58f, eased);
@@ -162,8 +180,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
             Destroy(flyingObject);
 
         _purchaseAnimationRunning = false;
-        if (_outline != null)
-            _outline.enabled = _buyable;
+        RefreshAvailabilityVisual();
     }
 
     private void OnInspect()
