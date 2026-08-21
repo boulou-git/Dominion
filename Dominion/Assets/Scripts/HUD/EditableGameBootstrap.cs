@@ -34,7 +34,10 @@ public static class EditableGameBootstrap
         if (existing != null)
         {
             if (existing.GetComponent<GameScreenController>() != null)
+            {
+                EnsureGameUiControllers(existing);
                 return;
+            }
 
             UnityEngine.Object.Destroy(existing);
         }
@@ -42,5 +45,15 @@ public static class EditableGameBootstrap
         GameObject instance = UnityEngine.Object.Instantiate(prefab);
         instance.name = RootName;
         SceneManager.MoveGameObjectToScene(instance, scene);
+        EnsureGameUiControllers(instance);
+    }
+
+    private static void EnsureGameUiControllers(GameObject root)
+    {
+        if (root == null)
+            return;
+
+        if (root.GetComponent<BaseSupplyController>() == null)
+            root.AddComponent<BaseSupplyController>();
     }
 }
