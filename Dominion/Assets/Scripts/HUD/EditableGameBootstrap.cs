@@ -68,6 +68,8 @@ public static class EditableGameBootstrap
 
         if (root.GetComponent<BuyPhaseGameplayController>() == null)
             root.AddComponent<BuyPhaseGameplayController>();
+
+        FixReserveScrollLayout(root.transform);
     }
 
     private static void RemoveLegacyBaseSupplyLayout(Transform root)
@@ -79,6 +81,55 @@ public static class EditableGameBootstrap
         LayoutGroup legacyLayout = baseSupply.GetComponent<LayoutGroup>();
         if (legacyLayout != null)
             UnityEngine.Object.DestroyImmediate(legacyLayout);
+    }
+
+    /// <summary>
+    /// The Reserve scroll content owns the vertical stacking of its two card grids.
+    /// It must control child heights so the LayoutElement heights calculated by the
+    /// gameplay controller are actually respected; otherwise Base and Kingdom retain
+    /// their old anchored heights and overlap visually.
+    /// </summary>
+    private static void FixReserveScrollLayout(Transform root)
+    {
+        Transform content = FindDeepChild(root, "ReserveScrollContent");
+        if (content == null)
+            return;
+
+        VerticalLayoutGroup vertical = content.GetComponent<VerticalLayoutGroup>();
+        if (vertical != null)
+        {
+            vertical.childControlHeight = true;
+            vertical.childForceExpandHeight = false;
+            vertical.spacing = 10f;
+        }
+
+        RectTransform baseSupply = FindDeepChild(content, "BaseSupply") as RectTransform;
+        RectTransform kingdomSupply = FindDeepChild(content, "KingdomSupply") as RectTransform;
+        ApplyGridHeight(baseSupply, 7, 4);
+        ApplyGridHeight(kingdomSupply, 10, 5);
+
+        RectTransform contentRect = content as RectTransform;
+        if (contentRect != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
+        Canvas.ForceUpdateCanvases();
+    }
+
+    private static void ApplyGridHeight(RectTransform gridRoot, int cardCount, int columns)
+    {
+        if (gridRoot == null)
+            return;
+
+        int rows = Mathf.Max(1, Mathf.CeilToInt(cardCount / (float)Mathf.Max(1, columns)));
+        const float cellHeight = 142f;
+        const float rowSpacing = 10f;
+        const float verticalPadding = 10f;
+        float height = verticalPadding + rows * cellHeight + Mathf.Max(0, rows - 1) * rowSpacing;
+
+        LayoutElement element = gridRoot.GetComponent<LayoutElement>();
+        if (element == null)
+            element = gridRoot.gameObject.AddComponent<LayoutElement>();
+        element.preferredHeight = height;
+        element.minHeight = height;
     }
 
     private static Transform FindDeepChild(Transform parent, string childName)
