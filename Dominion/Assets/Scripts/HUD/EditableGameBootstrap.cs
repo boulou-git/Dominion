@@ -59,6 +59,11 @@ public static class EditableGameBootstrap
         if (root.GetComponent<BaseSupplyController>() == null)
             root.AddComponent<BaseSupplyController>();
 
+        // Decorate the existing Pioche panel with the shared card back. The GameState
+        // remains authoritative for the actual deck contents and count.
+        if (root.GetComponent<DeckPileVisualController>() == null)
+            root.AddComponent<DeckPileVisualController>();
+
         // Older/local GameScreen prefabs still give BaseSupply a HorizontalLayoutGroup.
         // BuyPhaseGameplayController expects a grid, so remove that legacy layout first.
         RemoveLegacyBaseSupplyLayout(root.transform);
