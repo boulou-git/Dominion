@@ -20,6 +20,7 @@ public class GameStateSnapshot
     public bool IsStarted;
     public bool IsInitialised;
     public bool IsPaused;
+    public string PauseReason;
 
     public string ActivePlayerId;
     public int TurnNumber;
