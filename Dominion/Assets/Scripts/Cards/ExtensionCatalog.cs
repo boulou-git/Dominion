@@ -9,7 +9,10 @@ public sealed class ExtensionPackageData
     public string id;
     public string name;
     public int version;
+    public string artwork;
     public List<ExtensionCardData> cards = new List<ExtensionCardData>();
+
+    [NonSerialized] public string packageDirectory;
 }
 
 [Serializable]
@@ -25,7 +28,7 @@ public sealed class ExtensionCardData
 
 /// <summary>
 /// Reads drop-in extension packages from StreamingAssets/Extensions/*/extension.json.
-/// Missing/empty image fields are valid and are handled later by CardView's fallback.
+/// Missing/empty artwork/image fields are valid and use visual fallbacks.
 /// </summary>
 public static class ExtensionCatalog
 {
@@ -66,8 +69,6 @@ public static class ExtensionCatalog
         List<ExtensionPackageData> result = new List<ExtensionPackageData>();
         string root = Path.Combine(Application.streamingAssetsPath, "Extensions");
 
-        // The current desktop/Editor target exposes StreamingAssets as normal files.
-        // A web/mobile transport can be added later without changing the JSON format.
         if (root.Contains("://"))
         {
             Debug.LogWarning("StreamingAssets extension discovery currently expects a local filesystem path: " + root);
@@ -99,6 +100,7 @@ public static class ExtensionCatalog
                     continue;
                 }
 
+                extension.packageDirectory = directory;
                 if (extension.cards == null)
                     extension.cards = new List<ExtensionCardData>();
 
