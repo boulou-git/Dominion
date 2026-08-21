@@ -3,8 +3,8 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// Prefers the editable Resources/UI/LobbySetupScreen prefab over the legacy
-/// code-generated lobby. If the prefab has not been generated yet, the legacy bootstrap remains available.
+/// Single pre-game UI bootstrap.
+/// Loads the editable Resources/UI/LobbySetupScreen prefab when the Lobby scene is loaded.
 /// </summary>
 public static class EditableLobbyBootstrap
 {
@@ -26,7 +26,10 @@ public static class EditableLobbyBootstrap
 
         GameObject prefab = Resources.Load<GameObject>(PrefabResourcePath);
         if (prefab == null)
+        {
+            Debug.LogError("Missing Resources/UI/LobbySetupScreen prefab. Dominion pre-game UI cannot start.");
             return;
+        }
 
         GameObject existing = GameObject.Find(RootName);
         if (existing != null)
