@@ -32,8 +32,29 @@ public class GameStateSnapshot
     public int NextCardInstanceId = 1;
     public List<CardInstance> CardInstances = new List<CardInstance>();
 
+    // Authoritative remaining card counts for every Reserve pile.
+    // DefinitionId uses qualified refs such as "base:cuivre".
+    public List<SupplyPileSnapshot> SupplyPiles = new List<SupplyPileSnapshot>();
+
     // Player order is fixed once the match starts.
     public List<PlayerStateSnapshot> Players = new List<PlayerStateSnapshot>();
+}
+
+[Serializable]
+public class SupplyPileSnapshot
+{
+    public string DefinitionId;
+    public int RemainingCount;
+
+    public SupplyPileSnapshot()
+    {
+    }
+
+    public SupplyPileSnapshot(string definitionId, int remainingCount)
+    {
+        DefinitionId = definitionId;
+        RemainingCount = remainingCount;
+    }
 }
 
 [Serializable]
