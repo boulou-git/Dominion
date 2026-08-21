@@ -2,6 +2,24 @@
   "id": "base",
   "name": "Dominion — Base",
   "version": 1,
+  "baseCards": [
+    {
+      "id": "cuivre",
+      "name": "Cuivre",
+      "cost": 0,
+      "types": ["Trésor"],
+      "image": "cuivre.png",
+      "text": "+1 🪙"
+    },
+    {
+      "id": "domaine",
+      "name": "Domaine",
+      "cost": 2,
+      "types": ["Victoire"],
+      "image": "domaine.png",
+      "text": "1 VP"
+    }
+  ],
   "cards": [
     {
       "id": "cave",
