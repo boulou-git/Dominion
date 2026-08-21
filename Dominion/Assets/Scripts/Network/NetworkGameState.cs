@@ -16,6 +16,10 @@ public static class NetworkGameState
 {
     private const string StatePropertyKey = "dominion.gameState.v1";
 
+    public const string ActionPhase = "Action";
+    public const string BuyPhase = "Buy";
+    public const string CleanupPhase = "Cleanup";
+
     private static GameStateSnapshot _state;
 
     public static event Action<GameStateSnapshot> StateChanged;
@@ -101,7 +105,7 @@ public static class NetworkGameState
             IsInitialised = false,
             IsPaused = roomPlayers.Any(player => player.IsInactive),
             TurnNumber = 1,
-            Phase = "Action"
+            Phase = ActionPhase
         };
 
         foreach (Player player in roomPlayers)
@@ -211,10 +215,50 @@ public static class NetworkGameState
     }
 
     /// <summary>
-    /// The Master rejects stale commands, old authority epochs, wrong-player commands,
-    /// and every gameplay command while the match is paused for a disconnected player.
+    /// Advances Action -> Buy -> Cleanup. Advancing from Cleanup starts the next player's
+    /// Action phase. Only the active player may request this and stale requests are rejected.
+    /// </summary>
+    public static bool TryAdvancePhase(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
+    {
+        if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
+            return false;
+
+        GameStateSnapshot next = Clone(_state);
+
+        switch (next.Phase)
+        {
+            case ActionPhase:
+                next.Phase = BuyPhase;
+                break;
+
+            case BuyPhase:
+                next.Phase = CleanupPhase;
+                break;
+
+            case CleanupPhase:
+                return AdvanceToNextPlayer(next);
+
+            default:
+                // Unknown extension phases must never silently skip the turn.
+                return false;
+        }
+
+        return CommitState(next);
+    }
+
+    /// <summary>
+    /// Kept as a low-level helper for future engine code. Normal UI progression should use
+    /// TryAdvancePhase so a player cannot skip Action/Buy/Cleanup accidentally.
     /// </summary>
     public static bool TryAdvanceTurn(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
+    {
+        if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
+            return false;
+
+        return AdvanceToNextPlayer(Clone(_state));
+    }
+
+    private static bool ValidateActivePlayerCommand(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
     {
         if (!CanWrite() || _state == null || !_state.IsStarted || _state.IsPaused)
             return false;
@@ -222,10 +266,11 @@ public static class NetworkGameState
         if (_state.Version != expectedVersion || _state.AuthorityEpoch != expectedAuthorityEpoch)
             return false;
 
-        if (_state.ActivePlayerId != requesterPlayerId || _state.Players.Count == 0)
-            return false;
+        return _state.ActivePlayerId == requesterPlayerId && _state.Players.Count > 0;
+    }
 
-        GameStateSnapshot next = Clone(_state);
+    private static bool AdvanceToNextPlayer(GameStateSnapshot next)
+    {
         int currentIndex = next.Players.FindIndex(player => player.PlayerId == next.ActivePlayerId);
         if (currentIndex < 0)
             return false;
@@ -233,7 +278,7 @@ public static class NetworkGameState
         int nextIndex = (currentIndex + 1) % next.Players.Count;
         next.ActivePlayerId = next.Players[nextIndex].PlayerId;
         next.TurnNumber++;
-        next.Phase = "Action";
+        next.Phase = ActionPhase;
 
         return CommitState(next);
     }
