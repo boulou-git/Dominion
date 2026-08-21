@@ -60,16 +60,13 @@ public static class EditableGameBootstrap
             root.AddComponent<BaseSupplyController>();
 
         // Older/local GameScreen prefabs still give BaseSupply a HorizontalLayoutGroup.
-        // Unity UI forbids two LayoutGroup components on the same object, so attempting
-        // to add the GridLayoutGroup used by the scrollable Reserve returned null and
-        // caused BuyPhaseGameplayController.ReparentGrid to throw. Remove only that
-        // incompatible legacy layout before the gameplay controller is attached.
+        // BuyPhaseGameplayController expects a grid, so remove that legacy layout first.
         RemoveLegacyBaseSupplyLayout(root.transform);
 
         if (root.GetComponent<BuyPhaseGameplayController>() == null)
             root.AddComponent<BuyPhaseGameplayController>();
 
-        FixReserveScrollLayout(root.transform);
+        ConfigureFixedReserveLayout(root.transform);
     }
 
     private static void RemoveLegacyBaseSupplyLayout(Transform root)
@@ -84,52 +81,127 @@ public static class EditableGameBootstrap
     }
 
     /// <summary>
-    /// The Reserve scroll content owns the vertical stacking of its two card grids.
-    /// It must control child heights so the LayoutElement heights calculated by the
-    /// gameplay controller are actually respected; otherwise Base and Kingdom retain
-    /// their old anchored heights and overlap visually.
+    /// Displays the whole Reserve at once instead of scrolling it:
+    /// left = 7 base piles, right = 10 Kingdom piles.
+    /// Base uses a deliberate empty fourth slot on row one so the order is:
+    /// Cuivre / Argent / Or, then Domaine / Duché / Province / Malédiction.
     /// </summary>
-    private static void FixReserveScrollLayout(Transform root)
+    private static void ConfigureFixedReserveLayout(Transform root)
     {
-        Transform content = FindDeepChild(root, "ReserveScrollContent");
-        if (content == null)
+        Transform supplyPanel = FindDeepChild(root, "SupplyPanel");
+        RectTransform baseSupply = FindDeepChild(root, "BaseSupply") as RectTransform;
+        RectTransform kingdomSupply = FindDeepChild(root, "KingdomSupply") as RectTransform;
+        Transform baseLabel = FindDeepChild(root, "BaseSupplyLabel");
+        Transform kingdomLabel = FindDeepChild(root, "KingdomLabel");
+
+        if (supplyPanel == null || baseSupply == null || kingdomSupply == null)
             return;
 
-        VerticalLayoutGroup vertical = content.GetComponent<VerticalLayoutGroup>();
-        if (vertical != null)
+        // BuyPhaseGameplayController currently creates a runtime ScrollRect first.
+        // Move the useful children back to SupplyPanel, then remove the empty scroll shell.
+        if (baseLabel != null)
+            baseLabel.SetParent(supplyPanel, false);
+        baseSupply.SetParent(supplyPanel, false);
+
+        if (kingdomLabel != null)
+            kingdomLabel.SetParent(supplyPanel, false);
+        kingdomSupply.SetParent(supplyPanel, false);
+
+        Transform scrollViewport = FindDeepChild(supplyPanel, "ReserveScrollViewport");
+        if (scrollViewport != null)
         {
-            vertical.childControlHeight = true;
-            vertical.childForceExpandHeight = false;
-            vertical.spacing = 10f;
+            scrollViewport.gameObject.SetActive(false);
+            UnityEngine.Object.Destroy(scrollViewport.gameObject);
         }
 
-        RectTransform baseSupply = FindDeepChild(content, "BaseSupply") as RectTransform;
-        RectTransform kingdomSupply = FindDeepChild(content, "KingdomSupply") as RectTransform;
-        ApplyGridHeight(baseSupply, 7, 4);
-        ApplyGridHeight(kingdomSupply, 10, 5);
+        // Left side: base cards.
+        SetAnchors(baseLabel as RectTransform, new Vector2(0.025f, 0.80f), new Vector2(0.39f, 0.88f));
+        SetAnchors(baseSupply, new Vector2(0.025f, 0.055f), new Vector2(0.39f, 0.79f));
+        ConfigureGrid(baseSupply, 4, new Vector2(82f, 127f), TextAnchor.UpperLeft);
+        EnsureBaseFirstRowGap(baseSupply);
 
-        RectTransform contentRect = content as RectTransform;
-        if (contentRect != null)
-            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
+        // Right side: the ten Kingdom cards in a clean 5 x 2 grid.
+        SetAnchors(kingdomLabel as RectTransform, new Vector2(0.41f, 0.80f), new Vector2(0.975f, 0.88f));
+        SetAnchors(kingdomSupply, new Vector2(0.41f, 0.055f), new Vector2(0.975f, 0.79f));
+        ConfigureGrid(kingdomSupply, 5, new Vector2(82f, 127f), TextAnchor.UpperLeft);
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(baseSupply);
+        LayoutRebuilder.ForceRebuildLayoutImmediate(kingdomSupply);
+        if (supplyPanel is RectTransform supplyRect)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(supplyRect);
         Canvas.ForceUpdateCanvases();
     }
 
-    private static void ApplyGridHeight(RectTransform gridRoot, int cardCount, int columns)
+    private static void ConfigureGrid(RectTransform root, int columns, Vector2 cellSize, TextAnchor alignment)
     {
-        if (gridRoot == null)
+        if (root == null)
             return;
 
-        int rows = Mathf.Max(1, Mathf.CeilToInt(cardCount / (float)Mathf.Max(1, columns)));
-        const float cellHeight = 142f;
-        const float rowSpacing = 10f;
-        const float verticalPadding = 10f;
-        float height = verticalPadding + rows * cellHeight + Mathf.Max(0, rows - 1) * rowSpacing;
+        GridLayoutGroup grid = root.GetComponent<GridLayoutGroup>();
+        LayoutGroup[] layouts = root.GetComponents<LayoutGroup>();
+        foreach (LayoutGroup layout in layouts)
+        {
+            if (layout != null && !(layout is GridLayoutGroup))
+                UnityEngine.Object.DestroyImmediate(layout);
+        }
 
-        LayoutElement element = gridRoot.GetComponent<LayoutElement>();
-        if (element == null)
-            element = gridRoot.gameObject.AddComponent<LayoutElement>();
-        element.preferredHeight = height;
-        element.minHeight = height;
+        if (grid == null)
+            grid = root.gameObject.AddComponent<GridLayoutGroup>();
+        if (grid == null)
+            return;
+
+        grid.enabled = true;
+        grid.cellSize = cellSize;
+        grid.spacing = new Vector2(7f, 7f);
+        grid.padding = new RectOffset(4, 4, 4, 4);
+        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = columns;
+        grid.childAlignment = alignment;
+        grid.startAxis = GridLayoutGroup.Axis.Horizontal;
+    }
+
+    private static void EnsureBaseFirstRowGap(RectTransform baseSupply)
+    {
+        if (baseSupply == null)
+            return;
+
+        Transform gap = FindDirectChild(baseSupply, "BaseRowGap");
+        if (gap == null)
+        {
+            GameObject gapObject = new GameObject("BaseRowGap", typeof(RectTransform));
+            gapObject.transform.SetParent(baseSupply, false);
+            gap = gapObject.transform;
+        }
+
+        // C / A / O / [vide]
+        // D / Du / P / M
+        gap.SetSiblingIndex(Mathf.Min(3, baseSupply.childCount - 1));
+    }
+
+    private static void SetAnchors(RectTransform rect, Vector2 min, Vector2 max)
+    {
+        if (rect == null)
+            return;
+
+        rect.anchorMin = min;
+        rect.anchorMax = max;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+    }
+
+    private static Transform FindDirectChild(Transform parent, string childName)
+    {
+        if (parent == null)
+            return null;
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform child = parent.GetChild(i);
+            if (string.Equals(child.name, childName, StringComparison.Ordinal))
+                return child;
+        }
+
+        return null;
     }
 
     private static Transform FindDeepChild(Transform parent, string childName)
