@@ -9,8 +9,6 @@ using Hashtable = ExitGames.Client.Photon.Hashtable;
 /// <summary>
 /// Replicated Dominion game state stored in Photon room custom properties.
 /// The Master Client is the only writer, but every client keeps the latest snapshot.
-/// Because the snapshot lives on the room, it survives Master Client migration and is
-/// automatically available to players that successfully rejoin the room.
 /// </summary>
 public static class NetworkGameState
 {
@@ -31,6 +29,7 @@ public static class NetworkGameState
     private const int TotalCopperCount = 60;
     private const int SilverSupplyCount = 40;
     private const int GoldSupplyCount = 30;
+    private const int KingdomPileCount = 10;
 
     public const string ActionPhase = "Action";
     public const string BuyPhase = "Buy";
@@ -126,9 +125,8 @@ public static class NetworkGameState
     }
 
     /// <summary>
-    /// Creates the first authoritative snapshot for a match. Starter decks, the base
-    /// Reserve and opening hands are generated here once, before the Game scene opens,
-    /// so reconnecting never recreates or redraws them.
+    /// Creates the first authoritative snapshot for a match. For the current gameplay
+    /// milestone we deliberately begin directly in Buy phase; Action will be enabled later.
     /// </summary>
     public static bool InitialiseAuthoritativeState()
     {
@@ -155,7 +153,7 @@ public static class NetworkGameState
             IsPaused = roomPlayers.Any(player => player.IsInactive),
             ManualPauseRequested = false,
             TurnNumber = 1,
-            Phase = ActionPhase,
+            Phase = BuyPhase,
             NextCardInstanceId = 1
         };
 
@@ -173,7 +171,7 @@ public static class NetworkGameState
             });
         }
 
-        CreateBaseSupply(state, roomPlayers.Count);
+        CreateSupply(state, roomPlayers.Count);
         CreateStarterDecksAndOpeningHands(state);
         UpdatePauseState(state);
 
@@ -210,10 +208,6 @@ public static class NetworkGameState
         return CommitState(next);
     }
 
-    /// <summary>
-    /// A disconnected player remains in the immutable match player order. Any absence
-    /// pauses the authoritative game until every player is connected again.
-    /// </summary>
     public static bool SetPlayerConnectivity(Player photonPlayer, bool connected)
     {
         if (!CanWrite() || _state == null || photonPlayer == null)
@@ -288,8 +282,8 @@ public static class NetworkGameState
     }
 
     /// <summary>
-    /// Advances Action -> Buy -> Cleanup. Advancing from Cleanup starts the next player's
-    /// Action phase. Only the active player may request this and stale requests are rejected.
+    /// Current temporary flow: Buy -> cleanup/draw -> next player's Buy.
+    /// Action remains supported as a compatibility phase and simply enters Buy.
     /// </summary>
     public static bool TryAdvancePhase(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
     {
@@ -302,20 +296,16 @@ public static class NetworkGameState
         {
             case ActionPhase:
                 next.Phase = BuyPhase;
-                break;
+                return CommitState(next);
 
             case BuyPhase:
-                next.Phase = CleanupPhase;
-                break;
-
             case CleanupPhase:
-                return AdvanceToNextPlayer(next);
+                PerformCleanupAndAdvance(next);
+                return CommitState(next);
 
             default:
                 return false;
         }
-
-        return CommitState(next);
     }
 
     public static bool TryAdvanceTurn(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
@@ -323,18 +313,90 @@ public static class NetworkGameState
         if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
             return false;
 
-        return AdvanceToNextPlayer(Clone(_state));
+        GameStateSnapshot next = Clone(_state);
+        PerformCleanupAndAdvance(next);
+        return CommitState(next);
     }
 
-    private static void CreateBaseSupply(GameStateSnapshot state, int playerCount)
+    public static bool TryPlayTreasure(
+        string requesterPlayerId,
+        int instanceId,
+        int expectedVersion,
+        int expectedAuthorityEpoch)
+    {
+        if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
+            return false;
+        if (!string.Equals(_state.Phase, BuyPhase, StringComparison.Ordinal))
+            return false;
+
+        GameStateSnapshot next = Clone(_state);
+        PlayerStateSnapshot player = FindPlayer(next, requesterPlayerId);
+        if (player == null || !player.Hand.Contains(instanceId))
+            return false;
+
+        CardInstance instance = FindCardInstance(next, instanceId);
+        if (instance == null || !string.Equals(instance.OwnerPlayerId, requesterPlayerId, StringComparison.Ordinal))
+            return false;
+
+        ExtensionPackageData extension;
+        ExtensionCardData definition;
+        if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition) || !IsTreasure(definition))
+            return false;
+
+        int value = TreasureValue(instance.DefinitionId);
+        if (value <= 0)
+            return false;
+
+        player.Hand.Remove(instanceId);
+        player.InPlay.Add(instanceId);
+        player.Coins += value;
+
+        return CommitState(next);
+    }
+
+    public static bool TryBuyCard(
+        string requesterPlayerId,
+        string definitionId,
+        int expectedVersion,
+        int expectedAuthorityEpoch)
+    {
+        if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
+            return false;
+        if (!string.Equals(_state.Phase, BuyPhase, StringComparison.Ordinal))
+            return false;
+
+        GameStateSnapshot next = Clone(_state);
+        PlayerStateSnapshot player = FindPlayer(next, requesterPlayerId);
+        SupplyPileSnapshot pile = FindSupplyPile(next, definitionId);
+        if (player == null || pile == null || pile.RemainingCount <= 0 || player.Buys <= 0)
+            return false;
+
+        ExtensionPackageData extension;
+        ExtensionCardData definition;
+        if (!RoomGameSetup.TryResolveCard(definitionId, out extension, out definition))
+            return false;
+        if (definition.cost < 0 || definition.cost > player.Coins)
+            return false;
+
+        pile.RemainingCount--;
+        player.Coins -= definition.cost;
+        player.Buys--;
+        CreateOwnedCardInDiscard(next, player, definitionId);
+
+        // Requested convenience for the current Buy-only milestone: when no Treasure
+        // remains in hand and no buying power remains, cleanup starts automatically.
+        if (player.Coins <= 0 && !HandContainsTreasure(next, player))
+            PerformCleanupAndAdvance(next);
+
+        return CommitState(next);
+    }
+
+    private static void CreateSupply(GameStateSnapshot state, int playerCount)
     {
         if (state == null)
             return;
 
-        if (state.SupplyPiles == null)
-            state.SupplyPiles = new List<SupplyPileSnapshot>();
-        else
-            state.SupplyPiles.Clear();
+        state.SupplyPiles = new List<SupplyPileSnapshot>();
 
         int players = Math.Max(1, playerCount);
         int victoryPileSize = GetVictoryPileSize(players);
@@ -346,6 +408,16 @@ public static class NetworkGameState
         AddSupplyPile(state, DuchyDefinitionId, victoryPileSize);
         AddSupplyPile(state, ProvinceDefinitionId, victoryPileSize);
         AddSupplyPile(state, CurseDefinitionId, Math.Max(0, 10 * (players - 1)));
+
+        GameSetupConfig setup = RoomGameSetup.ReadCurrent();
+        if (setup != null && setup.kingdomCardIds != null)
+        {
+            foreach (string definitionId in setup.kingdomCardIds)
+            {
+                if (!string.IsNullOrEmpty(definitionId))
+                    AddSupplyPile(state, definitionId, KingdomPileCount);
+            }
+        }
     }
 
     private static int GetVictoryPileSize(int playerCount)
@@ -355,13 +427,15 @@ public static class NetworkGameState
         if (playerCount <= 4)
             return 12;
 
-        // Supports the project's larger Photon rooms while preserving the standard
-        // 5-player/6-player progression of three Victory cards per player.
         return playerCount * 3;
     }
 
     private static void AddSupplyPile(GameStateSnapshot state, string definitionId, int remainingCount)
     {
+        if (state.SupplyPiles.Any(pile =>
+            pile != null && string.Equals(pile.DefinitionId, definitionId, StringComparison.OrdinalIgnoreCase)))
+            return;
+
         state.SupplyPiles.Add(new SupplyPileSnapshot(definitionId, Math.Max(0, remainingCount)));
     }
 
@@ -370,7 +444,7 @@ public static class NetworkGameState
         if (state == null || state.Players == null)
             return;
 
-        System.Random random = new System.Random(Guid.NewGuid().GetHashCode());
+        System.Random random = NewRandom();
 
         foreach (PlayerStateSnapshot player in state.Players)
         {
@@ -383,21 +457,91 @@ public static class NetworkGameState
             player.InPlay.Clear();
 
             for (int i = 0; i < StartingCopperCount; i++)
-                CreateOwnedCard(state, player, CopperDefinitionId);
+                CreateOwnedCardInDeck(state, player, CopperDefinitionId);
 
             for (int i = 0; i < StartingEstateCount; i++)
-                CreateOwnedCard(state, player, EstateDefinitionId);
+                CreateOwnedCardInDeck(state, player, EstateDefinitionId);
 
             Shuffle(player.Deck, random);
-            DrawCards(player, StartingHandSize);
+            DrawCardsWithReshuffle(player, StartingHandSize, random);
         }
     }
 
-    private static void CreateOwnedCard(GameStateSnapshot state, PlayerStateSnapshot owner, string definitionId)
+    private static void CreateOwnedCardInDeck(GameStateSnapshot state, PlayerStateSnapshot owner, string definitionId)
     {
         int instanceId = state.NextCardInstanceId++;
         state.CardInstances.Add(new CardInstance(instanceId, definitionId, owner.PlayerId));
         owner.Deck.Add(instanceId);
+    }
+
+    private static void CreateOwnedCardInDiscard(GameStateSnapshot state, PlayerStateSnapshot owner, string definitionId)
+    {
+        int instanceId = state.NextCardInstanceId++;
+        state.CardInstances.Add(new CardInstance(instanceId, definitionId, owner.PlayerId));
+        owner.Discard.Add(instanceId);
+    }
+
+    private static void PerformCleanupAndAdvance(GameStateSnapshot state)
+    {
+        if (state == null || state.Players == null || state.Players.Count == 0)
+            return;
+
+        PlayerStateSnapshot current = FindPlayer(state, state.ActivePlayerId);
+        if (current == null)
+            return;
+
+        // Played cards go down first. Hand is discarded right-to-left so the visually
+        // leftmost card is the final card added and therefore remains on top.
+        foreach (int instanceId in current.InPlay)
+            current.Discard.Add(instanceId);
+        current.InPlay.Clear();
+
+        for (int i = current.Hand.Count - 1; i >= 0; i--)
+            current.Discard.Add(current.Hand[i]);
+        current.Hand.Clear();
+
+        current.Actions = 1;
+        current.Buys = 1;
+        current.Coins = 0;
+
+        DrawCardsWithReshuffle(current, StartingHandSize, NewRandom());
+
+        int currentIndex = state.Players.FindIndex(player => player != null && player.PlayerId == state.ActivePlayerId);
+        if (currentIndex < 0)
+            currentIndex = 0;
+
+        int nextIndex = (currentIndex + 1) % state.Players.Count;
+        PlayerStateSnapshot nextPlayer = state.Players[nextIndex];
+        state.ActivePlayerId = nextPlayer.PlayerId;
+        state.TurnNumber++;
+        state.Phase = BuyPhase;
+        nextPlayer.Actions = 1;
+        nextPlayer.Buys = 1;
+        nextPlayer.Coins = 0;
+    }
+
+    private static void DrawCardsWithReshuffle(PlayerStateSnapshot player, int count, System.Random random)
+    {
+        if (player == null || count <= 0)
+            return;
+
+        for (int i = 0; i < count; i++)
+        {
+            if (player.Deck.Count == 0)
+            {
+                if (player.Discard.Count == 0)
+                    break;
+
+                player.Deck.AddRange(player.Discard);
+                player.Discard.Clear();
+                Shuffle(player.Deck, random);
+            }
+
+            int topIndex = player.Deck.Count - 1;
+            int instanceId = player.Deck[topIndex];
+            player.Deck.RemoveAt(topIndex);
+            player.Hand.Add(instanceId);
+        }
     }
 
     private static void Shuffle(List<int> cards, System.Random random)
@@ -414,22 +558,51 @@ public static class NetworkGameState
         }
     }
 
-    /// <summary>
-    /// The top of a deck is the end of the list. Removing from the end avoids shifting
-    /// the whole list and gives us one convention for every future draw operation.
-    /// </summary>
-    private static void DrawCards(PlayerStateSnapshot player, int count)
+    private static System.Random NewRandom()
     {
-        if (player == null || player.Deck == null || player.Hand == null)
-            return;
+        return new System.Random(Guid.NewGuid().GetHashCode());
+    }
 
-        for (int i = 0; i < count && player.Deck.Count > 0; i++)
+    private static PlayerStateSnapshot FindPlayer(GameStateSnapshot state, string playerId)
+    {
+        if (state == null || state.Players == null)
+            return null;
+
+        return state.Players.Find(player => player != null && player.PlayerId == playerId);
+    }
+
+    private static bool HandContainsTreasure(GameStateSnapshot state, PlayerStateSnapshot player)
+    {
+        if (state == null || player == null || player.Hand == null)
+            return false;
+
+        foreach (int instanceId in player.Hand)
         {
-            int topIndex = player.Deck.Count - 1;
-            int instanceId = player.Deck[topIndex];
-            player.Deck.RemoveAt(topIndex);
-            player.Hand.Add(instanceId);
+            CardInstance instance = FindCardInstance(state, instanceId);
+            if (instance == null)
+                continue;
+
+            ExtensionPackageData extension;
+            ExtensionCardData definition;
+            if (RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition) && IsTreasure(definition))
+                return true;
         }
+
+        return false;
+    }
+
+    private static bool IsTreasure(ExtensionCardData definition)
+    {
+        return definition != null && definition.types != null && definition.types.Any(type =>
+            string.Equals(type, "Trésor", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static int TreasureValue(string definitionId)
+    {
+        if (string.Equals(definitionId, CopperDefinitionId, StringComparison.OrdinalIgnoreCase)) return 1;
+        if (string.Equals(definitionId, SilverDefinitionId, StringComparison.OrdinalIgnoreCase)) return 2;
+        if (string.Equals(definitionId, GoldDefinitionId, StringComparison.OrdinalIgnoreCase)) return 3;
+        return 0;
     }
 
     private static bool ValidateActivePlayerCommand(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
@@ -441,24 +614,6 @@ public static class NetworkGameState
             return false;
 
         return _state.ActivePlayerId == requesterPlayerId && _state.Players.Count > 0;
-    }
-
-    private static bool AdvanceToNextPlayer(GameStateSnapshot next)
-    {
-        int currentIndex = next.Players.FindIndex(player => player.PlayerId == next.ActivePlayerId);
-        if (currentIndex < 0)
-            return false;
-
-        int nextIndex = (currentIndex + 1) % next.Players.Count;
-        PlayerStateSnapshot nextPlayer = next.Players[nextIndex];
-        next.ActivePlayerId = nextPlayer.PlayerId;
-        next.TurnNumber++;
-        next.Phase = ActionPhase;
-        nextPlayer.Actions = 1;
-        nextPlayer.Buys = 1;
-        nextPlayer.Coins = 0;
-
-        return CommitState(next);
     }
 
     private static void UpdatePauseState(GameStateSnapshot state)
