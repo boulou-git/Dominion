@@ -15,6 +15,11 @@ using Hashtable = ExitGames.Client.Photon.Hashtable;
 public static class NetworkGameState
 {
     private const string StatePropertyKey = "dominion.gameState.v1";
+    private const string CopperDefinitionId = "base:cuivre";
+    private const string EstateDefinitionId = "base:domaine";
+    private const int StartingCopperCount = 7;
+    private const int StartingEstateCount = 3;
+    private const int StartingHandSize = 5;
 
     public const string ActionPhase = "Action";
     public const string BuyPhase = "Buy";
@@ -56,6 +61,19 @@ public static class NetworkGameState
         return "actor:" + player.ActorNumber;
     }
 
+    public static CardInstance FindCardInstance(int instanceId)
+    {
+        return FindCardInstance(_state, instanceId);
+    }
+
+    public static CardInstance FindCardInstance(GameStateSnapshot state, int instanceId)
+    {
+        if (state == null || state.CardInstances == null)
+            return null;
+
+        return state.CardInstances.Find(card => card != null && card.InstanceId == instanceId);
+    }
+
     public static bool HydrateFromRoom(bool force = false)
     {
         if (!PhotonNetwork.InRoom || PhotonNetwork.CurrentRoom == null)
@@ -81,6 +99,11 @@ public static class NetworkGameState
         StateChanged?.Invoke(null);
     }
 
+    /// <summary>
+    /// Creates the first authoritative snapshot for a match. Starter decks and opening
+    /// hands are generated here once, before the Game scene opens, so reconnecting never
+    /// recreates or redraws a player's deck.
+    /// </summary>
     public static bool InitialiseAuthoritativeState()
     {
         if (!CanWrite())
@@ -102,11 +125,12 @@ public static class NetworkGameState
             MatchId = Guid.NewGuid().ToString("N"),
             AuthorityEpoch = 1,
             IsStarted = true,
-            IsInitialised = false,
+            IsInitialised = true,
             IsPaused = roomPlayers.Any(player => player.IsInactive),
             ManualPauseRequested = false,
             TurnNumber = 1,
-            Phase = ActionPhase
+            Phase = ActionPhase,
+            NextCardInstanceId = 1
         };
 
         foreach (Player player in roomPlayers)
@@ -116,10 +140,14 @@ public static class NetworkGameState
                 PlayerId = GetPlayerId(player),
                 ActorNumber = player.ActorNumber,
                 NickName = player.NickName,
-                IsConnected = !player.IsInactive
+                IsConnected = !player.IsInactive,
+                Actions = 1,
+                Buys = 1,
+                Coins = 0
             });
         }
 
+        CreateStarterDecksAndOpeningHands(state);
         UpdatePauseState(state);
 
         PlayerStateSnapshot firstConnectedPlayer = state.Players.Find(player => player.IsConnected);
@@ -130,8 +158,11 @@ public static class NetworkGameState
 
     public static bool MarkInitialised()
     {
-        if (!CanWrite() || _state == null || _state.IsInitialised)
+        if (!CanWrite() || _state == null)
             return false;
+
+        if (_state.IsInitialised)
+            return true;
 
         GameStateSnapshot next = Clone(_state);
         next.IsInitialised = true;
@@ -268,6 +299,73 @@ public static class NetworkGameState
         return AdvanceToNextPlayer(Clone(_state));
     }
 
+    private static void CreateStarterDecksAndOpeningHands(GameStateSnapshot state)
+    {
+        if (state == null || state.Players == null)
+            return;
+
+        System.Random random = new System.Random(Guid.NewGuid().GetHashCode());
+
+        foreach (PlayerStateSnapshot player in state.Players)
+        {
+            if (player == null)
+                continue;
+
+            player.Deck.Clear();
+            player.Hand.Clear();
+            player.Discard.Clear();
+            player.InPlay.Clear();
+
+            for (int i = 0; i < StartingCopperCount; i++)
+                CreateOwnedCard(state, player, CopperDefinitionId);
+
+            for (int i = 0; i < StartingEstateCount; i++)
+                CreateOwnedCard(state, player, EstateDefinitionId);
+
+            Shuffle(player.Deck, random);
+            DrawCards(player, StartingHandSize);
+        }
+    }
+
+    private static void CreateOwnedCard(GameStateSnapshot state, PlayerStateSnapshot owner, string definitionId)
+    {
+        int instanceId = state.NextCardInstanceId++;
+        state.CardInstances.Add(new CardInstance(instanceId, definitionId, owner.PlayerId));
+        owner.Deck.Add(instanceId);
+    }
+
+    private static void Shuffle(List<int> cards, System.Random random)
+    {
+        if (cards == null || random == null)
+            return;
+
+        for (int i = cards.Count - 1; i > 0; i--)
+        {
+            int j = random.Next(i + 1);
+            int temp = cards[i];
+            cards[i] = cards[j];
+            cards[j] = temp;
+        }
+    }
+
+    /// <summary>
+    /// The top of a deck is the end of the list. Removing from the end avoids shifting
+    /// the whole list and gives us one convention for every future draw operation.
+    /// </summary>
+    private static void DrawCards(PlayerStateSnapshot player, int count)
+    {
+        if (player == null || player.Deck == null || player.Hand == null)
+            return;
+
+        for (int i = 0; i < count && player.Deck.Count > 0; i++)
+        {
+            int topIndex = player.Deck.Count - 1;
+            int instanceId = player.Deck[topIndex];
+            player.Deck.RemoveAt(topIndex);
+            player.Hand.Add(instanceId);
+        }
+    }
+
     private static bool ValidateActivePlayerCommand(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
     {
         if (!CanWrite() || _state == null || !_state.IsStarted || _state.IsPaused)
@@ -286,9 +384,13 @@ public static class NetworkGameState
             return false;
 
         int nextIndex = (currentIndex + 1) % next.Players.Count;
-        next.ActivePlayerId = next.Players[nextIndex].PlayerId;
+        PlayerStateSnapshot nextPlayer = next.Players[nextIndex];
+        next.ActivePlayerId = nextPlayer.PlayerId;
         next.TurnNumber++;
         next.Phase = ActionPhase;
+        nextPlayer.Actions = 1;
+        nextPlayer.Buys = 1;
+        nextPlayer.Coins = 0;
 
         return CommitState(next);
     }
@@ -324,6 +426,7 @@ public static class NetworkGameState
         if (!CanWrite() || state == null)
             return false;
 
+        NormaliseCollections(state);
         GameStateSnapshot committed = Clone(state);
         int previousVersion = _state != null ? _state.Version : 0;
         committed.Version = Math.Max(previousVersion, committed.Version) + 1;
@@ -351,6 +454,8 @@ public static class NetworkGameState
         if (incoming == null)
             return false;
 
+        NormaliseCollections(incoming);
+
         if (!force && _state != null && incoming.Version <= _state.Version)
             return false;
 
@@ -369,6 +474,34 @@ public static class NetworkGameState
         if (state == null)
             return null;
 
-        return JsonUtility.FromJson<GameStateSnapshot>(JsonUtility.ToJson(state));
+        GameStateSnapshot clone = JsonUtility.FromJson<GameStateSnapshot>(JsonUtility.ToJson(state));
+        NormaliseCollections(clone);
+        return clone;
+    }
+
+    private static void NormaliseCollections(GameStateSnapshot state)
+    {
+        if (state == null)
+            return;
+
+        if (state.CardInstances == null)
+            state.CardInstances = new List<CardInstance>();
+        if (state.NextCardInstanceId < 1)
+            state.NextCardInstanceId = state.CardInstances.Count > 0
+                ? state.CardInstances.Max(card => card != null ? card.InstanceId : 0) + 1
+                : 1;
+        if (state.Players == null)
+            state.Players = new List<PlayerStateSnapshot>();
+
+        foreach (PlayerStateSnapshot player in state.Players)
+        {
+            if (player == null)
+                continue;
+
+            if (player.Deck == null) player.Deck = new List<int>();
+            if (player.Hand == null) player.Hand = new List<int>();
+            if (player.Discard == null) player.Discard = new List<int>();
+            if (player.InPlay == null) player.InPlay = new List<int>();
+        }
     }
 }
