@@ -1,9 +1,5 @@
-using NUnit.Framework;
 using Photon.Pun;
 using Photon.Realtime;
-using System;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
 public class GameInitialiser : MonoBehaviour
@@ -14,46 +10,54 @@ public class GameInitialiser : MonoBehaviour
     [SerializeField]
     private PlayersTurnsHandler _turnsHandler;
 
+    [SerializeField]
+    private NetworkGameState _networkGameState;
+
     private void Start()
     {
-        PhotonView photonView = PhotonView.Get(this);
+        if (_networkGameState == null)
+            _networkGameState = FindFirstObjectByType<NetworkGameState>();
 
         if (PhotonNetwork.IsMasterClient)
         {
-            foreach (Player player in PhotonNetwork.CurrentRoom.Players.Values)
-            {
-                photonView.RPC("SpawnPlayer", RpcTarget.All, player);
-            }
-
-            // Setting up the game
-            photonView.RPC("SetupRealmCards", RpcTarget.All);
-            photonView.RPC("SetupDeckAndDraw", RpcTarget.All);
-            photonView.RPC("SetupAllSharedDecks", RpcTarget.All);
-            photonView.RPC("DrawFirstHand", RpcTarget.All);
+            SetupGameAuthoritatively();
+        }
+        else
+        {
+            // A client never builds its own game state. It asks the Master Client for the truth.
+            _networkGameState?.RequestFullState();
         }
 
         _turnsHandler.Initialise();
     }
 
-    [PunRPC]
-    private void SpawnPlayer(Player thisPlayer)
+    private void SetupGameAuthoritatively()
     {
-        Debug.Log("Received my player " + thisPlayer.NickName);
+        if (_networkGameState == null)
+        {
+            Debug.LogError("NetworkGameState is missing from the game scene.");
+            return;
+        }
+
+        _networkGameState.InitialiseAuthoritativeState();
+
+        // These setup steps will progressively move into a pure GameSetup/GameEngine layer.
+        SetupRealmCards();
+        SetupDeckAndDraw();
+        SetupAllSharedDecks();
+        DrawFirstHand();
     }
 
-    [PunRPC]
     private void SetupRealmCards()
     {
         Debug.Log("Creation de 10 paquets aleatoires de cartes royaumes");
     }
 
-    [PunRPC]
     private void SetupDeckAndDraw()
     {
         Debug.Log("Distribution de 3 cartes domaines et 7 cartes cuivre");
     }
 
-    [PunRPC]
     private void SetupAllSharedDecks()
     {
         Debug.Log("Mise en place des decks de cuivre, argent et or selon le nombre de joueurs");
@@ -61,9 +65,8 @@ public class GameInitialiser : MonoBehaviour
         Debug.Log("Mise en place du deck de maledictions selon le nombre de joueurs");
     }
 
-    [PunRPC]
     private void DrawFirstHand()
     {
-        Debug.Log("Je pioche mes cinq premieres cartes");
+        Debug.Log("Je pioche les cinq premieres cartes de chaque joueur");
     }
 }
