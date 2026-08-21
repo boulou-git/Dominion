@@ -15,7 +15,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     [Header("Screens")]
     [SerializeField] private GameObject _hostSelectionScreen;
     [SerializeField] private GameObject _waitingScreen;
-    [SerializeField] private GameObject _revealScreen;
+    [SerializeField] private GameObject _revealScreen; // Legacy prefab reveal. Kept only so old prefabs remain compatible.
 
     [Header("Host selection")]
     [SerializeField] private RectTransform _extensionsRoot;
@@ -28,11 +28,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     [Header("Waiting")]
     [SerializeField] private Text _waitingText;
-
-    [Header("10-card reveal")]
-    [SerializeField] private RectTransform _revealCardsRoot;
-    [SerializeField] private Text _revealStatus;
-    [SerializeField] private Button _startButton;
 
     private readonly List<GameObject> _spawnedExtensions = new List<GameObject>();
     private readonly List<GameObject> _spawnedCards = new List<GameObject>();
@@ -47,6 +42,13 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private Canvas _canvas;
     private GraphicRaycaster _raycaster;
 
+    // The final 10-card screen is intentionally created as one isolated overlay.
+    // It does not depend on any previous Reveal prefab/mask/scroll hierarchy.
+    private GameObject _revealOverlay;
+    private RectTransform _revealOverlayCardsRoot;
+    private Text _revealOverlayStatus;
+    private Button _revealOverlayStartButton;
+
     private void Awake()
     {
         _canvas = GetComponent<Canvas>();
@@ -58,8 +60,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         if (_validateButton != null)
             _validateButton.onClick.AddListener(ValidateSelection);
-        if (_startButton != null)
-            _startButton.onClick.AddListener(StartGame);
 
         CapturePhotonState();
         RefreshAll();
@@ -158,6 +158,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             SetActive(_hostSelectionScreen, false);
             SetActive(_waitingScreen, false);
             SetActive(_revealScreen, false);
+            SetActive(_revealOverlay, false);
             return;
         }
 
@@ -169,13 +170,17 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         SetActive(_hostSelectionScreen, !reveal && host);
         SetActive(_waitingScreen, !reveal && !host);
-        SetActive(_revealScreen, reveal);
+
+        // Old reveal hierarchies caused several masking/reference bugs. Never use them now.
+        SetActive(_revealScreen, false);
 
         if (reveal)
         {
-            RebuildReveal();
+            RebuildRevealOverlay();
             return;
         }
+
+        SetActive(_revealOverlay, false);
 
         if (!host)
         {
@@ -267,16 +272,15 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             _validateButton.interactable = selected >= RoomGameSetup.KingdomCardCount;
     }
 
-    private void RebuildReveal()
+    private void RebuildRevealOverlay()
     {
-        Clear(_spawnedRevealCards);
-
-        RectTransform revealRoot = ResolveRevealCardsRoot();
-        if (revealRoot == null || _cardTilePrefab == null)
-        {
-            Debug.LogError("Reveal UI is missing its card grid or CardSelectionTile prefab reference.");
+        EnsureRevealOverlay();
+        if (_revealOverlay == null || _revealOverlayCardsRoot == null || _cardTilePrefab == null)
             return;
-        }
+
+        _revealOverlay.SetActive(true);
+        _revealOverlay.transform.SetAsLastSibling();
+        Clear(_spawnedRevealCards);
 
         int shown = 0;
 
@@ -292,9 +296,8 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
                     continue;
                 }
 
-                // Same prefab, same loader, same binding as the selection screen.
-                // toggle == null puts the tile in display-only mode and hides its checkbox.
-                CardSelectionTileView tile = Instantiate(_cardTilePrefab, revealRoot);
+                // Exactly the same prefab + Bind path that displays artworks in selection.
+                CardSelectionTileView tile = Instantiate(_cardTilePrefab, _revealOverlayCardsRoot);
                 tile.Bind(extension, card, true, false, null);
                 _spawnedRevealCards.Add(tile.gameObject);
                 shown++;
@@ -302,31 +305,70 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         }
 
         bool host = PhotonNetwork.IsMasterClient;
+        if (_revealOverlayStartButton != null)
+            _revealOverlayStartButton.gameObject.SetActive(host);
 
-        if (_startButton != null)
-            _startButton.gameObject.SetActive(host);
-
-        if (_revealStatus != null)
+        if (_revealOverlayStatus != null)
         {
-            _revealStatus.text = host
+            _revealOverlayStatus.text = host
                 ? shown + "/10 cartes — démarrez la partie quand vous êtes prêt."
                 : shown + "/10 cartes — en attente de l’hôte.";
         }
     }
 
-    private RectTransform ResolveRevealCardsRoot()
+    private void EnsureRevealOverlay()
     {
-        if (_revealCardsRoot != null)
-            return _revealCardsRoot;
+        if (_revealOverlay != null)
+            return;
 
-        if (_revealScreen == null)
-            return null;
+        _revealOverlay = UiObject("KingdomRevealOverlay", typeof(Image));
+        _revealOverlay.transform.SetParent(transform, false);
+        Stretch(_revealOverlay.GetComponent<RectTransform>());
+        Image background = _revealOverlay.GetComponent<Image>();
+        background.color = new Color(0.055f, 0.055f, 0.055f, 1f);
+        background.raycastTarget = true;
 
-        GridLayoutGroup grid = _revealScreen.GetComponentInChildren<GridLayoutGroup>(true);
-        if (grid != null)
-            _revealCardsRoot = grid.transform as RectTransform;
+        Text title = ChildText(
+            _revealOverlay.transform,
+            "Title",
+            "LES 10 CARTES ROYAUME",
+            36,
+            TextAnchor.MiddleCenter,
+            new Vector2(0.08f, 0.91f),
+            new Vector2(0.92f, 0.985f));
+        title.fontStyle = FontStyle.Bold;
 
-        return _revealCardsRoot;
+        GameObject gridObject = UiObject("CardsGrid", typeof(GridLayoutGroup));
+        gridObject.transform.SetParent(_revealOverlay.transform, false);
+        _revealOverlayCardsRoot = gridObject.GetComponent<RectTransform>();
+        SetAnchors(_revealOverlayCardsRoot, new Vector2(0.06f, 0.17f), new Vector2(0.94f, 0.89f));
+
+        GridLayoutGroup grid = gridObject.GetComponent<GridLayoutGroup>();
+        grid.cellSize = new Vector2(210f, 324f); // 59:91
+        grid.spacing = new Vector2(20f, 22f);
+        grid.padding = new RectOffset(12, 12, 12, 12);
+        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = 5;
+        grid.childAlignment = TextAnchor.MiddleCenter;
+        grid.startAxis = GridLayoutGroup.Axis.Horizontal;
+        grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
+
+        _revealOverlayStatus = ChildText(
+            _revealOverlay.transform,
+            "Status",
+            string.Empty,
+            19,
+            TextAnchor.MiddleLeft,
+            new Vector2(0.08f, 0.045f),
+            new Vector2(0.64f, 0.135f));
+
+        _revealOverlayStartButton = ChildButton(
+            _revealOverlay.transform,
+            "StartButton",
+            "DÉMARRER LA PARTIE",
+            new Vector2(0.68f, 0.04f),
+            new Vector2(0.92f, 0.14f));
+        _revealOverlayStartButton.onClick.AddListener(StartGame);
     }
 
     private void SetExtensionEnabled(string extensionId, bool enabled)
@@ -389,6 +431,61 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         if (ExtensionCatalog.All.Count > 0)
             _viewedExtensionId = ExtensionCatalog.All[0].id;
+    }
+
+    private static GameObject UiObject(string name, params Type[] components)
+    {
+        Type[] all = new Type[components.Length + 1];
+        all[0] = typeof(RectTransform);
+        components.CopyTo(all, 1);
+        return new GameObject(name, all);
+    }
+
+    private static Text ChildText(Transform parent, string name, string value, int size, TextAnchor alignment, Vector2 min, Vector2 max)
+    {
+        GameObject go = UiObject(name, typeof(Text));
+        go.transform.SetParent(parent, false);
+        SetAnchors(go.GetComponent<RectTransform>(), min, max);
+
+        Text text = go.GetComponent<Text>();
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.text = value;
+        text.fontSize = size;
+        text.alignment = alignment;
+        text.color = Color.white;
+        text.raycastTarget = false;
+        return text;
+    }
+
+    private static Button ChildButton(Transform parent, string name, string label, Vector2 min, Vector2 max)
+    {
+        GameObject go = UiObject(name, typeof(Image), typeof(Button));
+        go.transform.SetParent(parent, false);
+        SetAnchors(go.GetComponent<RectTransform>(), min, max);
+
+        Image image = go.GetComponent<Image>();
+        image.color = new Color(0.30f, 0.25f, 0.14f, 1f);
+
+        Button button = go.GetComponent<Button>();
+        Text text = ChildText(go.transform, "Text", label, 21, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
+        text.fontStyle = FontStyle.Bold;
+        return button;
+    }
+
+    private static void Stretch(RectTransform rect)
+    {
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+    }
+
+    private static void SetAnchors(RectTransform rect, Vector2 min, Vector2 max)
+    {
+        rect.anchorMin = min;
+        rect.anchorMax = max;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
     }
 
     private static void SetActive(GameObject target, bool active)
