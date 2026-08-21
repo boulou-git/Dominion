@@ -104,7 +104,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         };
         PhotonNetwork.CurrentRoom.SetCustomProperties(roomProperties);
 
-        photonView.RPC(nameof(StartGameClients), RpcTarget.AllViaServer);
+        PhotonView.Get(this).RPC(nameof(StartGameClients), RpcTarget.AllViaServer);
     }
 
     public override void OnJoinedRoom()
@@ -208,10 +208,11 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         if (!PhotonNetwork.InRoom || PhotonNetwork.CurrentRoom == null)
             return false;
 
-        object value;
-        if (!PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(GameStartedPropertyKey, out value))
+        Hashtable properties = PhotonNetwork.CurrentRoom.CustomProperties;
+        if (properties == null || !properties.ContainsKey(GameStartedPropertyKey))
             return false;
 
+        object value = properties[GameStartedPropertyKey];
         return value is bool && (bool)value;
     }
 
