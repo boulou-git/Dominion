@@ -12,12 +12,52 @@
       "text": "+1 🪙"
     },
     {
+      "id": "argent",
+      "name": "Argent",
+      "cost": 3,
+      "types": ["Trésor"],
+      "image": "argent.png",
+      "text": "+2 🪙"
+    },
+    {
+      "id": "or",
+      "name": "Or",
+      "cost": 6,
+      "types": ["Trésor"],
+      "image": "or.png",
+      "text": "+3 🪙"
+    },
+    {
       "id": "domaine",
       "name": "Domaine",
       "cost": 2,
       "types": ["Victoire"],
       "image": "domaine.png",
       "text": "1 VP"
+    },
+    {
+      "id": "duche",
+      "name": "Duché",
+      "cost": 5,
+      "types": ["Victoire"],
+      "image": "duche - Copie.png",
+      "text": "3 VP"
+    },
+    {
+      "id": "province",
+      "name": "Province",
+      "cost": 8,
+      "types": ["Victoire"],
+      "image": "province.png",
+      "text": "6 VP"
+    },
+    {
+      "id": "malediction",
+      "name": "Malédiction",
+      "cost": 0,
+      "types": ["Malédiction"],
+      "image": "malediction.png",
+      "text": "-1 VP"
     }
   ],
   "cards": [
