@@ -10,7 +10,13 @@ public sealed class ExtensionPackageData
     public string name;
     public int version;
     public string artwork;
+
+    // Cards available to the Kingdom-card pre-game selection.
     public List<ExtensionCardData> cards = new List<ExtensionCardData>();
+
+    // Shared/base cards belonging to the extension but never entering the
+    // random Kingdom selection (Cuivre, Domaine, etc.).
+    public List<ExtensionCardData> baseCards = new List<ExtensionCardData>();
 
     [NonSerialized] public string packageDirectory;
 }
@@ -64,6 +70,35 @@ public static class ExtensionCatalog
         return null;
     }
 
+    /// <summary>
+    /// Resolves either a Kingdom card or a non-Kingdom base/shared card inside an extension.
+    /// Selection code still reads extension.cards only, so baseCards never leak into the
+    /// random 10-card Kingdom pool.
+    /// </summary>
+    public static ExtensionCardData FindCard(ExtensionPackageData extension, string cardId)
+    {
+        if (extension == null || string.IsNullOrEmpty(cardId))
+            return null;
+
+        ExtensionCardData card = FindIn(extension.cards, cardId);
+        return card ?? FindIn(extension.baseCards, cardId);
+    }
+
+    public static ExtensionCardData FindCard(string extensionId, string cardId)
+    {
+        return FindCard(Find(extensionId), cardId);
+    }
+
+    private static ExtensionCardData FindIn(List<ExtensionCardData> cards, string cardId)
+    {
+        if (cards == null)
+            return null;
+
+        return cards.Find(card =>
+            card != null &&
+            string.Equals(card.id, cardId, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static List<ExtensionPackageData> LoadAll()
     {
         List<ExtensionPackageData> result = new List<ExtensionPackageData>();
@@ -103,6 +138,8 @@ public static class ExtensionCatalog
                 extension.packageDirectory = directory;
                 if (extension.cards == null)
                     extension.cards = new List<ExtensionCardData>();
+                if (extension.baseCards == null)
+                    extension.baseCards = new List<ExtensionCardData>();
 
                 result.Add(extension);
             }
