@@ -6,11 +6,12 @@ using UnityEngine.EventSystems;
 /// Shared pointer convention for card UI:
 /// - short left click: primary/contextual action
 /// - short right click: inspect
-/// - long press with either mouse button: inspect
+/// - optional long press: inspect
 /// </summary>
 public sealed class CardPointerInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerClickHandler
 {
     public float LongPressSeconds = 0.45f;
+    public bool InspectOnLongPress = true;
 
     public event Action PrimaryActionRequested;
     public event Action InspectRequested;
@@ -22,7 +23,7 @@ public sealed class CardPointerInteraction : MonoBehaviour, IPointerDownHandler,
 
     private void Update()
     {
-        if (!_pointerIsDown || _longPressTriggered)
+        if (!_pointerIsDown || _longPressTriggered || !InspectOnLongPress)
             return;
 
         if (Time.unscaledTime - _pointerDownTime < LongPressSeconds)
