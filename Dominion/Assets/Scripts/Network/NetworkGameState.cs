@@ -104,6 +104,7 @@ public static class NetworkGameState
             IsStarted = true,
             IsInitialised = false,
             IsPaused = roomPlayers.Any(player => player.IsInactive),
+            ManualPauseRequested = false,
             TurnNumber = 1,
             Phase = ActionPhase
         };
@@ -134,6 +135,20 @@ public static class NetworkGameState
 
         GameStateSnapshot next = Clone(_state);
         next.IsInitialised = true;
+        return CommitState(next);
+    }
+
+    public static bool SetManualPause(bool paused)
+    {
+        if (!CanWrite() || _state == null || !_state.IsStarted)
+            return false;
+
+        if (_state.ManualPauseRequested == paused)
+            return true;
+
+        GameStateSnapshot next = Clone(_state);
+        next.ManualPauseRequested = paused;
+        UpdatePauseState(next);
         return CommitState(next);
     }
 
@@ -239,17 +254,12 @@ public static class NetworkGameState
                 return AdvanceToNextPlayer(next);
 
             default:
-                // Unknown extension phases must never silently skip the turn.
                 return false;
         }
 
         return CommitState(next);
     }
 
-    /// <summary>
-    /// Kept as a low-level helper for future engine code. Normal UI progression should use
-    /// TryAdvancePhase so a player cannot skip Action/Buy/Cleanup accidentally.
-    /// </summary>
     public static bool TryAdvanceTurn(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
     {
         if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
@@ -293,10 +303,15 @@ public static class NetworkGameState
             .Select(player => string.IsNullOrEmpty(player.NickName) ? "Joueur" : player.NickName)
             .ToList();
 
-        state.IsPaused = missingPlayers.Count > 0;
-        state.PauseReason = state.IsPaused
-            ? "En attente de reconnexion : " + string.Join(", ", missingPlayers)
-            : string.Empty;
+        if (missingPlayers.Count > 0)
+        {
+            state.IsPaused = true;
+            state.PauseReason = "En attente de reconnexion : " + string.Join(", ", missingPlayers);
+            return;
+        }
+
+        state.IsPaused = state.ManualPauseRequested;
+        state.PauseReason = state.ManualPauseRequested ? "Partie mise en pause par l’hôte." : string.Empty;
     }
 
     private static bool CanWrite()
