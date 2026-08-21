@@ -27,7 +27,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         IsVisible = true,
         IsOpen = true,
         PlayerTtl = 300_000,
-        EmptyRoomTtl = 300_000,
+        EmptyRoomTtl = 120_000,
         PublishUserId = true
     };
 
