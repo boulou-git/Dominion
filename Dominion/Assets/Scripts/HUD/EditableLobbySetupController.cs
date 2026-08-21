@@ -45,9 +45,14 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private bool _lastHost;
     private string _lastStage;
     private float _nextPhotonStateCheck;
+    private Canvas _canvas;
+    private GraphicRaycaster _raycaster;
 
     private void Awake()
     {
+        _canvas = GetComponent<Canvas>();
+        _raycaster = GetComponent<GraphicRaycaster>();
+
         ExtensionCatalog.Reload();
         _config = RoomGameSetup.ReadCurrent();
         PickInitialExtension();
@@ -63,9 +68,9 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     private void Update()
     {
-        // This prefab can be instantiated after Photon already fired OnJoinedRoom.
-        // Poll only the tiny connection/authority state so a late-created lobby still
-        // switches from Waiting to HostSelection as soon as Photon is ready.
+        // This prefab can exist before the player has joined a room, and can also be
+        // instantiated after Photon already fired OnJoinedRoom. Poll only the tiny
+        // connection/authority state so the editable screen appears at the right moment.
         if (Time.unscaledTime < _nextPhotonStateCheck)
             return;
 
@@ -145,11 +150,28 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     private void RefreshAll()
     {
+        bool inRoom = PhotonNetwork.InRoom;
+
+        // Before joining/creating a Photon room, keep this full-screen editable setup
+        // completely hidden so the ordinary Lobby connection/pseudo UI remains usable.
+        if (_canvas != null)
+            _canvas.enabled = inRoom;
+        if (_raycaster != null)
+            _raycaster.enabled = inRoom;
+
+        if (!inRoom)
+        {
+            SetActive(_hostSelectionScreen, false);
+            SetActive(_waitingScreen, false);
+            SetActive(_revealScreen, false);
+            return;
+        }
+
         if (_config == null)
             _config = RoomGameSetup.ReadCurrent();
 
         bool reveal = string.Equals(_config.stage, RoomGameSetup.RevealStage, StringComparison.Ordinal);
-        bool host = PhotonNetwork.InRoom && PhotonNetwork.IsMasterClient;
+        bool host = PhotonNetwork.IsMasterClient;
 
         SetActive(_hostSelectionScreen, !reveal && host);
         SetActive(_waitingScreen, !reveal && !host);
@@ -265,7 +287,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             }
         }
 
-        bool host = PhotonNetwork.InRoom && PhotonNetwork.IsMasterClient;
+        bool host = PhotonNetwork.IsMasterClient;
         if (_startButton != null)
             _startButton.gameObject.SetActive(host);
         if (_revealStatus != null)
