@@ -1,5 +1,4 @@
 using Photon.Pun;
-using Photon.Realtime;
 using UnityEngine;
 
 public class GameInitialiser : MonoBehaviour
@@ -10,22 +9,19 @@ public class GameInitialiser : MonoBehaviour
     [SerializeField]
     private PlayersTurnsHandler _turnsHandler;
 
-    [SerializeField]
-    private NetworkGameState _networkGameState;
-
     private void Start()
     {
-        if (_networkGameState == null)
-            _networkGameState = FindFirstObjectByType<NetworkGameState>();
+        // Every client rebuilds its local view from the authoritative room snapshot.
+        NetworkGameState.HydrateFromRoom(true);
 
-        if (PhotonNetwork.IsMasterClient)
+        // Setup must run exactly once for the whole match. Reconnecting or becoming the
+        // new Master Client must never recreate piles/decks or restart the game.
+        if (PhotonNetwork.IsMasterClient &&
+            NetworkGameState.IsStarted &&
+            NetworkGameState.State != null &&
+            !NetworkGameState.State.IsInitialised)
         {
             SetupGameAuthoritatively();
-        }
-        else
-        {
-            // A client never builds its own game state. It asks the Master Client for the truth.
-            _networkGameState?.RequestFullState();
         }
 
         _turnsHandler.Initialise();
@@ -33,19 +29,13 @@ public class GameInitialiser : MonoBehaviour
 
     private void SetupGameAuthoritatively()
     {
-        if (_networkGameState == null)
-        {
-            Debug.LogError("NetworkGameState is missing from the game scene.");
-            return;
-        }
-
-        _networkGameState.InitialiseAuthoritativeState();
-
         // These setup steps will progressively move into a pure GameSetup/GameEngine layer.
         SetupRealmCards();
         SetupDeckAndDraw();
         SetupAllSharedDecks();
         DrawFirstHand();
+
+        NetworkGameState.MarkInitialised();
     }
 
     private void SetupRealmCards()
