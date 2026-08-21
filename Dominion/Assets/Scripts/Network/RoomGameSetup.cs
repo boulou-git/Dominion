@@ -35,21 +35,7 @@ public static class RoomGameSetup
             if (extension == null || string.IsNullOrEmpty(extension.id))
                 continue;
 
-            ExtensionSetupSelection selection = new ExtensionSetupSelection
-            {
-                extensionId = extension.id,
-                enabled = string.Equals(extension.id, "base", StringComparison.OrdinalIgnoreCase)
-            };
-
-            if (extension.cards != null)
-            {
-                foreach (ExtensionCardData card in extension.cards)
-                {
-                    if (card != null && !string.IsNullOrEmpty(card.id))
-                        selection.selectedCardIds.Add(card.id);
-                }
-            }
-
+            ExtensionSetupSelection selection = CreateDefaultSelection(extension);
             config.extensions.Add(selection);
         }
 
@@ -132,29 +118,36 @@ public static class RoomGameSetup
             ExtensionSetupSelection selection = FindExtension(config, package.id);
             if (selection == null)
             {
-                selection = new ExtensionSetupSelection
-                {
-                    extensionId = package.id,
-                    enabled = string.Equals(package.id, "base", StringComparison.OrdinalIgnoreCase)
-                };
-                config.extensions.Add(selection);
+                // An extension discovered after the config was created gets the same sensible
+                // defaults as a fresh room. Existing selections, including empty ones, are preserved.
+                config.extensions.Add(CreateDefaultSelection(package));
+                continue;
             }
 
             if (selection.selectedCardIds == null)
                 selection.selectedCardIds = new List<string>();
-
-            // New cards added to an extension are selected by default only when no explicit
-            // card selection exists yet for that extension.
-            if (selection.selectedCardIds.Count == 0 && package.cards != null)
-            {
-                foreach (ExtensionCardData card in package.cards)
-                {
-                    if (card != null && !string.IsNullOrEmpty(card.id))
-                        selection.selectedCardIds.Add(card.id);
-                }
-            }
         }
 
         return config;
+    }
+
+    private static ExtensionSetupSelection CreateDefaultSelection(ExtensionPackageData extension)
+    {
+        ExtensionSetupSelection selection = new ExtensionSetupSelection
+        {
+            extensionId = extension.id,
+            enabled = string.Equals(extension.id, "base", StringComparison.OrdinalIgnoreCase)
+        };
+
+        if (extension.cards != null)
+        {
+            foreach (ExtensionCardData card in extension.cards)
+            {
+                if (card != null && !string.IsNullOrEmpty(card.id))
+                    selection.selectedCardIds.Add(card.id);
+            }
+        }
+
+        return selection;
     }
 }
