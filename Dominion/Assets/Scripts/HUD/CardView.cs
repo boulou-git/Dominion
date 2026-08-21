@@ -1,6 +1,5 @@
 using System;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
@@ -36,7 +35,7 @@ public sealed class CardView : MonoBehaviour
     /// </summary>
     public static CardView Create(RectTransform parent, float preferredHeight = 180f)
     {
-        GameObject root = new GameObject("CardView", typeof(RectTransform), typeof(LayoutElement), typeof(AspectRatioFitter), typeof(CardView));
+        GameObject root = new GameObject("CardView", typeof(RectTransform), typeof(Image), typeof(LayoutElement), typeof(AspectRatioFitter), typeof(CardView));
         RectTransform rect = root.GetComponent<RectTransform>();
         rect.SetParent(parent, false);
 
@@ -95,6 +94,12 @@ public sealed class CardView : MonoBehaviour
             _aspectRatioFitter.aspectMode = AspectRatioFitter.AspectMode.WidthControlsHeight;
             _aspectRatioFitter.aspectRatio = CardAspectRatio;
         }
+
+        Image hitTarget = GetComponent<Image>();
+        if (hitTarget == null)
+            hitTarget = gameObject.AddComponent<Image>();
+        hitTarget.color = new Color(1f, 1f, 1f, 0.001f);
+        hitTarget.raycastTarget = true;
 
         if (_cardImage == null)
         {
@@ -169,32 +174,16 @@ public sealed class CardView : MonoBehaviour
                 _pointerInteraction = gameObject.AddComponent<CardPointerInteraction>();
 
             _pointerInteraction.LongPressSeconds = 0.45f;
+            _pointerInteraction.PrimaryActionRequested -= HandlePrimaryActionRequested;
+            _pointerInteraction.PrimaryActionRequested += HandlePrimaryActionRequested;
             _pointerInteraction.InspectRequested -= HandleInspectRequested;
             _pointerInteraction.InspectRequested += HandleInspectRequested;
         }
+    }
 
-        // The root receives pointer events even when the source PNG has transparent rounded corners.
-        Image hitTarget = GetComponent<Image>();
-        if (hitTarget == null)
-            hitTarget = gameObject.AddComponent<Image>();
-        hitTarget.color = new Color(1f, 1f, 1f, 0.001f);
-        hitTarget.raycastTarget = true;
-
-        EventTrigger trigger = GetComponent<EventTrigger>();
-        if (trigger == null)
-            trigger = gameObject.AddComponent<EventTrigger>();
-
-        if (trigger.triggers == null || trigger.triggers.Count == 0)
-        {
-            EventTrigger.Entry clickEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
-            clickEntry.callback.AddListener(data =>
-            {
-                PointerEventData pointer = data as PointerEventData;
-                if (pointer != null && pointer.button == PointerEventData.InputButton.Left)
-                    PrimaryActionRequested?.Invoke(this);
-            });
-            trigger.triggers.Add(clickEntry);
-        }
+    private void HandlePrimaryActionRequested()
+    {
+        PrimaryActionRequested?.Invoke(this);
     }
 
     private void HandleInspectRequested()
