@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Photon.Pun;
 using UnityEngine;
 
@@ -28,12 +29,14 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     private void OnDestroy()
     {
         NetworkGameState.StateChanged -= OnGameStateChanged;
+        if (Instance == this)
+            Instance = null;
     }
 
     public void AdvancePhase()
     {
         GameStateSnapshot state = NetworkGameState.State;
-        if (!CanSendActivePlayerCommand(state))
+        if (!CanSendActivePlayerCommand(state) || state.PendingChoice != null)
             return;
 
         photonView.RPC(
@@ -47,7 +50,7 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     public void PlayTreasure(int instanceId)
     {
         GameStateSnapshot state = NetworkGameState.State;
-        if (!CanSendActivePlayerCommand(state) || instanceId <= 0)
+        if (!CanSendActivePlayerCommand(state) || state.PendingChoice != null || instanceId <= 0)
             return;
 
         photonView.RPC(
@@ -62,7 +65,7 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     public void BuyCard(string definitionId)
     {
         GameStateSnapshot state = NetworkGameState.State;
-        if (!CanSendActivePlayerCommand(state) || string.IsNullOrEmpty(definitionId))
+        if (!CanSendActivePlayerCommand(state) || state.PendingChoice != null || string.IsNullOrEmpty(definitionId))
             return;
 
         photonView.RPC(
@@ -70,6 +73,59 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
             RpcTarget.MasterClient,
             NetworkGameState.LocalPlayerId,
             definitionId,
+            state.Version,
+            state.AuthorityEpoch);
+    }
+
+    /// <summary>
+    /// Generic card resolution entry point. Photon transports each effect as JSON so the
+    /// networking layer does not need a custom Photon serializer for every new effect type.
+    /// </summary>
+    public void ApplyGenericEffects(List<GenericCardEffect> effects, int sourceCardInstanceId = 0)
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (!CanSendActivePlayerCommand(state) || state.PendingChoice != null || effects == null || effects.Count == 0)
+            return;
+
+        string[] effectJson = new string[effects.Count];
+        for (int i = 0; i < effects.Count; i++)
+            effectJson[i] = effects[i] != null ? JsonUtility.ToJson(effects[i]) : string.Empty;
+
+        photonView.RPC(
+            nameof(RpcRequestGenericEffects),
+            RpcTarget.MasterClient,
+            NetworkGameState.LocalPlayerId,
+            effectJson,
+            sourceCardInstanceId,
+            state.Version,
+            state.AuthorityEpoch);
+    }
+
+    public void TogglePendingChoiceCard(int instanceId)
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (!CanSendChoiceCommand(state) || instanceId <= 0)
+            return;
+
+        photonView.RPC(
+            nameof(RpcTogglePendingChoiceCard),
+            RpcTarget.MasterClient,
+            NetworkGameState.LocalPlayerId,
+            instanceId,
+            state.Version,
+            state.AuthorityEpoch);
+    }
+
+    public void ResolvePendingChoice()
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (!CanSendChoiceCommand(state))
+            return;
+
+        photonView.RPC(
+            nameof(RpcResolvePendingChoice),
+            RpcTarget.MasterClient,
+            NetworkGameState.LocalPlayerId,
             state.Version,
             state.AuthorityEpoch);
     }
@@ -123,12 +179,89 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
             Debug.LogWarning("Rejected stale or invalid BuyCard command for " + definitionId + ".");
     }
 
+    [PunRPC]
+    private void RpcRequestGenericEffects(
+        string requesterPlayerId,
+        string[] effectJson,
+        int sourceCardInstanceId,
+        int expectedVersion,
+        int expectedAuthorityEpoch,
+        PhotonMessageInfo info)
+    {
+        if (!ValidateSender(requesterPlayerId, info) || effectJson == null)
+            return;
+
+        List<GenericCardEffect> effects = new List<GenericCardEffect>();
+        foreach (string json in effectJson)
+        {
+            if (string.IsNullOrEmpty(json))
+                continue;
+
+            GenericCardEffect effect = JsonUtility.FromJson<GenericCardEffect>(json);
+            if (effect != null)
+                effects.Add(effect);
+        }
+
+        if (!NetworkGameState.TryApplyGenericEffects(
+                requesterPlayerId,
+                effects,
+                sourceCardInstanceId,
+                expectedVersion,
+                expectedAuthorityEpoch))
+            Debug.LogWarning("Rejected stale or invalid generic effect command.");
+    }
+
+    [PunRPC]
+    private void RpcTogglePendingChoiceCard(
+        string requesterPlayerId,
+        int instanceId,
+        int expectedVersion,
+        int expectedAuthorityEpoch,
+        PhotonMessageInfo info)
+    {
+        if (!ValidateSender(requesterPlayerId, info))
+            return;
+
+        if (!NetworkGameState.TryTogglePendingChoiceSelection(
+                requesterPlayerId,
+                instanceId,
+                expectedVersion,
+                expectedAuthorityEpoch))
+            Debug.LogWarning("Rejected pending-choice card selection.");
+    }
+
+    [PunRPC]
+    private void RpcResolvePendingChoice(
+        string requesterPlayerId,
+        int expectedVersion,
+        int expectedAuthorityEpoch,
+        PhotonMessageInfo info)
+    {
+        if (!ValidateSender(requesterPlayerId, info))
+            return;
+
+        if (!NetworkGameState.TryResolvePendingChoice(
+                requesterPlayerId,
+                expectedVersion,
+                expectedAuthorityEpoch))
+            Debug.LogWarning("Rejected pending-choice resolution.");
+    }
+
     private static bool CanSendActivePlayerCommand(GameStateSnapshot state)
     {
         return state != null &&
                state.IsStarted &&
                !state.IsPaused &&
                state.ActivePlayerId == NetworkGameState.LocalPlayerId;
+    }
+
+    private static bool CanSendChoiceCommand(GameStateSnapshot state)
+    {
+        return state != null &&
+               state.IsStarted &&
+               !state.IsPaused &&
+               state.PendingChoice != null &&
+               state.PendingChoice.IsFor(NetworkGameState.LocalPlayerId);
     }
 
     private static bool ValidateSender(string requesterPlayerId, PhotonMessageInfo info)
