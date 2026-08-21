@@ -1,7 +1,5 @@
 using System;
-using System.Linq;
 using Photon.Pun;
-using Photon.Realtime;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -157,25 +155,21 @@ public sealed class GamePauseMenu : MonoBehaviour
 
     private void LeaveGame()
     {
-        if (!PhotonNetwork.InRoom)
-            return;
-
-        PhotonNetwork.LeaveRoom();
+        if (RoomConnectionHandler.Instance != null)
+            RoomConnectionHandler.Instance.LeaveCurrentRoomPermanently();
+        else if (PhotonNetwork.InRoom)
+            PhotonNetwork.LeaveRoom(false);
     }
 
     private void CloseGameAsHost()
     {
-        if (!PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null)
+        if (!PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient)
             return;
 
-        PhotonNetwork.CurrentRoom.IsOpen = false;
-        PhotonNetwork.CurrentRoom.IsVisible = false;
-
-        Player[] others = PhotonNetwork.PlayerListOthers.ToArray();
-        foreach (Player player in others)
-            PhotonNetwork.CloseConnection(player);
-
-        PhotonNetwork.LeaveRoom();
+        if (RoomConnectionHandler.Instance != null)
+            RoomConnectionHandler.Instance.CloseCurrentRoomAsHost();
+        else
+            PhotonNetwork.LeaveRoom(false);
     }
 
     private static RectTransform CreatePanel(string name, RectTransform parent, Vector2 min, Vector2 max, Color color)
