@@ -18,9 +18,9 @@ public sealed class HandCardMotion : MonoBehaviour, IPointerEnterHandler, IPoint
 
     private RectTransform _rect;
     private Vector3 _visualOffset;
+    private Vector3 _lastAppliedOffset;
     private Vector3 _targetOffset;
     private Vector3 _targetScale = Vector3.one;
-    private bool _hovered;
     private bool _playing;
     private int _originalSiblingIndex;
 
@@ -34,9 +34,12 @@ public sealed class HandCardMotion : MonoBehaviour, IPointerEnterHandler, IPoint
 
     private void OnDisable()
     {
-        _hovered = false;
+        if (_rect != null)
+            _rect.anchoredPosition -= (Vector2)_lastAppliedOffset;
+
         _playing = false;
         _visualOffset = Vector3.zero;
+        _lastAppliedOffset = Vector3.zero;
         _targetOffset = Vector3.zero;
         _targetScale = Vector3.one;
         transform.localScale = Vector3.one;
@@ -47,7 +50,6 @@ public sealed class HandCardMotion : MonoBehaviour, IPointerEnterHandler, IPoint
         if (_playing)
             return;
 
-        _hovered = true;
         _targetOffset = new Vector3(0f, _hoverLift, 0f);
         _targetScale = Vector3.one * _hoverScale;
         transform.SetAsLastSibling();
@@ -58,7 +60,6 @@ public sealed class HandCardMotion : MonoBehaviour, IPointerEnterHandler, IPoint
         if (_playing)
             return;
 
-        _hovered = false;
         _targetOffset = Vector3.zero;
         _targetScale = Vector3.one;
         RestoreSiblingOrder();
@@ -69,12 +70,16 @@ public sealed class HandCardMotion : MonoBehaviour, IPointerEnterHandler, IPoint
         if (_rect == null || _playing)
             return;
 
+        // Remove only the visual offset applied on the previous frame. The layout keeps
+        // ownership of the real card position, so there is no cumulative drift.
+        _rect.anchoredPosition -= (Vector2)_lastAppliedOffset;
+
         float t = 1f - Mathf.Exp(-_hoverSpeed * Time.unscaledDeltaTime);
         _visualOffset = Vector3.Lerp(_visualOffset, _targetOffset, t);
         transform.localScale = Vector3.Lerp(transform.localScale, _targetScale, t);
 
-        // HorizontalLayoutGroup owns the base position; this offset is applied after layout.
         _rect.anchoredPosition += (Vector2)_visualOffset;
+        _lastAppliedOffset = _visualOffset;
     }
 
     /// <summary>
@@ -92,7 +97,12 @@ public sealed class HandCardMotion : MonoBehaviour, IPointerEnterHandler, IPoint
     private IEnumerator PlayRoutine(RectTransform targetArea, Action completed)
     {
         _playing = true;
-        _hovered = false;
+        _targetOffset = Vector3.zero;
+        _targetScale = Vector3.one;
+
+        _rect.anchoredPosition -= (Vector2)_lastAppliedOffset;
+        _lastAppliedOffset = Vector3.zero;
+        _visualOffset = Vector3.zero;
 
         Canvas canvas = GetComponentInParent<Canvas>();
         RectTransform animationParent = canvas != null ? canvas.transform as RectTransform : _rect.parent as RectTransform;
@@ -104,7 +114,6 @@ public sealed class HandCardMotion : MonoBehaviour, IPointerEnterHandler, IPoint
         }
 
         Vector3 startWorld = _rect.position;
-        Vector3 startScale = _rect.lossyScale;
         Vector3 targetWorld = targetArea.TransformPoint(targetArea.rect.center);
 
         transform.SetParent(animationParent, true);
