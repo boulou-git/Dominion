@@ -287,6 +287,15 @@ public static class NetworkGameState
     /// </summary>
     public static bool TryAdvancePhase(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
     {
+        return TryAdvancePhase(requesterPlayerId, expectedVersion, expectedAuthorityEpoch, null);
+    }
+
+    public static bool TryAdvancePhase(
+        string requesterPlayerId,
+        int expectedVersion,
+        int expectedAuthorityEpoch,
+        int[] visualHandOrder)
+    {
         if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
             return false;
 
@@ -300,6 +309,9 @@ public static class NetworkGameState
 
             case BuyPhase:
             case CleanupPhase:
+                if (!TryApplyRequestedHandOrder(next, requesterPlayerId, visualHandOrder))
+                    return false;
+
                 PerformCleanupAndAdvance(next);
                 return CommitState(next);
 
@@ -416,7 +428,7 @@ public static class NetworkGameState
 
         // Keep Cleanup as a short visible/interactable stage so the local UI can animate
         // the hand and played cards into the discard pile before the authoritative draw.
-        if (player.Coins <= 0 && !HandContainsTreasure(next, player))
+        if (player.Buys <= 0 || (player.Coins <= 0 && !HandContainsTreasure(next, player)))
             next.Phase = CleanupPhase;
 
         return CommitState(next);
@@ -512,6 +524,37 @@ public static class NetworkGameState
         owner.Discard.Add(instanceId);
     }
 
+    private static bool TryApplyRequestedHandOrder(
+        GameStateSnapshot state,
+        string playerId,
+        int[] requestedOrder)
+    {
+        if (requestedOrder == null)
+            return true;
+
+        PlayerStateSnapshot player = FindPlayer(state, playerId);
+        if (player == null || player.Hand == null)
+            return false;
+
+        if (requestedOrder.Length != player.Hand.Count)
+            return false;
+
+        HashSet<int> expected = new HashSet<int>(player.Hand);
+        if (expected.Count != player.Hand.Count)
+            return false;
+
+        HashSet<int> received = new HashSet<int>();
+        foreach (int instanceId in requestedOrder)
+        {
+            if (!expected.Contains(instanceId) || !received.Add(instanceId))
+                return false;
+        }
+
+        player.Hand.Clear();
+        player.Hand.AddRange(requestedOrder);
+        return true;
+    }
+
     private static void PerformCleanupAndAdvance(GameStateSnapshot state)
     {
         if (state == null || state.Players == null || state.Players.Count == 0)
@@ -525,8 +568,8 @@ public static class NetworkGameState
             current.Discard.Add(instanceId);
         current.InPlay.Clear();
 
-        // Right-to-left ensures the card visually furthest left is appended last and
-        // therefore remains the visible top card of the discard pile.
+        // Hand is stored left-to-right. Appending right-to-left means the card visually
+        // furthest left is appended last and therefore becomes the visible top discard.
         for (int i = current.Hand.Count - 1; i >= 0; i--)
             current.Discard.Add(current.Hand[i]);
         current.Hand.Clear();
