@@ -343,13 +343,44 @@ public static class NetworkGameState
         if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition) || !IsTreasure(definition))
             return false;
 
-        int value = TreasureValue(instance.DefinitionId);
-        if (value <= 0)
-            return false;
-
         player.Hand.Remove(instanceId);
         player.InPlay.Add(instanceId);
-        player.Coins += value;
+
+        AbilityResolutionResult abilityResult = AbilityResolver.ResolvePlay(
+            definition,
+            new EffectExecutionContext(next, player, instanceId, NewRandom()));
+
+        if (abilityResult.Status == EffectResolutionStatus.Rejected)
+        {
+            Debug.LogWarning(
+                "Rejected declarative Treasure ability for " + instance.DefinitionId + ": " + abilityResult.Error);
+            return false;
+        }
+
+        if (abilityResult.Status == EffectResolutionStatus.WaitingForChoice)
+        {
+            Debug.LogWarning(
+                "Treasure play cannot wait for a player choice yet: " + instance.DefinitionId);
+            return false;
+        }
+
+        if (abilityResult.AbilitiesMatched == 0)
+        {
+            // Transitional fallback for legacy Treasure definitions that do not yet declare
+            // a machine-readable play ability. This can be removed once every Treasure has
+            // migrated to the declarative rules format.
+            int legacyValue = TreasureValue(instance.DefinitionId);
+            if (legacyValue <= 0)
+                return false;
+
+            player.Coins += legacyValue;
+        }
+        else if (abilityResult.EffectsResolved == 0)
+        {
+            Debug.LogWarning(
+                "Treasure has a play ability but no resolved effects: " + instance.DefinitionId);
+            return false;
+        }
 
         return CommitState(next);
     }
