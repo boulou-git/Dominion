@@ -6,7 +6,8 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Local-hand visual behaviour: hover, drag-to-reorder and optional play animation.
-/// Reordering is presentation-only and never mutates authoritative game state.
+/// Reordering is presentation-only during the turn; the final visual order is sent once
+/// with cleanup so the authoritative discard order matches what the player sees.
 /// </summary>
 [RequireComponent(typeof(RectTransform))]
 public sealed class HandCardMotion : MonoBehaviour,
@@ -190,7 +191,10 @@ public sealed class HandCardMotion : MonoBehaviour,
         _targetScale = Vector3.one;
 
         if (parentRect != null)
+        {
             LayoutRebuilder.ForceRebuildLayoutImmediate(parentRect);
+            LocalHandOrderTracker.CaptureFromParent(parentRect);
+        }
 
         OrderChanged?.Invoke();
     }
