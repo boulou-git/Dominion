@@ -36,10 +36,17 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
         if (!CanSendActivePlayerCommand(state))
             return;
 
+        PlayerStateSnapshot localPlayer = state.Players != null
+            ? state.Players.Find(player => player != null && player.PlayerId == NetworkGameState.LocalPlayerId)
+            : null;
+        int[] visualHandOrder = LocalHandOrderTracker.ResolveForAuthoritativeHand(
+            localPlayer != null ? localPlayer.Hand : null);
+
         photonView.RPC(
             nameof(RpcRequestAdvancePhase),
             RpcTarget.MasterClient,
             NetworkGameState.LocalPlayerId,
+            visualHandOrder,
             state.Version,
             state.AuthorityEpoch);
     }
@@ -82,6 +89,7 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     [PunRPC]
     private void RpcRequestAdvancePhase(
         string requesterPlayerId,
+        int[] visualHandOrder,
         int expectedVersion,
         int expectedAuthorityEpoch,
         PhotonMessageInfo info)
@@ -89,7 +97,11 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
         if (!ValidateSender(requesterPlayerId, info))
             return;
 
-        if (!NetworkGameState.TryAdvancePhase(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
+        if (!NetworkGameState.TryAdvancePhase(
+                requesterPlayerId,
+                expectedVersion,
+                expectedAuthorityEpoch,
+                visualHandOrder))
             Debug.LogWarning("Rejected stale or invalid AdvancePhase command.");
     }
 
@@ -157,6 +169,8 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
 
         if (!turnChanged || state.IsPaused)
             return;
+
+        LocalHandOrderTracker.Clear();
 
         if (state.ActivePlayerId == NetworkGameState.LocalPlayerId && _playerHandler != null)
             _playerHandler.BeginTurn();
