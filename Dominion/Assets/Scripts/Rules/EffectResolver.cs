@@ -46,21 +46,27 @@ public readonly struct EffectResolutionResult
 /// Minimal context required by the rules engine to resolve one effect.
 /// The state passed here is expected to be an authoritative working copy; the resolver
 /// deliberately knows nothing about Photon, scenes, MonoBehaviours or UI.
+///
+/// Random is injected so tests can use a deterministic seed and the future authoritative
+/// rules layer can own every shuffle instead of hiding randomness inside an effect handler.
 /// </summary>
 public sealed class EffectExecutionContext
 {
     public GameStateSnapshot State { get; }
     public PlayerStateSnapshot Actor { get; }
     public int SourceCardInstanceId { get; }
+    public System.Random Random { get; }
 
     public EffectExecutionContext(
         GameStateSnapshot state,
         PlayerStateSnapshot actor,
-        int sourceCardInstanceId = 0)
+        int sourceCardInstanceId = 0,
+        System.Random random = null)
     {
         State = state;
         Actor = actor;
         SourceCardInstanceId = sourceCardInstanceId;
+        Random = random;
     }
 }
 
@@ -81,7 +87,8 @@ public static class EffectResolver
     private static readonly Dictionary<string, EffectHandler> Handlers =
         new Dictionary<string, EffectHandler>(StringComparer.OrdinalIgnoreCase)
         {
-            { "add_resource", ResolveAddResource }
+            { "add_resource", ResolveAddResource },
+            { "draw", ResolveDraw }
         };
 
     public static bool IsSupported(string operation)
@@ -112,7 +119,7 @@ public static class EffectResolver
         CardEffectData effect,
         EffectExecutionContext context)
     {
-        if (!string.Equals(effect.target, "self", StringComparison.OrdinalIgnoreCase))
+        if (!TargetsSelf(effect))
             return EffectResolutionResult.Rejected(
                 "add_resource currently supports target 'self' only.");
 
@@ -143,5 +150,61 @@ public static class EffectResolver
         }
 
         return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult ResolveDraw(
+        CardEffectData effect,
+        EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect))
+            return EffectResolutionResult.Rejected("draw currently supports target 'self' only.");
+
+        if (effect.amount < 0)
+            return EffectResolutionResult.Rejected("draw amount cannot be negative.");
+
+        PlayerStateSnapshot player = context.Actor;
+        if (player.Deck == null || player.Hand == null || player.Discard == null)
+            return EffectResolutionResult.Rejected("draw requires deck, hand and discard zones.");
+
+        for (int i = 0; i < effect.amount; i++)
+        {
+            if (player.Deck.Count == 0)
+            {
+                if (player.Discard.Count == 0)
+                    break;
+
+                if (context.Random == null)
+                    return EffectResolutionResult.Rejected(
+                        "draw requires an injected random source when the discard pile must be shuffled.");
+
+                player.Deck.AddRange(player.Discard);
+                player.Discard.Clear();
+                Shuffle(player.Deck, context.Random);
+            }
+
+            int topIndex = player.Deck.Count - 1;
+            int instanceId = player.Deck[topIndex];
+            player.Deck.RemoveAt(topIndex);
+            player.Hand.Add(instanceId);
+        }
+
+        return EffectResolutionResult.Applied();
+    }
+
+    private static bool TargetsSelf(CardEffectData effect)
+    {
+        return effect != null &&
+               string.Equals(effect.target, "self", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void Shuffle(List<int> cards, System.Random random)
+    {
+        for (int i = cards.Count - 1; i > 0; i--)
+        {
+            int j = random.Next(i + 1);
+            int temp = cards[i];
+            cards[i] = cards[j];
+            cards[j] = temp;
+        }
     }
 }
