@@ -2,6 +2,7 @@
   "id": "base",
   "name": "Dominion — Base",
   "version": 1,
+  "schemaVersion": 2,
   "baseCards": [
     {
       "id": "cuivre",
@@ -9,7 +10,15 @@
       "cost": 0,
       "types": ["Trésor"],
       "image": "cuivre.png",
-      "text": "+1 🪙"
+      "text": "+1 🪙",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
+          ]
+        }
+      ]
     },
     {
       "id": "argent",
@@ -17,7 +26,15 @@
       "cost": 3,
       "types": ["Trésor"],
       "image": "argent.png",
-      "text": "+2 🪙"
+      "text": "+2 🪙",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 }
+          ]
+        }
+      ]
     },
     {
       "id": "or",
@@ -25,7 +42,15 @@
       "cost": 6,
       "types": ["Trésor"],
       "image": "or.png",
-      "text": "+3 🪙"
+      "text": "+3 🪙",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 3 }
+          ]
+        }
+      ]
     },
     {
       "id": "domaine",
@@ -115,7 +140,16 @@
       "cost": 3,
       "types": ["Action"],
       "image": "village.png",
-      "text": "+1 Carte\n+2 Actions"
+      "text": "+1 Carte\n+2 Actions",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 }
+          ]
+        }
+      ]
     },
     {
       "id": "atelier",
