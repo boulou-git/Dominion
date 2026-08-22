@@ -72,6 +72,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         _outline.enabled = false;
 
         _countText = FindOrCreateCountText(transform);
+        EnsureCountBadgeVisible();
         RefreshAvailabilityVisual();
     }
 
@@ -82,6 +83,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         if (_countText != null)
             _countText.text = value.ToString();
 
+        EnsureCountBadgeVisible();
         RefreshAvailabilityVisual();
     }
 
@@ -89,6 +91,26 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     {
         _buyable = buyable;
         RefreshAvailabilityVisual();
+    }
+
+    private void EnsureCountBadgeVisible()
+    {
+        if (_countText == null)
+            return;
+
+        _countText.enabled = true;
+        Transform badgeTransform = _countText.transform.parent;
+        if (badgeTransform == null)
+            return;
+
+        badgeTransform.gameObject.SetActive(true);
+        Image badgeImage = badgeTransform.GetComponent<Image>();
+        if (badgeImage != null)
+            badgeImage.enabled = true;
+
+        // Base piles already create their own RemainingCount badge. Keeping the badge as the
+        // last child guarantees it renders above the card image just like Kingdom counters.
+        badgeTransform.SetAsLastSibling();
     }
 
     private void RefreshAvailabilityVisual()
@@ -203,13 +225,16 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         Transform existingBadge = parent.Find("RemainingCount");
         if (existingBadge != null)
         {
-            Text existing = existingBadge.GetComponentInChildren<Text>();
+            existingBadge.gameObject.SetActive(true);
+            existingBadge.SetAsLastSibling();
+            Text existing = existingBadge.GetComponentInChildren<Text>(true);
             if (existing != null)
                 return existing;
         }
 
         GameObject badgeObject = new GameObject("RemainingCount", typeof(RectTransform), typeof(Image));
         badgeObject.transform.SetParent(parent, false);
+        badgeObject.transform.SetAsLastSibling();
         RectTransform badgeRect = badgeObject.GetComponent<RectTransform>();
         badgeRect.anchorMin = new Vector2(0.64f, 0.79f);
         badgeRect.anchorMax = new Vector2(0.98f, 0.98f);
