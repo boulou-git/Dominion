@@ -712,7 +712,8 @@ public static class NetworkGameState
 
     private static bool ApplyJson(string json, bool force)
     {
-        if (string.IsNullOrEmpty(json))n            return false;
+        if (string.IsNullOrEmpty(json))
+            return false;
 
         GameStateSnapshot incoming = JsonUtility.FromJson<GameStateSnapshot>(json);
         if (incoming == null)
