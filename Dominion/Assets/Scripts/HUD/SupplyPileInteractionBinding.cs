@@ -16,6 +16,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     private string _definitionId;
     private Image _image;
     private Outline _outline;
+    private CardSelectionHalo _selectionHalo;
     private Text _countText;
     private CardPointerInteraction _pointer;
     private Sprite _sprite;
@@ -65,6 +66,10 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         if (_outline == null) _outline = gameObject.AddComponent<Outline>();
         _outline.useGraphicAlpha = false;
         _outline.enabled = false;
+
+        _selectionHalo = GetComponent<CardSelectionHalo>();
+        if (_selectionHalo == null) _selectionHalo = gameObject.AddComponent<CardSelectionHalo>();
+        _selectionHalo.SetVisible(false);
 
         _countText = FindOrCreateCountText(transform);
         EnsureCountBadgeVisible();
@@ -117,13 +122,15 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
                 _image.color = !_hasCards ? EmptyColor : (_buyable ? AvailableColor : UnavailableColor);
         }
 
+        if (_selectionHalo != null)
+            _selectionHalo.SetVisible(_decisionActive && _hasCards && _decisionCandidate && _decisionSelected);
+
         if (_outline != null)
         {
             if (_decisionActive)
             {
-                _outline.effectColor = Color.white;
-                _outline.effectDistance = new Vector2(2f, -2f);
-                _outline.enabled = _hasCards && _decisionCandidate && _decisionSelected;
+                // Decision selection uses CardSelectionHalo so the card artwork is never duplicated.
+                _outline.enabled = false;
             }
             else
             {
