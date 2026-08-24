@@ -247,7 +247,15 @@
       "cost": 4,
       "types": ["Action"],
       "image": "forge.png",
-      "text": "+3 Cartes"
+      "text": "+3 Cartes",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 3 }
+          ]
+        }
+      ]
     },
     {
       "id": "salle_du_trone",
@@ -279,7 +287,17 @@
       "cost": 5,
       "types": ["Action"],
       "image": "festival.png",
-      "text": "+2 Actions\n+1 Achat\n+2 🪙"
+      "text": "+2 Actions\n+1 Achat\n+2 🪙",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 },
+            { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 }
+          ]
+        }
+      ]
     },
     {
       "id": "laboratoire",
@@ -287,7 +305,16 @@
       "cost": 5,
       "types": ["Action"],
       "image": "laboratoire.png",
-      "text": "+2 Cartes\n+1 Action"
+      "text": "+2 Cartes\n+1 Action",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 2 },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 }
+          ]
+        }
+      ]
     },
     {
       "id": "bibliotheque",
@@ -303,7 +330,18 @@
       "cost": 5,
       "types": ["Action"],
       "image": "marche.png",
-      "text": "+1 Carte\n+1 Action\n+1 Achat\n+1 🪙"
+      "text": "+1 Carte\n+1 Action\n+1 Achat\n+1 🪙",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
+          ]
+        }
+      ]
     },
     {
       "id": "mine",
