@@ -49,7 +49,7 @@ public static class EffectResolver
         {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile},
         {"choose_each_other_cards", ChooseEachOtherCards}, {"reveal_each_other_cards", RevealEachOtherCards},
         {"reveal_each_other_top_trash_type_except", RevealEachOtherTopTrashTypeExcept},
-        {"reveal_top_cards", RevealTopCards}, {"move_all_ordered", MoveAllOrdered},
+        {"inspect_top_cards", InspectTopCards}, {"reveal_top_cards", RevealTopCards}, {"move_all_ordered", MoveAllOrdered},
         {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard},
         {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_others_down_to", DiscardOthersDownTo},
         {"move_selected", MoveSelected}, {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected},
@@ -182,18 +182,25 @@ public static class EffectResolver
         return result.Status == GameRuleStatus.WaitingForChoice ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(result.Error);
     }
 
-    private static EffectResolutionResult RevealTopCards(CardEffectData e, EffectExecutionContext c)
+    private static EffectResolutionResult InspectTopCards(CardEffectData e, EffectExecutionContext c) =>
+        MoveTopCardsToTemporary(e, c, false);
+
+    private static EffectResolutionResult RevealTopCards(CardEffectData e, EffectExecutionContext c) =>
+        MoveTopCardsToTemporary(e, c, true);
+
+    private static EffectResolutionResult MoveTopCardsToTemporary(CardEffectData e, EffectExecutionContext c, bool publicReveal)
     {
-        if (!Self(e) || c.Resolution == null || e.amount < 0) return EffectResolutionResult.Rejected("Invalid reveal_top_cards effect.");
-        List<int> revealed = CardZoneRules.ResolveZone(c.Actor, CardZone.Revealed);
-        if (revealed == null) return EffectResolutionResult.Rejected("Inspected storage zone is unavailable.");
-        if (revealed.Count > 0) return EffectResolutionResult.Rejected("Cannot reveal new cards while temporary storage is not empty.");
+        if (!Self(e) || c.Resolution == null || e.amount < 0)
+            return EffectResolutionResult.Rejected("Invalid inspect/reveal top cards effect.");
+        List<int> inspected = CardZoneRules.ResolveZone(c.Actor, CardZone.Inspected);
+        if (inspected == null) return EffectResolutionResult.Rejected("Inspected storage zone is unavailable.");
+        if (inspected.Count > 0) return EffectResolutionResult.Rejected("Cannot inspect/reveal new cards while temporary storage is not empty.");
         for (int n = 0; n < e.amount; n++)
         {
-            if (!CardZoneRules.TryMoveTopCardFromDeck(c.Actor, CardZone.Revealed, c.Random, out int id, out string error))
+            if (!CardZoneRules.TryMoveTopCardFromDeck(c.Actor, CardZone.Inspected, c.Random, out int id, out string error))
                 return EffectResolutionResult.Rejected(error);
             if (id <= 0) break;
-            JournalRules.RecordReveal(c.State, c.Actor, id);
+            if (publicReveal) JournalRules.RecordReveal(c.State, c.Actor, id);
         }
         return EffectResolutionResult.Applied();
     }
