@@ -47,7 +47,8 @@ public static class EffectResolver
         {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection},
         {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount},
         {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile},
-        {"choose_each_other_cards", ChooseEachOtherCards}, {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard},
+        {"choose_each_other_cards", ChooseEachOtherCards}, {"reveal_each_other_top_trash_type_except", RevealEachOtherTopTrashTypeExcept},
+        {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard},
         {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_others_down_to", DiscardOthersDownTo},
         {"move_selected", MoveSelected}, {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected},
         {"choose_supply", ChooseSupply}, {"gain_card", GainCard}, {"gain_selected_supply", GainSelectedSupply}
@@ -145,6 +146,16 @@ public static class EffectResolver
         if (!c.Resolution.TrySuspendForDecision(targets[0].PlayerId, op, e.zone, e.prompt, c.SourceCardInstanceId,
             min, Math.Min(max, choices[0].Count), choices[0], c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)) return EffectResolutionResult.Rejected(err);
         c.Resolution.PendingDecision.RemainingPlayerIds.AddRange(remaining); return EffectResolutionResult.WaitingForChoice();
+    }
+
+    private static EffectResolutionResult RevealEachOtherTopTrashTypeExcept(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Others(e) || c.Resolution == null || !Cursor(c) || e.amount <= 0 || string.IsNullOrWhiteSpace(e.cardType))
+            return EffectResolutionResult.Rejected("Invalid reveal_each_other_top_trash_type_except effect.");
+        GameRuleResult result = GameRules.TryStartRevealTrashForOthers(c.State, c.Actor, c.Resolution, e.amount, e.cardType, e.cardId,
+            e.prompt, c.SourceCardInstanceId, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, c.Random);
+        if (result == null || result.Status == GameRuleStatus.Applied) return EffectResolutionResult.Applied();
+        return result.Status == GameRuleStatus.WaitingForChoice ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(result.Error);
     }
 
     private static EffectResolutionResult RememberCost(CardEffectData e, EffectExecutionContext c)
