@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Small reusable runtime binding for one Reserve pile: quantity, contextual availability,
-/// left-click purchase, right-click inspection and purchase feedback animation.
+/// left-click purchase, right-click inspection and durable supply-choice interaction.
 /// </summary>
 public sealed class SupplyPileInteractionBinding : MonoBehaviour
 {
@@ -25,13 +25,14 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     private bool _hasCards = true;
     private bool _purchaseAnimationRunning;
 
+    private bool _decisionActive;
+    private bool _decisionCandidate;
+    private bool _decisionSelected;
+    private Action<string> _decisionRequested;
+
     public string DefinitionId => _definitionId;
 
-    public void Bind(
-        string definitionId,
-        Sprite sprite,
-        Action<string> buyRequested,
-        Action<Sprite> inspectRequested)
+    public void Bind(string definitionId, Sprite sprite, Action<string> buyRequested, Action<Sprite> inspectRequested)
     {
         _definitionId = definitionId;
         _sprite = sprite;
@@ -42,8 +43,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         if (_image != null)
         {
             _image.raycastTarget = true;
-            if (_image.sprite == null)
-                _image.sprite = sprite;
+            if (_image.sprite == null) _image.sprite = sprite;
         }
 
         Button legacyButton = GetComponent<Button>();
@@ -54,9 +54,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         }
 
         _pointer = GetComponent<CardPointerInteraction>();
-        if (_pointer == null)
-            _pointer = gameObject.AddComponent<CardPointerInteraction>();
-
+        if (_pointer == null) _pointer = gameObject.AddComponent<CardPointerInteraction>();
         _pointer.InspectOnLongPress = false;
         _pointer.PrimaryActionRequested -= OnPrimaryAction;
         _pointer.InspectRequested -= OnInspect;
@@ -64,10 +62,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         _pointer.InspectRequested += OnInspect;
 
         _outline = GetComponent<Outline>();
-        if (_outline == null)
-            _outline = gameObject.AddComponent<Outline>();
-        _outline.effectColor = new Color(1f, 0.78f, 0.18f, 0.90f);
-        _outline.effectDistance = new Vector2(3f, -3f);
+        if (_outline == null) _outline = gameObject.AddComponent<Outline>();
         _outline.useGraphicAlpha = false;
         _outline.enabled = false;
 
@@ -80,9 +75,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     {
         int value = Mathf.Max(0, remaining);
         _hasCards = value > 0;
-        if (_countText != null)
-            _countText.text = value.ToString();
-
+        if (_countText != null) _countText.text = value.ToString();
         EnsureCountBadgeVisible();
         RefreshAvailabilityVisual();
     }
@@ -93,23 +86,24 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         RefreshAvailabilityVisual();
     }
 
+    public void SetDecisionChoice(bool active, bool candidate, bool selected, Action<string> decisionRequested)
+    {
+        _decisionActive = active;
+        _decisionCandidate = candidate;
+        _decisionSelected = selected;
+        _decisionRequested = active ? decisionRequested : null;
+        RefreshAvailabilityVisual();
+    }
+
     private void EnsureCountBadgeVisible()
     {
-        if (_countText == null)
-            return;
-
+        if (_countText == null) return;
         _countText.enabled = true;
         Transform badgeTransform = _countText.transform.parent;
-        if (badgeTransform == null)
-            return;
-
+        if (badgeTransform == null) return;
         badgeTransform.gameObject.SetActive(true);
         Image badgeImage = badgeTransform.GetComponent<Image>();
-        if (badgeImage != null)
-            badgeImage.enabled = true;
-
-        // Base piles already create their own RemainingCount badge. Keeping the badge as the
-        // last child guarantees it renders above the card image just like Kingdom counters.
+        if (badgeImage != null) badgeImage.enabled = true;
         badgeTransform.SetAsLastSibling();
     }
 
@@ -117,28 +111,40 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     {
         if (_image != null)
         {
-            // During a player choice, cards that cannot satisfy that choice stay visible
-            // but are deliberately subdued. This same visual language can be reused by
-            // future discard/trash/gain selectors.
-            _image.color = !_hasCards
-                ? EmptyColor
-                : (_buyable ? AvailableColor : UnavailableColor);
+            if (_decisionActive)
+                _image.color = !_hasCards ? EmptyColor : (_decisionCandidate ? AvailableColor : UnavailableColor);
+            else
+                _image.color = !_hasCards ? EmptyColor : (_buyable ? AvailableColor : UnavailableColor);
         }
 
         if (_outline != null)
-            _outline.enabled = _hasCards && _buyable && !_purchaseAnimationRunning;
+        {
+            if (_decisionActive)
+            {
+                _outline.effectColor = Color.white;
+                _outline.effectDistance = new Vector2(2f, -2f);
+                _outline.enabled = _hasCards && _decisionCandidate && _decisionSelected;
+            }
+            else
+            {
+                _outline.effectColor = new Color(1f, 0.78f, 0.18f, 0.90f);
+                _outline.effectDistance = new Vector2(3f, -3f);
+                _outline.enabled = _hasCards && _buyable && !_purchaseAnimationRunning;
+            }
+        }
     }
 
     private void OnPrimaryAction()
     {
-        if (!_buyable || _purchaseAnimationRunning || string.IsNullOrEmpty(_definitionId))
+        if (_decisionActive)
+        {
+            if (_decisionCandidate && _hasCards && !string.IsNullOrEmpty(_definitionId))
+                _decisionRequested?.Invoke(_definitionId);
             return;
+        }
 
-        // The gameplay command remains authoritative. This coroutine only gives immediate
-        // visual feedback and never mutates the hand, discard or Reserve itself.
-        if (_sprite != null)
-            StartCoroutine(PurchaseAnimationRoutine());
-
+        if (!_buyable || _purchaseAnimationRunning || string.IsNullOrEmpty(_definitionId)) return;
+        if (_sprite != null) StartCoroutine(PurchaseAnimationRoutine());
         _buyRequested?.Invoke(_definitionId);
     }
 
@@ -150,7 +156,6 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         RectTransform source = transform as RectTransform;
         RectTransform discard = FindDeepChild(transform.root, "Discard") as RectTransform;
         Canvas canvas = GetComponentInParent<Canvas>();
-
         if (source == null || discard == null || canvas == null || _sprite == null)
         {
             _purchaseAnimationRunning = false;
@@ -158,17 +163,12 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
             yield break;
         }
 
-        GameObject flyingObject = new GameObject(
-            "PurchasedCardAnimation_" + _definitionId.Replace(':', '_'),
-            typeof(RectTransform),
-            typeof(Image));
+        GameObject flyingObject = new GameObject("PurchasedCardAnimation_" + _definitionId.Replace(':', '_'), typeof(RectTransform), typeof(Image));
         flyingObject.transform.SetParent(canvas.transform, false);
         flyingObject.transform.SetAsLastSibling();
-
         RectTransform flying = flyingObject.GetComponent<RectTransform>();
         Vector2 sourceSize = source.rect.size;
-        if (sourceSize.x <= 1f || sourceSize.y <= 1f)
-            sourceSize = new Vector2(96f, 148f);
+        if (sourceSize.x <= 1f || sourceSize.y <= 1f) sourceSize = new Vector2(96f, 148f);
         flying.sizeDelta = sourceSize;
         flying.pivot = new Vector2(0.5f, 0.5f);
 
@@ -189,33 +189,26 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
             elapsed += Time.unscaledDeltaTime;
             float t = Mathf.Clamp01(elapsed / duration);
             float eased = 1f - Mathf.Pow(1f - t, 3f);
-
             Vector3 position = Vector3.Lerp(startWorld, targetWorld, eased);
             position.y += Mathf.Sin(t * Mathf.PI) * 24f;
             flying.position = position;
             flying.localScale = Vector3.Lerp(Vector3.one, Vector3.one * 0.58f, eased);
-
             yield return null;
         }
 
-        if (flyingObject != null)
-            Destroy(flyingObject);
-
+        if (flyingObject != null) Destroy(flyingObject);
         _purchaseAnimationRunning = false;
         RefreshAvailabilityVisual();
     }
 
     private void OnInspect()
     {
-        if (_sprite != null)
-            _inspectRequested?.Invoke(_sprite);
+        if (_sprite != null) _inspectRequested?.Invoke(_sprite);
     }
 
     private void OnDestroy()
     {
-        if (_pointer == null)
-            return;
-
+        if (_pointer == null) return;
         _pointer.PrimaryActionRequested -= OnPrimaryAction;
         _pointer.InspectRequested -= OnInspect;
     }
@@ -228,8 +221,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
             existingBadge.gameObject.SetActive(true);
             existingBadge.SetAsLastSibling();
             Text existing = existingBadge.GetComponentInChildren<Text>(true);
-            if (existing != null)
-                return existing;
+            if (existing != null) return existing;
         }
 
         GameObject badgeObject = new GameObject("RemainingCount", typeof(RectTransform), typeof(Image));
@@ -270,20 +262,14 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
 
     private static Transform FindDeepChild(Transform parent, string childName)
     {
-        if (parent == null)
-            return null;
-
+        if (parent == null) return null;
         for (int i = 0; i < parent.childCount; i++)
         {
             Transform child = parent.GetChild(i);
-            if (string.Equals(child.name, childName, StringComparison.Ordinal))
-                return child;
-
+            if (string.Equals(child.name, childName, StringComparison.Ordinal)) return child;
             Transform nested = FindDeepChild(child, childName);
-            if (nested != null)
-                return nested;
+            if (nested != null) return nested;
         }
-
         return null;
     }
 }
