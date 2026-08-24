@@ -65,12 +65,9 @@ public readonly struct TriggerResolutionResult
 }
 
 /// <summary>
-/// Deterministically consumes GameEvents and resolves declarative abilities triggered by them.
-///
-/// Existing abilities default to scope="subject": the card involved in CardPlayed/CardGained/etc.
-/// Explicit listeners may use scope="in_hand" or scope="in_play" and optional event filters.
-/// No global subscription state is kept; listeners are discovered from the authoritative working
-/// copy for every event, so reconnect/save/replay remain data-driven and deterministic.
+/// Deterministically consumes the events of one ResolutionQueue and resolves declarative
+/// abilities triggered by them. Existing abilities default to scope="subject"; explicit
+/// listeners may use scope="in_hand" or scope="in_play" and optional event filters.
 /// </summary>
 public static class TriggerResolver
 {
@@ -80,13 +77,13 @@ public static class TriggerResolver
     private const string InPlayScope = "in_play";
 
     public static TriggerResolutionResult ResolvePending(
-        GameEventBus eventBus,
+        ResolutionQueue resolution,
         GameStateSnapshot state,
         Func<string, ExtensionCardData> resolveCardDefinition,
         System.Random random)
     {
-        if (eventBus == null)
-            return TriggerResolutionResult.Rejected(0, 0, 0, "Game event bus is missing.");
+        if (resolution == null)
+            return TriggerResolutionResult.Rejected(0, 0, 0, "Resolution queue is missing.");
         if (state == null)
             return TriggerResolutionResult.Rejected(0, 0, 0, "Game state is null.");
         if (resolveCardDefinition == null)
@@ -96,7 +93,7 @@ public static class TriggerResolver
         int abilitiesMatched = 0;
         int effectsResolved = 0;
 
-        while (eventBus.TryTakeNext(out GameEvent gameEvent))
+        while (resolution.Events.TryTakeNext(out GameEvent gameEvent))
         {
             eventsProcessed++;
             if (eventsProcessed > MaxEventsPerResolution)
@@ -115,7 +112,7 @@ public static class TriggerResolver
             AbilityResolutionResult subjectResult = ResolveSubjectAbility(
                 gameEvent,
                 timing,
-                eventBus,
+                resolution,
                 state,
                 resolveCardDefinition,
                 random);
@@ -143,7 +140,7 @@ public static class TriggerResolver
             AbilityResolutionResult listenerResult = ResolveExternalListeners(
                 gameEvent,
                 timing,
-                eventBus,
+                resolution,
                 state,
                 resolveCardDefinition,
                 random);
@@ -175,7 +172,7 @@ public static class TriggerResolver
     private static AbilityResolutionResult ResolveSubjectAbility(
         GameEvent gameEvent,
         string timing,
-        GameEventBus eventBus,
+        ResolutionQueue resolution,
         GameStateSnapshot state,
         Func<string, ExtensionCardData> resolveCardDefinition,
         System.Random random)
@@ -201,7 +198,7 @@ public static class TriggerResolver
         return AbilityResolver.ResolveTiming(
             definition,
             timing,
-            BuildContext(state, owner, instance.InstanceId, random, eventBus, gameEvent),
+            BuildContext(state, owner, instance.InstanceId, random, resolution, gameEvent),
             ability => IsSubjectScope(ability) && FilterMatches(
                 ability != null ? ability.filter : null,
                 gameEvent,
@@ -212,7 +209,7 @@ public static class TriggerResolver
     private static AbilityResolutionResult ResolveExternalListeners(
         GameEvent gameEvent,
         string timing,
-        GameEventBus eventBus,
+        ResolutionQueue resolution,
         GameStateSnapshot state,
         Func<string, ExtensionCardData> resolveCardDefinition,
         System.Random random)
@@ -234,7 +231,7 @@ public static class TriggerResolver
                 InHandScope,
                 gameEvent,
                 timing,
-                eventBus,
+                resolution,
                 state,
                 resolveCardDefinition,
                 random);
@@ -252,7 +249,7 @@ public static class TriggerResolver
                 InPlayScope,
                 gameEvent,
                 timing,
-                eventBus,
+                resolution,
                 state,
                 resolveCardDefinition,
                 random);
@@ -274,7 +271,7 @@ public static class TriggerResolver
         string requiredScope,
         GameEvent gameEvent,
         string timing,
-        GameEventBus eventBus,
+        ResolutionQueue resolution,
         GameStateSnapshot state,
         Func<string, ExtensionCardData> resolveCardDefinition,
         System.Random random)
@@ -285,11 +282,9 @@ public static class TriggerResolver
         if (zone == null || zone.Count == 0)
             return AbilityResolutionResult.Applied(0, 0);
 
-        // Snapshot the instance ids because a triggered effect may mutate this zone.
         int[] listenerIds = zone.ToArray();
         foreach (int instanceId in listenerIds)
         {
-            // If an earlier trigger moved this listener away, it no longer listens from this scope.
             if (!zone.Contains(instanceId))
                 continue;
 
@@ -304,7 +299,7 @@ public static class TriggerResolver
             AbilityResolutionResult result = AbilityResolver.ResolveTiming(
                 definition,
                 timing,
-                BuildContext(state, owner, instanceId, random, eventBus, gameEvent),
+                BuildContext(state, owner, instanceId, random, resolution, gameEvent),
                 ability => ScopeEquals(ability, requiredScope) && FilterMatches(
                     ability != null ? ability.filter : null,
                     gameEvent,
@@ -328,7 +323,7 @@ public static class TriggerResolver
         PlayerStateSnapshot owner,
         int sourceCardInstanceId,
         System.Random random,
-        GameEventBus eventBus,
+        ResolutionQueue resolution,
         GameEvent gameEvent)
     {
         return new EffectExecutionContext(
@@ -336,7 +331,7 @@ public static class TriggerResolver
             owner,
             sourceCardInstanceId,
             random,
-            eventBus,
+            resolution,
             gameEvent);
     }
 
@@ -419,7 +414,6 @@ public static class TriggerResolver
     {
         switch (eventType)
         {
-            // Backwards-compatible with the pilot JSON already using when="play".
             case GameEventType.CardPlayed:
                 return "play";
             case GameEventType.CardGained:
