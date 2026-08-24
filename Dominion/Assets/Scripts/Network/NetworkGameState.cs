@@ -9,6 +9,7 @@ using Hashtable = ExitGames.Client.Photon.Hashtable;
 /// <summary>
 /// Replicated Dominion game state stored in Photon room custom properties.
 /// The Master Client is the only writer, but every client keeps the latest snapshot.
+/// Gameplay rules are delegated to the deterministic Rules layer before state is committed.
 /// </summary>
 public static class NetworkGameState
 {
@@ -31,9 +32,9 @@ public static class NetworkGameState
     private const int GoldSupplyCount = 30;
     private const int KingdomPileCount = 10;
 
-    public const string ActionPhase = "Action";
-    public const string BuyPhase = "Buy";
-    public const string CleanupPhase = "Cleanup";
+    public const string ActionPhase = GameRules.ActionPhase;
+    public const string BuyPhase = GameRules.BuyPhase;
+    public const string CleanupPhase = GameRules.CleanupPhase;
 
     private static GameStateSnapshot _state;
 
@@ -125,8 +126,7 @@ public static class NetworkGameState
     }
 
     /// <summary>
-    /// Creates the first authoritative snapshot for a match. Each turn now starts in
-    /// Action phase; the existing phase command advances Action -> Buy.
+    /// Creates the first authoritative snapshot for a match. Each turn starts in Action.
     /// </summary>
     public static bool InitialiseAuthoritativeState()
     {
@@ -329,7 +329,12 @@ public static class NetworkGameState
         return CommitState(next);
     }
 
-    public static bool TryPlayAction(
+    /// <summary>
+    /// Single authoritative entry point for playing a card. NetworkGameState only validates
+    /// command freshness/identity and commits; GameRules decides whether the card is playable
+    /// in the current phase and resolves its declared play abilities.
+    /// </summary>
+    public static bool TryPlayCard(
         string requesterPlayerId,
         int instanceId,
         int expectedVersion,
@@ -337,116 +342,24 @@ public static class NetworkGameState
     {
         if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
             return false;
-        if (!string.Equals(_state.Phase, ActionPhase, StringComparison.Ordinal))
-            return false;
 
         GameStateSnapshot next = Clone(_state);
-        PlayerStateSnapshot player = FindPlayer(next, requesterPlayerId);
-        if (player == null || player.Actions <= 0 || !player.Hand.Contains(instanceId))
-            return false;
+        GameRuleResult result = GameRules.TryPlayCard(
+            next,
+            requesterPlayerId,
+            instanceId,
+            ResolveCardDefinition,
+            NewRandom());
 
-        CardInstance instance = FindCardInstance(next, instanceId);
-        if (instance == null || !string.Equals(instance.OwnerPlayerId, requesterPlayerId, StringComparison.Ordinal))
-            return false;
-
-        ExtensionPackageData extension;
-        ExtensionCardData definition;
-        if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition) || !IsAction(definition))
-            return false;
-
-        player.Hand.Remove(instanceId);
-        player.InPlay.Add(instanceId);
-        player.Actions--;
-
-        AbilityResolutionResult abilityResult = AbilityResolver.ResolvePlay(
-            definition,
-            new EffectExecutionContext(next, player, instanceId, NewRandom()));
-
-        if (abilityResult.Status == EffectResolutionStatus.Rejected)
+        if (result.Status == GameRuleStatus.Rejected)
         {
-            Debug.LogWarning(
-                "Rejected declarative Action ability for " + instance.DefinitionId + ": " + abilityResult.Error);
+            Debug.LogWarning("Rejected PlayCard command: " + result.Error);
             return false;
         }
 
-        if (abilityResult.Status == EffectResolutionStatus.WaitingForChoice)
+        if (result.Status == GameRuleStatus.WaitingForChoice)
         {
-            Debug.LogWarning(
-                "Action play cannot wait for a player choice yet: " + instance.DefinitionId);
-            return false;
-        }
-
-        if (abilityResult.AbilitiesMatched == 0 || abilityResult.EffectsResolved == 0)
-        {
-            Debug.LogWarning(
-                "Action has no resolvable play effects yet: " + instance.DefinitionId);
-            return false;
-        }
-
-        return CommitState(next);
-    }
-
-    public static bool TryPlayTreasure(
-        string requesterPlayerId,
-        int instanceId,
-        int expectedVersion,
-        int expectedAuthorityEpoch)
-    {
-        if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
-            return false;
-        if (!string.Equals(_state.Phase, BuyPhase, StringComparison.Ordinal))
-            return false;
-
-        GameStateSnapshot next = Clone(_state);
-        PlayerStateSnapshot player = FindPlayer(next, requesterPlayerId);
-        if (player == null || !player.Hand.Contains(instanceId))
-            return false;
-
-        CardInstance instance = FindCardInstance(next, instanceId);
-        if (instance == null || !string.Equals(instance.OwnerPlayerId, requesterPlayerId, StringComparison.Ordinal))
-            return false;
-
-        ExtensionPackageData extension;
-        ExtensionCardData definition;
-        if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition) || !IsTreasure(definition))
-            return false;
-
-        player.Hand.Remove(instanceId);
-        player.InPlay.Add(instanceId);
-
-        AbilityResolutionResult abilityResult = AbilityResolver.ResolvePlay(
-            definition,
-            new EffectExecutionContext(next, player, instanceId, NewRandom()));
-
-        if (abilityResult.Status == EffectResolutionStatus.Rejected)
-        {
-            Debug.LogWarning(
-                "Rejected declarative Treasure ability for " + instance.DefinitionId + ": " + abilityResult.Error);
-            return false;
-        }
-
-        if (abilityResult.Status == EffectResolutionStatus.WaitingForChoice)
-        {
-            Debug.LogWarning(
-                "Treasure play cannot wait for a player choice yet: " + instance.DefinitionId);
-            return false;
-        }
-
-        if (abilityResult.AbilitiesMatched == 0)
-        {
-            // Transitional fallback for legacy Treasure definitions that do not yet declare
-            // a machine-readable play ability. This can be removed once every Treasure has
-            // migrated to the declarative rules format.
-            int legacyValue = TreasureValue(instance.DefinitionId);
-            if (legacyValue <= 0)
-                return false;
-
-            player.Coins += legacyValue;
-        }
-        else if (abilityResult.EffectsResolved == 0)
-        {
-            Debug.LogWarning(
-                "Treasure has a play ability but no resolved effects: " + instance.DefinitionId);
+            Debug.LogWarning("PlayCard cannot wait for a player choice yet.");
             return false;
         }
 
@@ -624,8 +537,8 @@ public static class NetworkGameState
             current.Discard.Add(instanceId);
         current.InPlay.Clear();
 
-        // Hand is stored left-to-right. Appending right-to-left means the card visually
-        // furthest left is appended last and therefore becomes the visible top discard.
+        // Hand is stored left-to-right. Appending right-to-left means the visually
+        // leftmost card is appended last and therefore becomes the visible top discard.
         for (int i = current.Hand.Count - 1; i >= 0; i--)
             current.Discard.Add(current.Hand[i]);
         current.Hand.Clear();
@@ -701,6 +614,15 @@ public static class NetworkGameState
         return state.Players.Find(player => player != null && player.PlayerId == playerId);
     }
 
+    private static ExtensionCardData ResolveCardDefinition(string definitionId)
+    {
+        ExtensionPackageData extension;
+        ExtensionCardData definition;
+        return RoomGameSetup.TryResolveCard(definitionId, out extension, out definition)
+            ? definition
+            : null;
+    }
+
     private static bool HandContainsTreasure(GameStateSnapshot state, PlayerStateSnapshot player)
     {
         if (state == null || player == null || player.Hand == null)
@@ -721,24 +643,10 @@ public static class NetworkGameState
         return false;
     }
 
-    private static bool IsAction(ExtensionCardData definition)
-    {
-        return definition != null && definition.types != null && definition.types.Any(type =>
-            string.Equals(type, "Action", StringComparison.OrdinalIgnoreCase));
-    }
-
     private static bool IsTreasure(ExtensionCardData definition)
     {
         return definition != null && definition.types != null && definition.types.Any(type =>
             string.Equals(type, "Trésor", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static int TreasureValue(string definitionId)
-    {
-        if (string.Equals(definitionId, CopperDefinitionId, StringComparison.OrdinalIgnoreCase)) return 1;
-        if (string.Equals(definitionId, SilverDefinitionId, StringComparison.OrdinalIgnoreCase)) return 2;
-        if (string.Equals(definitionId, GoldDefinitionId, StringComparison.OrdinalIgnoreCase)) return 3;
-        return 0;
     }
 
     private static bool ValidateActivePlayerCommand(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
@@ -804,8 +712,7 @@ public static class NetworkGameState
 
     private static bool ApplyJson(string json, bool force)
     {
-        if (string.IsNullOrEmpty(json))
-            return false;
+        if (string.IsNullOrEmpty(json))n            return false;
 
         GameStateSnapshot incoming = JsonUtility.FromJson<GameStateSnapshot>(json);
         if (incoming == null)
