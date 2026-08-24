@@ -52,7 +52,8 @@ public static class EffectResolver
         { "add_resource", ResolveAddResource }, { "draw", ResolveDraw },
         { "draw_last_selection_count", ResolveDrawLastSelectionCount }, { "choose_cards", ResolveChooseCards },
         { "trash_selected", ResolveTrashSelected }, { "discard_selected", ResolveDiscardSelected },
-        { "move_selected", ResolveMoveSelected }
+        { "move_selected", ResolveMoveSelected }, { "choose_supply", ResolveChooseSupply },
+        { "gain_selected_supply", ResolveGainSelectedSupply }
     };
 
     public static bool IsSupported(string operation) => !string.IsNullOrWhiteSpace(operation) && Handlers.ContainsKey(operation);
@@ -103,15 +104,11 @@ public static class EffectResolver
         if (context.Resolution == null) return EffectResolutionResult.Rejected("choose_cards requires an active ResolutionQueue.");
         if (!CardZoneRules.TryParseZone(effect.zone, out CardZone choiceZone) || (choiceZone != CardZone.Hand && choiceZone != CardZone.Discard))
             return EffectResolutionResult.Rejected("choose_cards currently supports zones 'hand' and 'discard'.");
-        if (context.AbilityIndex < 0 || context.EffectIndex < 0 || context.ListenerCardInstanceId <= 0)
-            return EffectResolutionResult.Rejected("choose_cards is missing its continuation cursor.");
-        if (context.TriggerEvent == null || context.TriggerEvent.CardInstanceId != context.ListenerCardInstanceId)
-            return EffectResolutionResult.Rejected("choose_cards currently supports subject abilities only.");
+        if (!HasDecisionCursor(context)) return EffectResolutionResult.Rejected("choose_cards is missing its continuation cursor.");
 
         int min = Math.Max(0, effect.min);
         int max = effect.max > 0 ? effect.max : min;
         if (max < min) return EffectResolutionResult.Rejected("choose_cards max cannot be lower than min.");
-
         List<int> source = CardZoneRules.ResolveZone(context.Actor, choiceZone);
         List<int> candidates = source != null ? new List<int>(source) : new List<int>();
         max = Math.Min(max, candidates.Count);
@@ -119,6 +116,39 @@ public static class EffectResolver
         if (candidates.Count == 0 && min == 0) return EffectResolutionResult.Applied();
 
         if (!context.Resolution.TrySuspendForDecision(context.Actor.PlayerId, "choose_cards", effect.zone, effect.prompt,
+                context.SourceCardInstanceId, min, max, candidates, context.TriggerEvent, context.Timing,
+                context.ListenerCardInstanceId, context.AbilityIndex, context.EffectIndex, out string error))
+            return EffectResolutionResult.Rejected(error);
+        return EffectResolutionResult.WaitingForChoice();
+    }
+
+    private static EffectResolutionResult ResolveChooseSupply(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("choose_supply currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("choose_supply requires an active ResolutionQueue.");
+        if (!HasDecisionCursor(context)) return EffectResolutionResult.Rejected("choose_supply is missing its continuation cursor.");
+
+        int min = Math.Max(0, effect.min);
+        int max = effect.max > 0 ? effect.max : Math.Max(1, min);
+        List<string> candidates = new List<string>();
+        if (context.State.SupplyPiles != null)
+        {
+            foreach (SupplyPileSnapshot pile in context.State.SupplyPiles)
+            {
+                if (pile == null || pile.RemainingCount <= 0 || string.IsNullOrEmpty(pile.DefinitionId)) continue;
+                ExtensionCardData definition = ResolveDefinition(pile.DefinitionId);
+                if (definition == null) continue;
+                if (effect.maxCost >= 0 && definition.cost > effect.maxCost) continue;
+                if (!string.IsNullOrWhiteSpace(effect.cardType) && !CardDefinitionRules.HasType(definition, effect.cardType)) continue;
+                candidates.Add(pile.DefinitionId);
+            }
+        }
+
+        max = Math.Min(max, candidates.Count);
+        if (candidates.Count == 0) return EffectResolutionResult.Applied();
+        if (min > candidates.Count) min = candidates.Count;
+
+        if (!context.Resolution.TrySuspendForSupplyDecision(context.Actor.PlayerId, "choose_supply", effect.prompt,
                 context.SourceCardInstanceId, min, max, candidates, context.TriggerEvent, context.Timing,
                 context.ListenerCardInstanceId, context.AbilityIndex, context.EffectIndex, out string error))
             return EffectResolutionResult.Rejected(error);
@@ -157,6 +187,36 @@ public static class EffectResolver
             if (!CardZoneRules.MoveCard(context.Actor, source, destination, instanceId))
                 return EffectResolutionResult.Rejected("Selected card could not be moved from " + source + " to " + destination + ".");
         return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult ResolveGainSelectedSupply(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("gain_selected_supply currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("gain_selected_supply requires an active ResolutionQueue.");
+        CardZone destination = CardZone.Discard;
+        if (!string.IsNullOrWhiteSpace(effect.destinationZone) && !CardZoneRules.TryParseZone(effect.destinationZone, out destination))
+            return EffectResolutionResult.Rejected("gain_selected_supply destinationZone is invalid.");
+
+        List<string> selected = context.Resolution.TakeSelectedDefinitionIds();
+        foreach (string definitionId in selected)
+            if (!GainRules.TryGainFromSupply(context.State, context.Actor, definitionId, destination, context.SourceCardInstanceId,
+                    context.EventBus, out _, out string error))
+                return EffectResolutionResult.Rejected(error);
+        return EffectResolutionResult.Applied();
+    }
+
+    private static bool HasDecisionCursor(EffectExecutionContext context)
+    {
+        return context.AbilityIndex >= 0 && context.EffectIndex >= 0 && context.ListenerCardInstanceId > 0 &&
+               context.TriggerEvent != null && context.TriggerEvent.CardInstanceId == context.ListenerCardInstanceId;
+    }
+
+    private static ExtensionCardData ResolveDefinition(string definitionId)
+    {
+        if (string.IsNullOrWhiteSpace(definitionId)) return null;
+        int separator = definitionId.IndexOf(':');
+        if (separator <= 0 || separator >= definitionId.Length - 1) return null;
+        return ExtensionCatalog.FindCard(definitionId.Substring(0, separator), definitionId.Substring(separator + 1));
     }
 
     private static bool TargetsSelf(CardEffectData effect) => effect != null && string.Equals(effect.target, "self", StringComparison.OrdinalIgnoreCase);
