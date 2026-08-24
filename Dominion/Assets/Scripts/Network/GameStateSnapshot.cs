@@ -105,6 +105,11 @@ public class PlayerStateSnapshot
     public List<int> Discard = new List<int>();
     public List<int> InPlay = new List<int>();
 
+    // Temporary face-up cards being inspected/revealed by an in-progress effect.
+    // Keeping this authoritative makes decisions reconnect-safe while avoiding
+    // card-specific temporary state in the UI or effect engine.
+    public List<int> Revealed = new List<int>();
+
     public int Actions;
     public int Buys;
     public int Coins;
