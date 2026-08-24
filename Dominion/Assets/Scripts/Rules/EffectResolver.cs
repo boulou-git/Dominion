@@ -47,7 +47,7 @@ public static class EffectResolver
         {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection},
         {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount},
         {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile},
-        {"choose_each_other_cards", ChooseEachOtherCards}, {"remember_selected_card_cost", RememberCost},
+        {"choose_each_other_cards", ChooseEachOtherCards}, {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard},
         {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_others_down_to", DiscardOthersDownTo},
         {"move_selected", MoveSelected}, {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected},
         {"choose_supply", ChooseSupply}, {"gain_card", GainCard}, {"gain_selected_supply", GainSelectedSupply}
@@ -72,9 +72,7 @@ public static class EffectResolver
         if (!Self(e) || e.amount < 0) return EffectResolutionResult.Rejected("Invalid add_resource effect.");
         switch ((e.resource ?? string.Empty).Trim().ToLowerInvariant())
         {
-            case "actions": c.Actor.Actions += e.amount; break;
-            case "buys": c.Actor.Buys += e.amount; break;
-            case "coins": c.Actor.Coins += e.amount; break;
+            case "actions": c.Actor.Actions += e.amount; break; case "buys": c.Actor.Buys += e.amount; break; case "coins": c.Actor.Coins += e.amount; break;
             default: return EffectResolutionResult.Rejected("Unsupported resource: " + e.resource);
         }
         return EffectResolutionResult.Applied();
@@ -83,8 +81,7 @@ public static class EffectResolver
     private static EffectResolutionResult AddResourcePerSelection(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null || e.amount < 0) return EffectResolutionResult.Rejected("Invalid add_resource_per_last_selection effect.");
-        CardEffectData copy = new CardEffectData { target = "self", resource = e.resource, amount = e.amount * c.Resolution.LastSelectionCount };
-        return AddResource(copy, c);
+        return AddResource(new CardEffectData { target = "self", resource = e.resource, amount = e.amount * c.Resolution.LastSelectionCount }, c);
     }
 
     private static EffectResolutionResult Draw(CardEffectData e, EffectExecutionContext c)
@@ -124,10 +121,8 @@ public static class EffectResolver
     private static EffectResolutionResult ChoosePerEmptyPile(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null || !Cursor(c)) return EffectResolutionResult.Rejected("Invalid choose_cards_per_empty_pile effect.");
-        int empty = 0;
-        if (c.State.SupplyPiles != null) foreach (SupplyPileSnapshot p in c.State.SupplyPiles) if (p != null && p.RemainingCount <= 0) empty++;
-        int required = Math.Min(empty, c.Actor.Hand != null ? c.Actor.Hand.Count : 0);
-        if (required <= 0) return EffectResolutionResult.Applied();
+        int empty = 0; if (c.State.SupplyPiles != null) foreach (SupplyPileSnapshot p in c.State.SupplyPiles) if (p != null && p.RemainingCount <= 0) empty++;
+        int required = Math.Min(empty, c.Actor.Hand != null ? c.Actor.Hand.Count : 0); if (required <= 0) return EffectResolutionResult.Applied();
         return c.Resolution.TrySuspendForDecision(c.Actor.PlayerId, "choose_cards_per_empty_pile", "hand", e.prompt, c.SourceCardInstanceId,
             required, required, c.Actor.Hand, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)
             ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(err);
@@ -138,24 +133,18 @@ public static class EffectResolver
         if (!Others(e) || c.Resolution == null || !Cursor(c)) return EffectResolutionResult.Rejected("Invalid choose_each_other_cards effect.");
         if (!CardZoneRules.TryParseZone(e.zone, out CardZone src) || !CardZoneRules.TryParseZone(e.destinationZone, out CardZone dst) || src == dst)
             return EffectResolutionResult.Rejected("choose_each_other_cards requires distinct valid source and destination zones.");
-        int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : min;
-        List<PlayerStateSnapshot> targets = new List<PlayerStateSnapshot>();
-        List<List<int>> choices = new List<List<int>>();
+        int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : min; List<PlayerStateSnapshot> targets = new List<PlayerStateSnapshot>(); List<List<int>> choices = new List<List<int>>();
         if (c.State.Players != null) foreach (PlayerStateSnapshot p in c.State.Players)
         {
-            if (p == null || p.PlayerId == c.Actor.PlayerId || SkipAttackTarget(c, p)) continue;
-            List<int> cards = Eligible(c.State, p, src, e.cardId, e.cardType, 0);
-            if (cards.Count < min) continue;
-            targets.Add(p); choices.Add(cards);
+            if (p == null || p.PlayerId == c.Actor.PlayerId || SkipAttackTarget(c, p)) continue; List<int> cards = Eligible(c.State, p, src, e.cardId, e.cardType, 0);
+            if (cards.Count < min) continue; targets.Add(p); choices.Add(cards);
         }
         if (targets.Count == 0) return EffectResolutionResult.Applied();
         string op = "choose_each_other_cards|" + (e.cardId ?? string.Empty) + "|" + (e.cardType ?? string.Empty) + "|" + e.destinationZone;
         List<string> remaining = new List<string>(); for (int i = 1; i < targets.Count; i++) remaining.Add(targets[i].PlayerId);
         if (!c.Resolution.TrySuspendForDecision(targets[0].PlayerId, op, e.zone, e.prompt, c.SourceCardInstanceId,
-            min, Math.Min(max, choices[0].Count), choices[0], c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err))
-            return EffectResolutionResult.Rejected(err);
-        c.Resolution.PendingDecision.RemainingPlayerIds.AddRange(remaining);
-        return EffectResolutionResult.WaitingForChoice();
+            min, Math.Min(max, choices[0].Count), choices[0], c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)) return EffectResolutionResult.Rejected(err);
+        c.Resolution.PendingDecision.RemainingPlayerIds.AddRange(remaining); return EffectResolutionResult.WaitingForChoice();
     }
 
     private static EffectResolutionResult RememberCost(CardEffectData e, EffectExecutionContext c)
@@ -168,6 +157,14 @@ public static class EffectResolver
         c.Resolution.SetLastSelectedCardCost(d.cost); return EffectResolutionResult.Applied();
     }
 
+    private static EffectResolutionResult RememberSelectedCard(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("Invalid remember_selected_card effect.");
+        if (c.Resolution.SelectedInstanceIds.Count == 0) { c.Resolution.SetLastMovedCardInstanceId(0); return EffectResolutionResult.Applied(); }
+        if (c.Resolution.SelectedInstanceIds.Count != 1) return EffectResolutionResult.Rejected("remember_selected_card requires exactly one selected card.");
+        c.Resolution.SetLastMovedCardInstanceId(c.Resolution.SelectedInstanceIds[0]); return EffectResolutionResult.Applied();
+    }
+
     private static EffectResolutionResult ChooseSupply(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null || !Cursor(c)) return EffectResolutionResult.Rejected("Invalid choose_supply effect.");
@@ -177,18 +174,13 @@ public static class EffectResolver
             if (c.Resolution.LastSelectedCardCost < 0) return min == 0 ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected("choose_supply requires a remembered selected-card cost.");
             int dyn = c.Resolution.LastSelectedCardCost + e.costOffset; ceiling = ceiling >= 0 ? Math.Min(ceiling, dyn) : dyn;
         }
-        List<string> candidates = new List<string>();
-        if (c.State.SupplyPiles != null) foreach (SupplyPileSnapshot p in c.State.SupplyPiles)
+        List<string> candidates = new List<string>(); if (c.State.SupplyPiles != null) foreach (SupplyPileSnapshot p in c.State.SupplyPiles)
         {
-            if (p == null || p.RemainingCount <= 0 || string.IsNullOrEmpty(p.DefinitionId)) continue;
-            ExtensionCardData d = Def(p.DefinitionId); if (d == null) continue;
-            if (ceiling >= 0 && d.cost > ceiling) continue;
-            if (!string.IsNullOrWhiteSpace(e.cardId) && !string.Equals(p.DefinitionId, e.cardId, StringComparison.OrdinalIgnoreCase)) continue;
-            if (!string.IsNullOrWhiteSpace(e.cardType) && !CardDefinitionRules.HasType(d, e.cardType)) continue;
-            candidates.Add(p.DefinitionId);
+            if (p == null || p.RemainingCount <= 0 || string.IsNullOrEmpty(p.DefinitionId)) continue; ExtensionCardData d = Def(p.DefinitionId); if (d == null) continue;
+            if (ceiling >= 0 && d.cost > ceiling) continue; if (!string.IsNullOrWhiteSpace(e.cardId) && !string.Equals(p.DefinitionId, e.cardId, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!string.IsNullOrWhiteSpace(e.cardType) && !CardDefinitionRules.HasType(d, e.cardType)) continue; candidates.Add(p.DefinitionId);
         }
-        max = Math.Min(max, candidates.Count);
-        if (candidates.Count == 0) return (min == 0 || e.allowNoEligible) ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected("choose_supply has no eligible pile.");
+        max = Math.Min(max, candidates.Count); if (candidates.Count == 0) return (min == 0 || e.allowNoEligible) ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected("choose_supply has no eligible pile.");
         if (min > candidates.Count) return EffectResolutionResult.Rejected("choose_supply does not have enough eligible piles.");
         return c.Resolution.TrySuspendForSupplyDecision(c.Actor.PlayerId, "choose_supply", e.prompt, c.SourceCardInstanceId,
             min, max, candidates, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)
@@ -212,11 +204,9 @@ public static class EffectResolver
     private static EffectResolutionResult DiscardOthersDownTo(CardEffectData e, EffectExecutionContext c)
     {
         if (!Others(e) || c.Resolution == null || !Cursor(c) || e.amount < 0) return EffectResolutionResult.Rejected("Invalid discard_others_down_to effect.");
-        List<PlayerStateSnapshot> targets = new List<PlayerStateSnapshot>();
-        if (c.State.Players != null) foreach (PlayerStateSnapshot p in c.State.Players)
+        List<PlayerStateSnapshot> targets = new List<PlayerStateSnapshot>(); if (c.State.Players != null) foreach (PlayerStateSnapshot p in c.State.Players)
             if (p != null && p.PlayerId != c.Actor.PlayerId && !SkipAttackTarget(c, p) && p.Hand != null && p.Hand.Count > e.amount) targets.Add(p);
-        if (targets.Count == 0) return EffectResolutionResult.Applied();
-        List<string> rem = new List<string>(); for (int i = 1; i < targets.Count; i++) rem.Add(targets[i].PlayerId);
+        if (targets.Count == 0) return EffectResolutionResult.Applied(); List<string> rem = new List<string>(); for (int i = 1; i < targets.Count; i++) rem.Add(targets[i].PlayerId);
         return c.Resolution.TrySuspendForDiscardDownDecision(targets[0].PlayerId, e.prompt, c.SourceCardInstanceId, e.amount, targets[0].Hand,
             rem, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)
             ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(err);
@@ -247,13 +237,19 @@ public static class EffectResolver
     private static EffectResolutionResult PlaySelected(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null || !CardZoneRules.TryParseZone(e.sourceZone, out CardZone s)) return EffectResolutionResult.Rejected("Invalid play_selected effect.");
-        List<int> selected = c.Resolution.TakeSelectedInstanceIds(); if (selected.Count == 0) return EffectResolutionResult.Applied();
-        if (selected.Count != 1) return EffectResolutionResult.Rejected("play_selected supports one card at a time.");
-        int id = selected[0]; List<int> zone = CardZoneRules.ResolveZone(c.Actor, s); if (zone == null || !zone.Contains(id)) return EffectResolutionResult.Rejected("Selected card is no longer in source zone.");
+        int id;
+        if (e.lastMovedOnly) id = c.Resolution.LastMovedCardInstanceId;
+        else
+        {
+            List<int> selected = c.Resolution.TakeSelectedInstanceIds(); if (selected.Count == 0) return EffectResolutionResult.Applied();
+            if (selected.Count != 1) return EffectResolutionResult.Rejected("play_selected supports one card at a time."); id = selected[0];
+        }
+        if (id <= 0) return EffectResolutionResult.Applied(); List<int> zone = CardZoneRules.ResolveZone(c.Actor, s); if (zone == null || !zone.Contains(id)) return EffectResolutionResult.Rejected("Selected card is no longer in source zone.");
         CardInstance i = Find(c.State, id); ExtensionCardData d = i != null ? Def(i.DefinitionId) : null; if (d == null) return EffectResolutionResult.Rejected("Selected card definition could not be resolved.");
         if (s != CardZone.InPlay && !CardZoneRules.MoveCard(c.Actor, s, CardZone.InPlay, id)) return EffectResolutionResult.Rejected("Selected card could not be moved into play.");
         if (CardDefinitionRules.HasType(d, "Attaque"))
         {
+            c.Resolution.ClearAttackProtection();
             GameRuleResult rr = GameRules.TryStartAttackReactions(c.State, c.Actor, i, d, c.Resolution, Def, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex);
             if (rr != null) return rr.Status == GameRuleStatus.Rejected ? EffectResolutionResult.Rejected(rr.Error) : EffectResolutionResult.WaitingForChoice();
         }
