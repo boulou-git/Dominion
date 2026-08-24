@@ -1,17 +1,35 @@
 using System.Collections.Generic;
 
 /// <summary>
-/// Per-resolution ordered event queue. This is deliberately not a global/static pub-sub bus:
-/// events belong to one authoritative working-copy transaction and disappear if that
-/// transaction is rejected instead of leaking side effects into the live game.
+/// Ordered event queue for one rules resolution. It can optionally be backed by the
+/// serializable ResolutionQueueSnapshot stored in GameStateSnapshot, so unresolved events
+/// survive reconnect/save/load/Master migration without becoming global/static state.
 /// </summary>
 public sealed class GameEventBus
 {
     private readonly Queue<GameEvent> _pending = new Queue<GameEvent>();
     private readonly List<GameEvent> _history = new List<GameEvent>();
+    private readonly ResolutionQueueSnapshot _backingSnapshot;
 
     public int PendingCount => _pending.Count;
     public int PublishedCount => _history.Count;
+
+    public GameEventBus()
+    {
+    }
+
+    public GameEventBus(ResolutionQueueSnapshot backingSnapshot)
+    {
+        _backingSnapshot = backingSnapshot;
+        if (_backingSnapshot == null || _backingSnapshot.PendingEvents == null)
+            return;
+
+        foreach (GameEventSnapshot snapshot in _backingSnapshot.PendingEvents)
+        {
+            if (snapshot != null && snapshot.TryToRuntime(out GameEvent gameEvent))
+                _pending.Enqueue(gameEvent);
+        }
+    }
 
     public void Publish(GameEvent gameEvent)
     {
@@ -20,6 +38,13 @@ public sealed class GameEventBus
 
         _pending.Enqueue(gameEvent);
         _history.Add(gameEvent);
+
+        if (_backingSnapshot != null)
+        {
+            if (_backingSnapshot.PendingEvents == null)
+                _backingSnapshot.PendingEvents = new List<GameEventSnapshot>();
+            _backingSnapshot.PendingEvents.Add(GameEventSnapshot.FromRuntime(gameEvent));
+        }
     }
 
     public void PublishRange(IEnumerable<GameEvent> gameEvents)
@@ -40,6 +65,14 @@ public sealed class GameEventBus
         }
 
         gameEvent = _pending.Dequeue();
+
+        if (_backingSnapshot != null &&
+            _backingSnapshot.PendingEvents != null &&
+            _backingSnapshot.PendingEvents.Count > 0)
+        {
+            _backingSnapshot.PendingEvents.RemoveAt(0);
+        }
+
         return true;
     }
 
