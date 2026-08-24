@@ -130,7 +130,13 @@
       ] } ]
     },
     { "id": "soldat", "name": "Soldat", "cost": 5, "types": ["Action"], "image": "soldat.png", "text": "+1 Carte\n+1 Action\n\nRegardez les 2 premières cartes de votre pioche.\n\nÉcartez et/ou défaussez autant de ces cartes que vous le souhaitez. Replacez les autres sur votre pioche dans l’ordre de votre choix." },
-    { "id": "sorciere", "name": "Sorcière", "cost": 5, "types": ["Action", "Attaque"], "image": "sorciere.png", "text": "+2 Cartes\n\nChaque autre joueur reçoit une Malédiction." },
+    {
+      "id": "sorciere", "name": "Sorcière", "cost": 5, "types": ["Action", "Attaque"], "image": "sorciere.png", "text": "+2 Cartes\n\nChaque autre joueur reçoit une Malédiction.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 2 },
+        { "op": "gain_card", "target": "others", "cardId": "base:malediction", "amount": 1, "destinationZone": "discard" }
+      ] } ]
+    },
     {
       "id": "artisane", "name": "Artisane", "cost": 6, "types": ["Action"], "image": "artisane.png", "text": "Recevez dans votre main une carte coûtant jusqu’à 5 🪙.\n\nPlacez une carte de votre main sur votre pioche.",
       "abilities": [ { "when": "play", "effects": [
