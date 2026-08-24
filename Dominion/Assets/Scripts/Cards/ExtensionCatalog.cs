@@ -65,6 +65,10 @@ public sealed class CardEffectData
     public string cardId;
     public string cardType;
 
+    // Generic conditional execution: when true, this effect becomes a no-op if the
+    // immediately preceding player choice selected no cards/piles.
+    public bool requiresLastSelection;
+
     // Supply-choice constraints. Negative maxCost means no fixed cost ceiling.
     public int maxCost = -1;
 
@@ -72,6 +76,11 @@ public sealed class CardEffectData
     // This is intentionally separate from maxCost so cards such as Rénovation/Mine stay data-driven.
     public bool useLastSelectionCost;
     public int costOffset;
+
+    // If a mandatory-looking supply choice has no eligible non-empty pile, resolve it as
+    // a no-op instead of rejecting the whole transaction. This matches Dominion's
+    // "do as much as you can" behavior without making an available gain optional.
+    public bool allowNoEligible;
 }
 
 public static class ExtensionCatalog
