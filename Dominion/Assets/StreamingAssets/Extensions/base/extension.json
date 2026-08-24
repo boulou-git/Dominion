@@ -66,7 +66,7 @@
       "id": "bureaucrate", "name": "Bureaucrate", "cost": 4, "types": ["Action", "Attaque"], "image": "bureaucrate.png", "text": "Recevez un Argent et placez-le sur votre pioche.\n\nChaque autre joueur révèle une carte Victoire de sa main et la place sur sa pioche (ou révèle une main ne contenant aucune carte Victoire).",
       "abilities": [ { "when": "play", "effects": [
         { "op": "gain_card", "target": "self", "cardId": "base:argent", "amount": 1, "destinationZone": "deck" },
-        { "op": "choose_each_other_cards", "target": "others", "zone": "hand", "min": 1, "max": 1, "cardType": "Victoire", "destinationZone": "deck", "prompt": "Révélez une carte Victoire de votre main et placez-la sur votre pioche." }
+        { "op": "reveal_each_other_cards", "target": "others", "zone": "hand", "min": 1, "max": 1, "cardType": "Victoire", "destinationZone": "deck", "prompt": "Révélez une carte Victoire de votre main et placez-la sur votre pioche." }
       ] } ]
     },
     { "id": "jardins", "name": "Jardins", "cost": 4, "types": ["Victoire"], "image": "jardins.png", "text": "Vaut 1 VP par tranche de 10 cartes dans votre deck (arrondi à l’entier inférieur)." },
@@ -107,7 +107,7 @@
       "abilities": [ { "when": "play", "effects": [
         { "op": "draw", "target": "self", "amount": 1 },
         { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
-        { "op": "reveal_top_cards", "target": "self", "amount": 2 },
+        { "op": "inspect_top_cards", "target": "self", "amount": 2 },
         { "op": "choose_cards", "target": "self", "zone": "inspected", "min": 0, "max": 99, "prompt": "Choisissez parmi les cartes regardées celles à écarter." },
         { "op": "trash_selected", "target": "self", "sourceZone": "inspected" },
         { "op": "choose_cards", "target": "self", "zone": "inspected", "min": 0, "max": 99, "prompt": "Choisissez parmi les cartes regardées celles à défausser." },
