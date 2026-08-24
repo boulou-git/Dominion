@@ -46,17 +46,39 @@ public sealed class ExtensionCardData
 
 /// <summary>
 /// One capability exposed by a card at a well-defined timing point.
-/// Initial timing is "play"; future timings can include gain, trash, turn_start, etc.
+///
+/// scope is optional and defaults to "subject", preserving existing cards:
+/// - subject: this card is itself the subject of the event (played/gained/etc.)
+/// - in_hand: this card listens while in its owner's hand
+/// - in_play: this card listens while in its owner's in-play zone
+///
+/// filter is optional and constrains the triggering event without embedding card-specific
+/// logic in C#.
 /// </summary>
 [Serializable]
 public sealed class CardAbilityData
 {
     public string when;
+    public string scope;
+    public CardTriggerFilterData filter;
     public List<CardEffectData> effects = new List<CardEffectData>();
 }
 
 /// <summary>
-/// Declarative effect instruction consumed by the future rules engine.
+/// Minimal declarative event filter. Empty fields mean "no restriction".
+/// eventPlayer accepts "self", "other" or "any".
+/// cardId and cardType apply to the card carried by the triggering event.
+/// </summary>
+[Serializable]
+public sealed class CardTriggerFilterData
+{
+    public string eventPlayer;
+    public string cardId;
+    public string cardType;
+}
+
+/// <summary>
+/// Declarative effect instruction consumed by the rules engine.
 /// Only fields needed by the first generic operations live here for now. New operation-specific
 /// fields can be added without changing existing extension files or the play-card pipeline.
 /// </summary>
