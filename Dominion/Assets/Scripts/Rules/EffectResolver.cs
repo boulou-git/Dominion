@@ -49,11 +49,11 @@ public static class EffectResolver
     private delegate EffectResolutionResult EffectHandler(CardEffectData effect, EffectExecutionContext context);
     private static readonly Dictionary<string, EffectHandler> Handlers = new Dictionary<string, EffectHandler>(StringComparer.OrdinalIgnoreCase)
     {
-        { "add_resource", ResolveAddResource }, { "draw", ResolveDraw },
-        { "draw_last_selection_count", ResolveDrawLastSelectionCount }, { "choose_cards", ResolveChooseCards },
-        { "trash_selected", ResolveTrashSelected }, { "discard_selected", ResolveDiscardSelected },
-        { "move_selected", ResolveMoveSelected }, { "choose_supply", ResolveChooseSupply },
-        { "gain_selected_supply", ResolveGainSelectedSupply }
+        { "add_resource", ResolveAddResource }, { "add_resource_per_last_selection", ResolveAddResourcePerLastSelection },
+        { "draw", ResolveDraw }, { "draw_last_selection_count", ResolveDrawLastSelectionCount },
+        { "choose_cards", ResolveChooseCards }, { "trash_selected", ResolveTrashSelected },
+        { "discard_selected", ResolveDiscardSelected }, { "move_selected", ResolveMoveSelected },
+        { "choose_supply", ResolveChooseSupply }, { "gain_selected_supply", ResolveGainSelectedSupply }
     };
 
     public static bool IsSupported(string operation) => !string.IsNullOrWhiteSpace(operation) && Handlers.ContainsKey(operation);
@@ -71,13 +71,27 @@ public static class EffectResolver
     {
         if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("add_resource currently supports target 'self' only.");
         if (effect.amount < 0) return EffectResolutionResult.Rejected("add_resource amount cannot be negative.");
-        if (string.IsNullOrWhiteSpace(effect.resource)) return EffectResolutionResult.Rejected("add_resource resource is missing.");
-        switch (effect.resource.Trim().ToLowerInvariant())
+        return AddResource(context.Actor, effect.resource, effect.amount);
+    }
+
+    private static EffectResolutionResult ResolveAddResourcePerLastSelection(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("add_resource_per_last_selection currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("add_resource_per_last_selection requires an active ResolutionQueue.");
+        if (effect.amount < 0) return EffectResolutionResult.Rejected("add_resource_per_last_selection amount cannot be negative.");
+        return AddResource(context.Actor, effect.resource, effect.amount * context.Resolution.LastSelectionCount);
+    }
+
+    private static EffectResolutionResult AddResource(PlayerStateSnapshot actor, string resource, int amount)
+    {
+        if (actor == null) return EffectResolutionResult.Rejected("Resource actor is missing.");
+        if (string.IsNullOrWhiteSpace(resource)) return EffectResolutionResult.Rejected("Resource name is missing.");
+        switch (resource.Trim().ToLowerInvariant())
         {
-            case "actions": context.Actor.Actions += effect.amount; break;
-            case "buys": context.Actor.Buys += effect.amount; break;
-            case "coins": context.Actor.Coins += effect.amount; break;
-            default: return EffectResolutionResult.Rejected("Unsupported add_resource resource: " + effect.resource);
+            case "actions": actor.Actions += amount; break;
+            case "buys": actor.Buys += amount; break;
+            case "coins": actor.Coins += amount; break;
+            default: return EffectResolutionResult.Rejected("Unsupported resource: " + resource);
         }
         return EffectResolutionResult.Applied();
     }
@@ -110,7 +124,24 @@ public static class EffectResolver
         int max = effect.max > 0 ? effect.max : min;
         if (max < min) return EffectResolutionResult.Rejected("choose_cards max cannot be lower than min.");
         List<int> source = CardZoneRules.ResolveZone(context.Actor, choiceZone);
-        List<int> candidates = source != null ? new List<int>(source) : new List<int>();
+        List<int> candidates = new List<int>();
+        if (source != null)
+        {
+            foreach (int instanceId in source)
+            {
+                CardInstance instance = FindCardInstance(context.State, instanceId);
+                if (instance == null) continue;
+                if (!string.IsNullOrWhiteSpace(effect.cardId) &&
+                    !string.Equals(instance.DefinitionId, effect.cardId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!string.IsNullOrWhiteSpace(effect.cardType))
+                {
+                    ExtensionCardData definition = ResolveDefinition(instance.DefinitionId);
+                    if (!CardDefinitionRules.HasType(definition, effect.cardType)) continue;
+                }
+                candidates.Add(instanceId);
+            }
+        }
+
         max = Math.Min(max, candidates.Count);
         if (min > candidates.Count) return EffectResolutionResult.Rejected("choose_cards does not have enough eligible cards for its minimum.");
         if (candidates.Count == 0 && min == 0) return EffectResolutionResult.Applied();
@@ -139,14 +170,18 @@ public static class EffectResolver
                 ExtensionCardData definition = ResolveDefinition(pile.DefinitionId);
                 if (definition == null) continue;
                 if (effect.maxCost >= 0 && definition.cost > effect.maxCost) continue;
+                if (!string.IsNullOrWhiteSpace(effect.cardId) &&
+                    !string.Equals(pile.DefinitionId, effect.cardId, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!string.IsNullOrWhiteSpace(effect.cardType) && !CardDefinitionRules.HasType(definition, effect.cardType)) continue;
                 candidates.Add(pile.DefinitionId);
             }
         }
 
         max = Math.Min(max, candidates.Count);
-        if (candidates.Count == 0) return EffectResolutionResult.Applied();
-        if (min > candidates.Count) min = candidates.Count;
+        if (candidates.Count == 0) return min == 0
+            ? EffectResolutionResult.Applied()
+            : EffectResolutionResult.Rejected("choose_supply has no eligible pile for its required choice.");
+        if (min > candidates.Count) return EffectResolutionResult.Rejected("choose_supply does not have enough eligible piles for its minimum.");
 
         if (!context.Resolution.TrySuspendForSupplyDecision(context.Actor.PlayerId, "choose_supply", effect.prompt,
                 context.SourceCardInstanceId, min, max, candidates, context.TriggerEvent, context.Timing,
@@ -209,6 +244,12 @@ public static class EffectResolver
     {
         return context.AbilityIndex >= 0 && context.EffectIndex >= 0 && context.ListenerCardInstanceId > 0 &&
                context.TriggerEvent != null && context.TriggerEvent.CardInstanceId == context.ListenerCardInstanceId;
+    }
+
+    private static CardInstance FindCardInstance(GameStateSnapshot state, int instanceId)
+    {
+        if (state == null || state.CardInstances == null || instanceId <= 0) return null;
+        return state.CardInstances.Find(card => card != null && card.InstanceId == instanceId);
     }
 
     private static ExtensionCardData ResolveDefinition(string definitionId)
