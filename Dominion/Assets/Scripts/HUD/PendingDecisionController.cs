@@ -13,7 +13,7 @@ public sealed class PendingDecisionController : MonoBehaviour
     private readonly HashSet<string> _selectedSupply = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<CardPointerInteraction, Action> _selectionHandlers = new Dictionary<CardPointerInteraction, Action>();
     private readonly Dictionary<Image, Color> _originalImageColors = new Dictionary<Image, Color>();
-    private readonly List<Outline> _selectionOutlines = new List<Outline>();
+    private readonly List<CardSelectionHalo> _selectionHalos = new List<CardSelectionHalo>();
     private readonly List<GameObject> _externalCards = new List<GameObject>();
 
     private RectTransform _panel;
@@ -217,8 +217,9 @@ public sealed class PendingDecisionController : MonoBehaviour
 
     private void RefreshSelectionMarkers()
     {
-        foreach (Outline outline in _selectionOutlines) if (outline != null) Destroy(outline);
-        _selectionOutlines.Clear();
+        foreach (CardSelectionHalo halo in _selectionHalos)
+            if (halo != null) halo.SetVisible(false);
+        _selectionHalos.Clear();
 
         Transform handRoot = FindHandCardsRoot();
         if (handRoot != null)
@@ -226,24 +227,23 @@ public sealed class PendingDecisionController : MonoBehaviour
             {
                 Transform child = handRoot.GetChild(i);
                 HandCardMotion motion = child.GetComponent<HandCardMotion>();
-                if (motion != null && _selected.Contains(motion.InstanceId)) AddSelectionOutline(child.gameObject);
+                if (motion != null && _selected.Contains(motion.InstanceId)) AddSelectionHalo(child.gameObject);
             }
 
         foreach (GameObject card in _externalCards)
         {
             if (card == null) continue;
             int id = ResolveExternalInstanceId(card.name);
-            if (_selected.Contains(id)) AddSelectionOutline(card);
+            if (_selected.Contains(id)) AddSelectionHalo(card);
         }
     }
 
-    private void AddSelectionOutline(GameObject target)
+    private void AddSelectionHalo(GameObject target)
     {
-        Outline outline = target.AddComponent<Outline>();
-        outline.effectColor = new Color(1f, 1f, 1f, 0.95f);
-        outline.effectDistance = new Vector2(2f, -2f);
-        outline.useGraphicAlpha = true;
-        _selectionOutlines.Add(outline);
+        CardSelectionHalo halo = target.GetComponent<CardSelectionHalo>();
+        if (halo == null) halo = target.AddComponent<CardSelectionHalo>();
+        halo.SetVisible(true);
+        if (!_selectionHalos.Contains(halo)) _selectionHalos.Add(halo);
     }
 
     private static int ResolveExternalInstanceId(string objectName)
@@ -298,8 +298,9 @@ public sealed class PendingDecisionController : MonoBehaviour
         _selectionHandlers.Clear();
         foreach (KeyValuePair<Image, Color> pair in _originalImageColors) if (pair.Key != null) pair.Key.color = pair.Value;
         _originalImageColors.Clear();
-        foreach (Outline outline in _selectionOutlines) if (outline != null) Destroy(outline);
-        _selectionOutlines.Clear();
+        foreach (CardSelectionHalo halo in _selectionHalos)
+            if (halo != null) halo.SetVisible(false);
+        _selectionHalos.Clear();
     }
 
     private void ClearExternalCards()
