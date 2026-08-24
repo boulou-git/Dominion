@@ -138,9 +138,10 @@ public static class GameRules
         return ResumeDecision(state, resolution, continuation, resolveCardDefinition, random);
     }
 
-    private static GameRuleResult TryStartAttackReactions(GameStateSnapshot state, PlayerStateSnapshot attacker,
+    internal static GameRuleResult TryStartAttackReactions(GameStateSnapshot state, PlayerStateSnapshot attacker,
         CardInstance attackInstance, ExtensionCardData attackDefinition, ResolutionQueue resolution,
-        Func<string, ExtensionCardData> resolveCardDefinition)
+        Func<string, ExtensionCardData> resolveCardDefinition, GameEvent triggerEvent = null, string timing = null,
+        int listenerCardInstanceId = 0, int abilityIndex = -1, int effectIndex = -1)
     {
         if (state.Players == null || state.Players.Count <= 1) return null;
 
@@ -164,6 +165,11 @@ public static class GameRules
                 attackInstance.InstanceId,
                 candidatesByPlayer[0],
                 remaining,
+                triggerEvent,
+                timing,
+                listenerCardInstanceId > 0 ? listenerCardInstanceId : attackInstance.InstanceId,
+                abilityIndex,
+                effectIndex,
                 out string error))
             return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
 
@@ -205,9 +211,22 @@ public static class GameRules
                     attackInstance.InstanceId,
                     candidates,
                     remaining,
+                    RestoreTriggerEvent(continuation),
+                    continuation.Timing,
+                    continuation.ListenerCardInstanceId,
+                    continuation.AbilityIndex,
+                    continuation.EffectIndex,
                     out string suspendError))
                 return GameRuleResult.Rejected(suspendError, resolution.Events.SnapshotHistory());
             return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+        }
+
+        // An Attack played by another effect (for example Vassal) must resume the outer
+        // declarative effect after reactions, rather than losing that effect's continuation.
+        if (continuation.TriggerEvent != null && continuation.AbilityIndex >= 0 && continuation.EffectIndex >= 0)
+        {
+            resolution.Events.Publish(GameEvent.CardPlayed(attacker.PlayerId, attackInstance.InstanceId, attackInstance.DefinitionId));
+            return ResumeDecision(state, resolution, continuation, resolveCardDefinition, random);
         }
 
         return ResolvePlayedCard(state, attacker, attackInstance, resolution, resolveCardDefinition, random);
