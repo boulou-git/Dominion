@@ -12,12 +12,7 @@
       "image": "cuivre.png",
       "text": "+1 🪙",
       "abilities": [
-        {
-          "when": "play",
-          "effects": [
-            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
-          ]
-        }
+        { "when": "play", "effects": [ { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 } ] }
       ]
     },
     {
@@ -28,12 +23,7 @@
       "image": "argent.png",
       "text": "+2 🪙",
       "abilities": [
-        {
-          "when": "play",
-          "effects": [
-            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 }
-          ]
-        }
+        { "when": "play", "effects": [ { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 } ] }
       ]
     },
     {
@@ -44,336 +34,95 @@
       "image": "or.png",
       "text": "+3 🪙",
       "abilities": [
-        {
-          "when": "play",
-          "effects": [
-            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 3 }
-          ]
-        }
+        { "when": "play", "effects": [ { "op": "add_resource", "target": "self", "resource": "coins", "amount": 3 } ] }
       ]
     },
-    {
-      "id": "domaine",
-      "name": "Domaine",
-      "cost": 2,
-      "types": ["Victoire"],
-      "image": "domaine.png",
-      "text": "1 VP"
-    },
-    {
-      "id": "duche",
-      "name": "Duché",
-      "cost": 5,
-      "types": ["Victoire"],
-      "image": "duche - Copie.png",
-      "text": "3 VP"
-    },
-    {
-      "id": "province",
-      "name": "Province",
-      "cost": 8,
-      "types": ["Victoire"],
-      "image": "province.png",
-      "text": "6 VP"
-    },
-    {
-      "id": "malediction",
-      "name": "Malédiction",
-      "cost": 0,
-      "types": ["Malédiction"],
-      "image": "malediction.png",
-      "text": "-1 VP"
-    }
+    { "id": "domaine", "name": "Domaine", "cost": 2, "types": ["Victoire"], "image": "domaine.png", "text": "1 VP" },
+    { "id": "duche", "name": "Duché", "cost": 5, "types": ["Victoire"], "image": "duche - Copie.png", "text": "3 VP" },
+    { "id": "province", "name": "Province", "cost": 8, "types": ["Victoire"], "image": "province.png", "text": "6 VP" },
+    { "id": "malediction", "name": "Malédiction", "cost": 0, "types": ["Malédiction"], "image": "malediction.png", "text": "-1 VP" }
   ],
   "cards": [
     {
-      "id": "cave",
-      "name": "Cave",
-      "cost": 2,
-      "types": ["Action"],
-      "image": "cave.png",
+      "id": "cave", "name": "Cave", "cost": 2, "types": ["Action"], "image": "cave.png",
       "text": "+1 Action\n\nDéfaussez autant de cartes que vous le souhaitez, puis piochez autant de cartes.",
-      "abilities": [
-        {
-          "when": "play",
-          "effects": [
-            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
-            {
-              "op": "choose_cards",
-              "target": "self",
-              "zone": "hand",
-              "min": 0,
-              "max": 99,
-              "prompt": "Défaussez autant de cartes que vous le souhaitez."
-            },
-            { "op": "discard_selected", "target": "self" },
-            { "op": "draw_last_selection_count", "target": "self" }
-          ]
-        }
-      ]
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 99, "prompt": "Défaussez autant de cartes que vous le souhaitez." },
+        { "op": "discard_selected", "target": "self" },
+        { "op": "draw_last_selection_count", "target": "self" }
+      ] } ]
     },
     {
-      "id": "chapelle",
-      "name": "Chapelle",
-      "cost": 2,
-      "types": ["Action"],
-      "image": "chapelle.png",
+      "id": "chapelle", "name": "Chapelle", "cost": 2, "types": ["Action"], "image": "chapelle.png",
       "text": "Écartez jusqu’à 4 cartes de votre main.",
-      "abilities": [
-        {
-          "when": "play",
-          "effects": [
-            {
-              "op": "choose_cards",
-              "target": "self",
-              "zone": "hand",
-              "min": 0,
-              "max": 4,
-              "prompt": "Écartez jusqu’à 4 cartes de votre main."
-            },
-            { "op": "trash_selected", "target": "self" }
-          ]
-        }
-      ]
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 4, "prompt": "Écartez jusqu’à 4 cartes de votre main." },
+        { "op": "trash_selected", "target": "self" }
+      ] } ]
+    },
+    { "id": "douves", "name": "Douves", "cost": 2, "types": ["Action", "Réaction"], "image": "douves.png", "text": "+2 Cartes\n\n———\n\nLorsqu’un autre joueur joue une carte Attaque, vous pouvez d’abord révéler cette carte de votre main pour ne pas être affecté par cette Attaque." },
+    {
+      "id": "messagere", "name": "Messagère", "cost": 3, "types": ["Action"], "image": "messagere.png",
+      "text": "+1 Carte\n+1 Action\n\nRegardez dans votre défausse. Vous pouvez placer une carte de votre défausse sur votre pioche.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "choose_cards", "target": "self", "zone": "discard", "min": 0, "max": 1, "prompt": "Vous pouvez placer une carte de votre défausse sur votre pioche." },
+        { "op": "move_selected", "target": "self", "sourceZone": "discard", "destinationZone": "deck" }
+      ] } ]
+    },
+    { "id": "marchande", "name": "Marchande", "cost": 3, "types": ["Action"], "image": "marchande.png", "text": "+1 Carte\n+1 Action\n\nLa première fois que vous jouez un Argent pendant ce tour, +1 🪙." },
+    { "id": "vassal", "name": "Vassal", "cost": 3, "types": ["Action"], "image": "vassal.png", "text": "+2 🪙\n\nDéfaussez la première carte de votre pioche. Si c’est une carte Action, vous pouvez la jouer." },
+    {
+      "id": "village", "name": "Village", "cost": 3, "types": ["Action"], "image": "village.png", "text": "+1 Carte\n+2 Actions",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 }
+      ] } ]
+    },
+    { "id": "atelier", "name": "Atelier", "cost": 3, "types": ["Action"], "image": "atelier.png", "text": "Recevez une carte coûtant jusqu’à 4 🪙." },
+    { "id": "bureaucrate", "name": "Bureaucrate", "cost": 4, "types": ["Action", "Attaque"], "image": "bureaucrate.png", "text": "Recevez un Argent et placez-le sur votre pioche.\n\nChaque autre joueur révèle une carte Victoire de sa main et la place sur sa pioche (ou révèle une main ne contenant aucune carte Victoire)." },
+    { "id": "jardins", "name": "Jardins", "cost": 4, "types": ["Victoire"], "image": "jardins.png", "text": "Vaut 1 VP par tranche de 10 cartes dans votre deck (arrondi à l’entier inférieur)." },
+    { "id": "milice", "name": "Milice", "cost": 4, "types": ["Action", "Attaque"], "image": "milice.png", "text": "+2 🪙\n\nChaque autre joueur se défausse jusqu’à n’avoir plus que 3 cartes en main." },
+    { "id": "preteur_sur_gage", "name": "Prêteur sur gage", "cost": 4, "types": ["Action"], "image": "preteur_sur_gage.png", "text": "Vous pouvez écarter un Cuivre de votre main. Dans ce cas, +3 🪙." },
+    { "id": "braconniere", "name": "Braconnière", "cost": 4, "types": ["Action"], "image": "braconniere.png", "text": "+1 Carte\n+1 Action\n+1 🪙\n\nDéfaussez une carte par pile vide de la Réserve." },
+    { "id": "renovation", "name": "Rénovation", "cost": 4, "types": ["Action"], "image": "renovation.png", "text": "Écartez une carte de votre main.\n\nRecevez une carte coûtant jusqu’à 2 🪙 de plus que la carte écartée." },
+    {
+      "id": "forge", "name": "Forge", "cost": 4, "types": ["Action"], "image": "forge.png", "text": "+3 Cartes",
+      "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 3 } ] } ]
+    },
+    { "id": "salle_du_trone", "name": "Salle du trône", "cost": 4, "types": ["Action"], "image": "salle_du_trone.png", "text": "Vous pouvez jouer deux fois une carte Action de votre main." },
+    { "id": "brigand", "name": "Brigand", "cost": 5, "types": ["Action", "Attaque"], "image": "brigand.png", "text": "Recevez un Or.\n\nChaque autre joueur révèle les 2 premières cartes de sa pioche, écarte une carte Trésor révélée autre qu’un Cuivre et défausse les autres cartes révélées." },
+    { "id": "salle_du_conseil", "name": "Salle du conseil", "cost": 5, "types": ["Action"], "image": "salle_du_conseil.png", "text": "+4 Cartes\n+1 Achat\n\nChaque autre joueur pioche une carte." },
+    {
+      "id": "festival", "name": "Festival", "cost": 5, "types": ["Action"], "image": "festival.png", "text": "+2 Actions\n+1 Achat\n+2 🪙",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 },
+        { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 }
+      ] } ]
     },
     {
-      "id": "douves",
-      "name": "Douves",
-      "cost": 2,
-      "types": ["Action", "Réaction"],
-      "image": "douves.png",
-      "text": "+2 Cartes\n\n———\n\nLorsqu’un autre joueur joue une carte Attaque, vous pouvez d’abord révéler cette carte de votre main pour ne pas être affecté par cette Attaque."
+      "id": "laboratoire", "name": "Laboratoire", "cost": 5, "types": ["Action"], "image": "laboratoire.png", "text": "+2 Cartes\n+1 Action",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 2 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 }
+      ] } ]
     },
+    { "id": "bibliotheque", "name": "Bibliothèque", "cost": 5, "types": ["Action"], "image": "bibliotheque.png", "text": "Piochez jusqu’à avoir 7 cartes en main.\n\nVous pouvez ignorer les cartes Action que vous piochez. Mettez-les de côté et défaussez-les ensuite." },
     {
-      "id": "messagere",
-      "name": "Messagère",
-      "cost": 3,
-      "types": ["Action"],
-      "image": "messagere.png",
-      "text": "+1 Carte\n+1 Action\n\nRegardez dans votre défausse. Vous pouvez placer une carte de votre défausse sur votre pioche."
+      "id": "marche", "name": "Marché", "cost": 5, "types": ["Action"], "image": "marche.png", "text": "+1 Carte\n+1 Action\n+1 Achat\n+1 🪙",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
+      ] } ]
     },
-    {
-      "id": "marchande",
-      "name": "Marchande",
-      "cost": 3,
-      "types": ["Action"],
-      "image": "marchande.png",
-      "text": "+1 Carte\n+1 Action\n\nLa première fois que vous jouez un Argent pendant ce tour, +1 🪙."
-    },
-    {
-      "id": "vassal",
-      "name": "Vassal",
-      "cost": 3,
-      "types": ["Action"],
-      "image": "vassal.png",
-      "text": "+2 🪙\n\nDéfaussez la première carte de votre pioche. Si c’est une carte Action, vous pouvez la jouer."
-    },
-    {
-      "id": "village",
-      "name": "Village",
-      "cost": 3,
-      "types": ["Action"],
-      "image": "village.png",
-      "text": "+1 Carte\n+2 Actions",
-      "abilities": [
-        {
-          "when": "play",
-          "effects": [
-            { "op": "draw", "target": "self", "amount": 1 },
-            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "atelier",
-      "name": "Atelier",
-      "cost": 3,
-      "types": ["Action"],
-      "image": "atelier.png",
-      "text": "Recevez une carte coûtant jusqu’à 4 🪙."
-    },
-    {
-      "id": "bureaucrate",
-      "name": "Bureaucrate",
-      "cost": 4,
-      "types": ["Action", "Attaque"],
-      "image": "bureaucrate.png",
-      "text": "Recevez un Argent et placez-le sur votre pioche.\n\nChaque autre joueur révèle une carte Victoire de sa main et la place sur sa pioche (ou révèle une main ne contenant aucune carte Victoire)."
-    },
-    {
-      "id": "jardins",
-      "name": "Jardins",
-      "cost": 4,
-      "types": ["Victoire"],
-      "image": "jardins.png",
-      "text": "Vaut 1 VP par tranche de 10 cartes dans votre deck (arrondi à l’entier inférieur)."
-    },
-    {
-      "id": "milice",
-      "name": "Milice",
-      "cost": 4,
-      "types": ["Action", "Attaque"],
-      "image": "milice.png",
-      "text": "+2 🪙\n\nChaque autre joueur se défausse jusqu’à n’avoir plus que 3 cartes en main."
-    },
-    {
-      "id": "preteur_sur_gage",
-      "name": "Prêteur sur gage",
-      "cost": 4,
-      "types": ["Action"],
-      "image": "preteur_sur_gage.png",
-      "text": "Vous pouvez écarter un Cuivre de votre main. Dans ce cas, +3 🪙."
-    },
-    {
-      "id": "braconniere",
-      "name": "Braconnière",
-      "cost": 4,
-      "types": ["Action"],
-      "image": "braconniere.png",
-      "text": "+1 Carte\n+1 Action\n+1 🪙\n\nDéfaussez une carte par pile vide de la Réserve."
-    },
-    {
-      "id": "renovation",
-      "name": "Rénovation",
-      "cost": 4,
-      "types": ["Action"],
-      "image": "renovation.png",
-      "text": "Écartez une carte de votre main.\n\nRecevez une carte coûtant jusqu’à 2 🪙 de plus que la carte écartée."
-    },
-    {
-      "id": "forge",
-      "name": "Forge",
-      "cost": 4,
-      "types": ["Action"],
-      "image": "forge.png",
-      "text": "+3 Cartes",
-      "abilities": [
-        {
-          "when": "play",
-          "effects": [
-            { "op": "draw", "target": "self", "amount": 3 }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "salle_du_trone",
-      "name": "Salle du trône",
-      "cost": 4,
-      "types": ["Action"],
-      "image": "salle_du_trone.png",
-      "text": "Vous pouvez jouer deux fois une carte Action de votre main."
-    },
-    {
-      "id": "brigand",
-      "name": "Brigand",
-      "cost": 5,
-      "types": ["Action", "Attaque"],
-      "image": "brigand.png",
-      "text": "Recevez un Or.\n\nChaque autre joueur révèle les 2 premières cartes de sa pioche, écarte une carte Trésor révélée autre qu’un Cuivre et défausse les autres cartes révélées."
-    },
-    {
-      "id": "salle_du_conseil",
-      "name": "Salle du conseil",
-      "cost": 5,
-      "types": ["Action"],
-      "image": "salle_du_conseil.png",
-      "text": "+4 Cartes\n+1 Achat\n\nChaque autre joueur pioche une carte."
-    },
-    {
-      "id": "festival",
-      "name": "Festival",
-      "cost": 5,
-      "types": ["Action"],
-      "image": "festival.png",
-      "text": "+2 Actions\n+1 Achat\n+2 🪙",
-      "abilities": [
-        {
-          "when": "play",
-          "effects": [
-            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 },
-            { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
-            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "laboratoire",
-      "name": "Laboratoire",
-      "cost": 5,
-      "types": ["Action"],
-      "image": "laboratoire.png",
-      "text": "+2 Cartes\n+1 Action",
-      "abilities": [
-        {
-          "when": "play",
-          "effects": [
-            { "op": "draw", "target": "self", "amount": 2 },
-            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "bibliotheque",
-      "name": "Bibliothèque",
-      "cost": 5,
-      "types": ["Action"],
-      "image": "bibliotheque.png",
-      "text": "Piochez jusqu’à avoir 7 cartes en main.\n\nVous pouvez ignorer les cartes Action que vous piochez. Mettez-les de côté et défaussez-les ensuite."
-    },
-    {
-      "id": "marche",
-      "name": "Marché",
-      "cost": 5,
-      "types": ["Action"],
-      "image": "marche.png",
-      "text": "+1 Carte\n+1 Action\n+1 Achat\n+1 🪙",
-      "abilities": [
-        {
-          "when": "play",
-          "effects": [
-            { "op": "draw", "target": "self", "amount": 1 },
-            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
-            { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
-            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "mine",
-      "name": "Mine",
-      "cost": 5,
-      "types": ["Action"],
-      "image": "mine.png",
-      "text": "Vous pouvez écarter une carte Trésor de votre main.\n\nRecevez dans votre main une carte Trésor coûtant jusqu’à 3 🪙 de plus que la carte écartée."
-    },
-    {
-      "id": "soldat",
-      "name": "Soldat",
-      "cost": 5,
-      "types": ["Action"],
-      "image": "soldat.png",
-      "text": "+1 Carte\n+1 Action\n\nRegardez les 2 premières cartes de votre pioche.\n\nÉcartez et/ou défaussez autant de ces cartes que vous le souhaitez. Replacez les autres sur votre pioche dans l’ordre de votre choix."
-    },
-    {
-      "id": "sorciere",
-      "name": "Sorcière",
-      "cost": 5,
-      "types": ["Action", "Attaque"],
-      "image": "sorciere.png",
-      "text": "+2 Cartes\n\nChaque autre joueur reçoit une Malédiction."
-    },
-    {
-      "id": "artisane",
-      "name": "Artisane",
-      "cost": 6,
-      "types": ["Action"],
-      "image": "artisane.png",
-      "text": "Recevez dans votre main une carte coûtant jusqu’à 5 🪙.\n\nPlacez une carte de votre main sur votre pioche."
-    }
+    { "id": "mine", "name": "Mine", "cost": 5, "types": ["Action"], "image": "mine.png", "text": "Vous pouvez écarter une carte Trésor de votre main.\n\nRecevez dans votre main une carte Trésor coûtant jusqu’à 3 🪙 de plus que la carte écartée." },
+    { "id": "soldat", "name": "Soldat", "cost": 5, "types": ["Action"], "image": "soldat.png", "text": "+1 Carte\n+1 Action\n\nRegardez les 2 premières cartes de votre pioche.\n\nÉcartez et/ou défaussez autant de ces cartes que vous le souhaitez. Replacez les autres sur votre pioche dans l’ordre de votre choix." },
+    { "id": "sorciere", "name": "Sorcière", "cost": 5, "types": ["Action", "Attaque"], "image": "sorciere.png", "text": "+2 Cartes\n\nChaque autre joueur reçoit une Malédiction." },
+    { "id": "artisane", "name": "Artisane", "cost": 6, "types": ["Action"], "image": "artisane.png", "text": "Recevez dans votre main une carte coûtant jusqu’à 5 🪙.\n\nPlacez une carte de votre main sur votre pioche." }
   ]
 }
