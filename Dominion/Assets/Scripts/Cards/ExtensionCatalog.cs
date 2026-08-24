@@ -66,6 +66,10 @@ public sealed class CardEffectData
     public string cardId;
     public string cardType;
 
+    // Restrict a card choice to the card most recently moved by this resolution.
+    // Useful for reveal/discard-top flows without introducing card-specific operations.
+    public bool lastMovedOnly;
+
     // Generic conditional execution: when true, this effect becomes a no-op if the
     // immediately preceding player choice selected no cards/piles.
     public bool requiresLastSelection;
