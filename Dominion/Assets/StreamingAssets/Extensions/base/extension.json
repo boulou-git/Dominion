@@ -84,7 +84,13 @@
         { "op": "play_selected", "target": "self", "sourceZone": "in_play", "lastMovedOnly": true }
       ] } ]
     },
-    { "id": "brigand", "name": "Brigand", "cost": 5, "types": ["Action", "Attaque"], "image": "brigand.png", "text": "Recevez un Or.\n\nChaque autre joueur révèle les 2 premières cartes de sa pioche, écarte une carte Trésor révélée autre qu’un Cuivre et défausse les autres cartes révélées." },
+    {
+      "id": "brigand", "name": "Brigand", "cost": 5, "types": ["Action", "Attaque"], "image": "brigand.png", "text": "Recevez un Or.\n\nChaque autre joueur révèle les 2 premières cartes de sa pioche, écarte une carte Trésor révélée autre qu’un Cuivre et défausse les autres cartes révélées.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "gain_card", "target": "self", "cardId": "base:or", "amount": 1, "destinationZone": "discard" },
+        { "op": "reveal_each_other_top_trash_type_except", "target": "others", "amount": 2, "cardType": "Trésor", "cardId": "base:cuivre", "prompt": "Choisissez une carte Trésor révélée autre qu’un Cuivre à écarter." }
+      ] } ]
+    },
     { "id": "salle_du_conseil", "name": "Salle du conseil", "cost": 5, "types": ["Action"], "image": "salle_du_conseil.png", "text": "+4 Cartes\n+1 Achat\n\nChaque autre joueur pioche une carte.", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 4 }, { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 }, { "op": "draw", "target": "others", "amount": 1 } ] } ] },
     { "id": "festival", "name": "Festival", "cost": 5, "types": ["Action"], "image": "festival.png", "text": "+2 Actions\n+1 Achat\n+2 🪙", "abilities": [ { "when": "play", "effects": [ { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 }, { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 }, { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 } ] } ] },
     { "id": "laboratoire", "name": "Laboratoire", "cost": 5, "types": ["Action"], "image": "laboratoire.png", "text": "+2 Cartes\n+1 Action", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 2 }, { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 } ] } ] },
