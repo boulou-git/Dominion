@@ -67,7 +67,16 @@
       ] } ]
     },
     { "id": "braconniere", "name": "Braconnière", "cost": 4, "types": ["Action"], "image": "braconniere.png", "text": "+1 Carte\n+1 Action\n+1 🪙\n\nDéfaussez une carte par pile vide de la Réserve." },
-    { "id": "renovation", "name": "Rénovation", "cost": 4, "types": ["Action"], "image": "renovation.png", "text": "Écartez une carte de votre main.\n\nRecevez une carte coûtant jusqu’à 2 🪙 de plus que la carte écartée." },
+    {
+      "id": "renovation", "name": "Rénovation", "cost": 4, "types": ["Action"], "image": "renovation.png", "text": "Écartez une carte de votre main.\n\nRecevez une carte coûtant jusqu’à 2 🪙 de plus que la carte écartée.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Écartez une carte de votre main." },
+        { "op": "remember_selected_card_cost", "target": "self" },
+        { "op": "trash_selected", "target": "self" },
+        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "useLastSelectionCost": true, "costOffset": 2, "prompt": "Recevez une carte coûtant jusqu’à 2 🪙 de plus que la carte écartée." },
+        { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" }
+      ] } ]
+    },
     { "id": "forge", "name": "Forge", "cost": 4, "types": ["Action"], "image": "forge.png", "text": "+3 Cartes", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 3 } ] } ] },
     { "id": "salle_du_trone", "name": "Salle du trône", "cost": 4, "types": ["Action"], "image": "salle_du_trone.png", "text": "Vous pouvez jouer deux fois une carte Action de votre main." },
     { "id": "brigand", "name": "Brigand", "cost": 5, "types": ["Action", "Attaque"], "image": "brigand.png", "text": "Recevez un Or.\n\nChaque autre joueur révèle les 2 premières cartes de sa pioche, écarte une carte Trésor révélée autre qu’un Cuivre et défausse les autres cartes révélées." },
