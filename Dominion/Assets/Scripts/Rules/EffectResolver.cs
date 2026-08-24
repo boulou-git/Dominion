@@ -55,6 +55,7 @@ public static class EffectResolver
         { "remember_selected_card_cost", ResolveRememberSelectedCardCost },
         { "trash_selected", ResolveTrashSelected }, { "discard_selected", ResolveDiscardSelected },
         { "discard_others_down_to", ResolveDiscardOthersDownTo },
+        { "topdeck_others_card_type", ResolveTopdeckOthersCardType },
         { "move_selected", ResolveMoveSelected }, { "choose_supply", ResolveChooseSupply },
         { "gain_card", ResolveGainCard }, { "gain_selected_supply", ResolveGainSelectedSupply }
     };
@@ -325,6 +326,50 @@ public static class EffectResolver
         return EffectResolutionResult.WaitingForChoice();
     }
 
+    private static EffectResolutionResult ResolveTopdeckOthersCardType(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsOthers(effect)) return EffectResolutionResult.Rejected("topdeck_others_card_type requires target 'others'.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("topdeck_others_card_type requires an active ResolutionQueue.");
+        if (!HasDecisionCursor(context)) return EffectResolutionResult.Rejected("topdeck_others_card_type is missing its continuation cursor.");
+        if (string.IsNullOrWhiteSpace(effect.cardType)) return EffectResolutionResult.Rejected("topdeck_others_card_type requires cardType.");
+        if (context.State.Players == null || context.State.Players.Count <= 1) return EffectResolutionResult.Applied();
+
+        List<PlayerStateSnapshot> targets = new List<PlayerStateSnapshot>();
+        List<List<int>> candidatesByTarget = new List<List<int>>();
+        foreach (PlayerStateSnapshot player in context.State.Players)
+        {
+            if (player == null || string.Equals(player.PlayerId, context.Actor.PlayerId, StringComparison.Ordinal)) continue;
+            if (ShouldSkipAttackTarget(context, player)) continue;
+
+            List<int> candidates = FindHandCardsByType(context.State, player, effect.cardType);
+            if (candidates.Count == 0) continue;
+            targets.Add(player);
+            candidatesByTarget.Add(candidates);
+        }
+        if (targets.Count == 0) return EffectResolutionResult.Applied();
+
+        List<string> remaining = new List<string>();
+        for (int i = 1; i < targets.Count; i++) remaining.Add(targets[i].PlayerId);
+
+        if (!context.Resolution.TrySuspendForOtherPlayerCardTypeDecision(
+                targets[0].PlayerId,
+                "topdeck_card_type",
+                string.IsNullOrWhiteSpace(effect.prompt) ? "Choisissez une carte à placer sur votre pioche." : effect.prompt,
+                context.SourceCardInstanceId,
+                effect.cardType,
+                candidatesByTarget[0],
+                remaining,
+                context.TriggerEvent,
+                context.Timing,
+                context.ListenerCardInstanceId,
+                context.AbilityIndex,
+                context.EffectIndex,
+                out string error))
+            return EffectResolutionResult.Rejected(error);
+
+        return EffectResolutionResult.WaitingForChoice();
+    }
+
     private static EffectResolutionResult ResolveMoveSelected(CardEffectData effect, EffectExecutionContext context)
     {
         if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("move_selected currently supports target 'self' only.");
@@ -394,6 +439,20 @@ public static class EffectResolver
                     context.EventBus, out _, out string error))
                 return EffectResolutionResult.Rejected(error);
         return EffectResolutionResult.Applied();
+    }
+
+    private static List<int> FindHandCardsByType(GameStateSnapshot state, PlayerStateSnapshot player, string cardType)
+    {
+        List<int> candidates = new List<int>();
+        if (state == null || player == null || player.Hand == null || string.IsNullOrWhiteSpace(cardType)) return candidates;
+        foreach (int instanceId in player.Hand)
+        {
+            CardInstance instance = FindCardInstance(state, instanceId);
+            if (instance == null) continue;
+            ExtensionCardData definition = ResolveDefinition(instance.DefinitionId);
+            if (CardDefinitionRules.HasType(definition, cardType)) candidates.Add(instanceId);
+        }
+        return candidates;
     }
 
     private static bool ShouldSkipAttackTarget(EffectExecutionContext context, PlayerStateSnapshot target)
