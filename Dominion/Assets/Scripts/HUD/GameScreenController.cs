@@ -96,8 +96,8 @@ public sealed class GameScreenController : MonoBehaviour
             if (_actionsText != null) _actionsText.text = "Actions  —";
             if (_buysText != null) _buysText.text = "Achats  —";
             if (_coinsText != null) _coinsText.text = "Pièces  —";
-            if (_deckText != null) _deckText.text = "Pioche\n—";
-            if (_discardText != null) _discardText.text = "Défausse\n—";
+            if (_deckText != null) _deckText.text = "PIOCHE\n—";
+            if (_discardText != null) _discardText.text = "DÉFAUSSE\n—";
             if (_handCountText != null) _handCountText.text = "Main  —";
             if (_statusText != null) _statusText.text = "Synchronisation du GameState…";
             if (_nextPhaseButton != null) _nextPhaseButton.interactable = false;
@@ -226,11 +226,6 @@ public sealed class GameScreenController : MonoBehaviour
         RebuildLocalHand(state);
     }
 
-    /// <summary>
-    /// Serialized prefab references can become stale while the editable prefab is being
-    /// iterated locally. Dynamic card zones are therefore resolved by their canonical
-    /// hierarchy names at runtime and override stale serialized references.
-    /// </summary>
     private void ResolveDynamicRoots()
     {
         Transform foundBaseSupply = FindDeepChild(transform, "BaseSupply");
@@ -346,6 +341,7 @@ public sealed class GameScreenController : MonoBehaviour
         {
             return _handCards.Count == 1 &&
                    _handCards[0] != null &&
+                   _handCards[0].transform.parent == _handRoot &&
                    _handCards[0].name == "HandMessage";
         }
 
@@ -354,7 +350,9 @@ public sealed class GameScreenController : MonoBehaviour
 
         for (int i = 0; i < _localHandOrder.Count; i++)
         {
-            if (_handCards[i] == null || _renderedHandIds[i] != _localHandOrder[i])
+            if (_handCards[i] == null ||
+                _handCards[i].transform.parent != _handRoot ||
+                _renderedHandIds[i] != _localHandOrder[i])
                 return false;
         }
 
