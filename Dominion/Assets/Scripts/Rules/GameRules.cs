@@ -61,6 +61,12 @@ public static class GameRules
         if (!PrepareResume(s, playerId, decisionId, resolve, out ResolutionQueue q, out GameRuleResult rejected)) return rejected;
         if (!q.TrySubmitDecision(playerId, decisionId, selected, out PendingDecisionSnapshot c, out string err)) return GameRuleResult.Rejected(err, q.Events.SnapshotHistory());
         PlayerStateSnapshot p = Player(s, playerId);
+        if (AdvancedActionRules.IsContinuation(c.Operation))
+        {
+            GameRuleResult advanced = AdvancedActionRules.ResolveContinuation(s, p, q, c, resolve, random);
+            if (advanced.Status != GameRuleStatus.Applied) return advanced;
+            return ResumeDecision(s, q, c, resolve, random);
+        }
         if ((c.Operation ?? string.Empty).StartsWith("reveal_each_other_top_trash_type_except|", StringComparison.OrdinalIgnoreCase))
             return ResolveRevealTrashDecision(s, p, q, c, resolve, random);
         if (!CardZoneRules.TryParseZone(c.Zone, out CardZone choiceZone)) return GameRuleResult.Rejected("Decision source zone is invalid.", q.Events.SnapshotHistory());

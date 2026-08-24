@@ -45,9 +45,10 @@ public static class EffectResolver
     private static readonly Dictionary<string, Handler> H = new Dictionary<string, Handler>(StringComparer.OrdinalIgnoreCase)
     {
         {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection},
-        {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount},
+        {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount}, {"draw_to_hand_size_skipping_type", DrawToHandSizeSkippingType},
         {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile},
         {"choose_each_other_cards", ChooseEachOtherCards}, {"reveal_each_other_top_trash_type_except", RevealEachOtherTopTrashTypeExcept},
+        {"reveal_top_cards", RevealTopCards}, {"move_all_ordered", MoveAllOrdered},
         {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard},
         {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_others_down_to", DiscardOthersDownTo},
         {"move_selected", MoveSelected}, {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected},
@@ -105,10 +106,21 @@ public static class EffectResolver
         return CardZoneRules.DrawCards(c.Actor, c.Resolution.LastSelectionCount, c.Random, out string err) ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(err);
     }
 
+    private static EffectResolutionResult DrawToHandSizeSkippingType(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || !Cursor(c) || e.amount < 0 || string.IsNullOrWhiteSpace(e.cardType))
+            return EffectResolutionResult.Rejected("Invalid draw_to_hand_size_skipping_type effect.");
+        GameRuleResult result = AdvancedActionRules.TryStartDrawToHandSizeSkippingType(c.State, c.Actor, c.Resolution,
+            e.amount, e.cardType, e.prompt, c.SourceCardInstanceId, c.TriggerEvent, c.Timing,
+            c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, Def, c.Random);
+        return FromGameRuleResult(result);
+    }
+
     private static EffectResolutionResult ChooseCards(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null || !Cursor(c)) return EffectResolutionResult.Rejected("Invalid choose_cards effect.");
-        if (!CardZoneRules.TryParseZone(e.zone, out CardZone z) || (z != CardZone.Hand && z != CardZone.Discard)) return EffectResolutionResult.Rejected("choose_cards currently supports hand and discard.");
+        if (!CardZoneRules.TryParseZone(e.zone, out CardZone z) || (z != CardZone.Hand && z != CardZone.Discard && z != CardZone.Revealed))
+            return EffectResolutionResult.Rejected("choose_cards currently supports hand, discard and revealed zones.");
         int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : min;
         List<int> candidates = Eligible(c.State, c.Actor, z, e.cardId, e.cardType, e.lastMovedOnly ? c.Resolution.LastMovedCardInstanceId : 0);
         max = Math.Min(max, candidates.Count);
@@ -158,6 +170,32 @@ public static class EffectResolver
         return result.Status == GameRuleStatus.WaitingForChoice ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(result.Error);
     }
 
+    private static EffectResolutionResult RevealTopCards(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || e.amount < 0) return EffectResolutionResult.Rejected("Invalid reveal_top_cards effect.");
+        List<int> revealed = CardZoneRules.ResolveZone(c.Actor, CardZone.Revealed);
+        if (revealed == null) return EffectResolutionResult.Rejected("Revealed zone is unavailable.");
+        if (revealed.Count > 0) return EffectResolutionResult.Rejected("Cannot reveal new cards while the revealed zone is not empty.");
+        for (int n = 0; n < e.amount; n++)
+        {
+            if (!CardZoneRules.TryMoveTopCardFromDeck(c.Actor, CardZone.Revealed, c.Random, out int id, out string error))
+                return EffectResolutionResult.Rejected(error);
+            if (id <= 0) break;
+        }
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult MoveAllOrdered(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || !Cursor(c) ||
+            !CardZoneRules.TryParseZone(e.sourceZone, out CardZone source) ||
+            !CardZoneRules.TryParseZone(e.destinationZone, out CardZone destination) || source == destination)
+            return EffectResolutionResult.Rejected("Invalid move_all_ordered effect.");
+        return FromGameRuleResult(AdvancedActionRules.TryStartMoveAllOrdered(c.State, c.Actor, c.Resolution,
+            source, destination, e.prompt, c.SourceCardInstanceId, c.TriggerEvent, c.Timing,
+            c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex));
+    }
+
     private static EffectResolutionResult RememberCost(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("Invalid remember_selected_card_cost effect.");
@@ -201,14 +239,22 @@ public static class EffectResolver
     private static EffectResolutionResult TrashSelected(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("Invalid trash_selected effect.");
-        foreach (int id in c.Resolution.TakeSelectedInstanceIds()) if (!TrashRules.TryTrashFromHand(c.State, c.Actor, id, c.SourceCardInstanceId, c.EventBus, out string err)) return EffectResolutionResult.Rejected(err);
+        CardZone source = CardZone.Hand;
+        if (!string.IsNullOrWhiteSpace(e.sourceZone) && !CardZoneRules.TryParseZone(e.sourceZone, out source))
+            return EffectResolutionResult.Rejected("trash_selected sourceZone is invalid.");
+        foreach (int id in c.Resolution.TakeSelectedInstanceIds())
+            if (!TrashRules.TryTrashFromZone(c.State, c.Actor, source, id, c.SourceCardInstanceId, c.EventBus, out string err))
+                return EffectResolutionResult.Rejected(err);
         return EffectResolutionResult.Applied();
     }
 
     private static EffectResolutionResult DiscardSelected(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("Invalid discard_selected effect.");
-        return DiscardRules.TryDiscardSelectedFromHand(c.State, c.Actor, c.Resolution.TakeSelectedInstanceIds(), c.SourceCardInstanceId, c.EventBus, out string err)
+        CardZone source = CardZone.Hand;
+        if (!string.IsNullOrWhiteSpace(e.sourceZone) && !CardZoneRules.TryParseZone(e.sourceZone, out source))
+            return EffectResolutionResult.Rejected("discard_selected sourceZone is invalid.");
+        return DiscardRules.TryDiscardSelected(c.State, c.Actor, source, c.Resolution.TakeSelectedInstanceIds(), c.SourceCardInstanceId, c.EventBus, out string err)
             ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(err);
     }
 
@@ -289,6 +335,14 @@ public static class EffectResolver
         CardZone d = CardZone.Discard; if (!string.IsNullOrWhiteSpace(e.destinationZone) && !CardZoneRules.TryParseZone(e.destinationZone, out d)) return EffectResolutionResult.Rejected("Invalid gain destination.");
         foreach (string id in c.Resolution.TakeSelectedDefinitionIds()) if (!GainRules.TryGainFromSupply(c.State, c.Actor, id, d, c.SourceCardInstanceId, c.EventBus, out _, out string err)) return EffectResolutionResult.Rejected(err);
         return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult FromGameRuleResult(GameRuleResult result)
+    {
+        if (result == null || result.Status == GameRuleStatus.Applied) return EffectResolutionResult.Applied();
+        return result.Status == GameRuleStatus.WaitingForChoice
+            ? EffectResolutionResult.WaitingForChoice()
+            : EffectResolutionResult.Rejected(result.Error);
     }
 
     private static List<int> Eligible(GameStateSnapshot state, PlayerStateSnapshot p, CardZone z, string cardId, string cardType, int onlyId)
