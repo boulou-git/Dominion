@@ -32,19 +32,14 @@
     {
       "id": "douves", "name": "Douves", "cost": 2, "types": ["Action", "Réaction"], "image": "douves.png", "text": "+2 Cartes\n\n———\n\nLorsqu’un autre joueur joue une carte Attaque, vous pouvez d’abord révéler cette carte de votre main pour ne pas être affecté par cette Attaque.",
       "abilities": [
-        { "when": "play", "effects": [
-          { "op": "draw", "target": "self", "amount": 2 }
-        ] },
-        { "when": "attack_reaction", "scope": "in_hand", "filter": { "eventPlayer": "other", "cardType": "Attaque" }, "effects": [
-          { "op": "block_attack", "target": "self" }
-        ] }
+        { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 2 } ] },
+        { "when": "attack_reaction", "scope": "in_hand", "filter": { "eventPlayer": "other", "cardType": "Attaque" }, "effects": [ { "op": "block_attack", "target": "self" } ] }
       ]
     },
     {
       "id": "messagere", "name": "Messagère", "cost": 3, "types": ["Action"], "image": "messagere.png", "text": "+1 Carte\n+1 Action\n\nRegardez dans votre défausse. Vous pouvez placer une carte de votre défausse sur votre pioche.",
       "abilities": [ { "when": "play", "effects": [
-        { "op": "draw", "target": "self", "amount": 1 },
-        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "draw", "target": "self", "amount": 1 }, { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
         { "op": "choose_cards", "target": "self", "zone": "discard", "min": 0, "max": 1, "prompt": "Vous pouvez placer une carte de votre défausse sur votre pioche." },
         { "op": "move_selected", "target": "self", "sourceZone": "discard", "destinationZone": "deck" }
       ] } ]
@@ -52,13 +47,8 @@
     {
       "id": "marchande", "name": "Marchande", "cost": 3, "types": ["Action"], "image": "marchande.png", "text": "+1 Carte\n+1 Action\n\nLa première fois que vous jouez un Argent pendant ce tour, +1 🪙.",
       "abilities": [
-        { "when": "play", "effects": [
-          { "op": "draw", "target": "self", "amount": 1 },
-          { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 }
-        ] },
-        { "when": "play", "scope": "in_play", "oncePerTurn": true, "filter": { "eventPlayer": "self", "cardId": "base:argent" }, "effects": [
-          { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
-        ] }
+        { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 1 }, { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 } ] },
+        { "when": "play", "scope": "in_play", "oncePerTurn": true, "filter": { "eventPlayer": "self", "cardId": "base:argent" }, "effects": [ { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 } ] }
       ]
     },
     {
@@ -70,119 +60,31 @@
         { "op": "play_selected", "target": "self", "sourceZone": "discard", "requiresLastSelection": true }
       ] } ]
     },
+    { "id": "village", "name": "Village", "cost": 3, "types": ["Action"], "image": "village.png", "text": "+1 Carte\n+2 Actions", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 1 }, { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 } ] } ] },
+    { "id": "atelier", "name": "Atelier", "cost": 3, "types": ["Action"], "image": "atelier.png", "text": "Recevez une carte coûtant jusqu’à 4 🪙.", "abilities": [ { "when": "play", "effects": [ { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "maxCost": 4, "prompt": "Recevez une carte coûtant jusqu’à 4 🪙." }, { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" } ] } ] },
     {
-      "id": "village", "name": "Village", "cost": 3, "types": ["Action"], "image": "village.png", "text": "+1 Carte\n+2 Actions",
+      "id": "bureaucrate", "name": "Bureaucrate", "cost": 4, "types": ["Action", "Attaque"], "image": "bureaucrate.png", "text": "Recevez un Argent et placez-le sur votre pioche.\n\nChaque autre joueur révèle une carte Victoire de sa main et la place sur sa pioche (ou révèle une main ne contenant aucune carte Victoire).",
       "abilities": [ { "when": "play", "effects": [
-        { "op": "draw", "target": "self", "amount": 1 },
-        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 }
+        { "op": "gain_card", "target": "self", "cardId": "base:argent", "amount": 1, "destinationZone": "deck" },
+        { "op": "choose_each_other_cards", "target": "others", "zone": "hand", "min": 1, "max": 1, "cardType": "Victoire", "destinationZone": "deck", "prompt": "Révélez une carte Victoire de votre main et placez-la sur votre pioche." }
       ] } ]
     },
-    {
-      "id": "atelier", "name": "Atelier", "cost": 3, "types": ["Action"], "image": "atelier.png", "text": "Recevez une carte coûtant jusqu’à 4 🪙.",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "maxCost": 4, "prompt": "Recevez une carte coûtant jusqu’à 4 🪙." },
-        { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" }
-      ] } ]
-    },
-    { "id": "bureaucrate", "name": "Bureaucrate", "cost": 4, "types": ["Action", "Attaque"], "image": "bureaucrate.png", "text": "Recevez un Argent et placez-le sur votre pioche.\n\nChaque autre joueur révèle une carte Victoire de sa main et la place sur sa pioche (ou révèle une main ne contenant aucune carte Victoire)." },
     { "id": "jardins", "name": "Jardins", "cost": 4, "types": ["Victoire"], "image": "jardins.png", "text": "Vaut 1 VP par tranche de 10 cartes dans votre deck (arrondi à l’entier inférieur)." },
-    {
-      "id": "milice", "name": "Milice", "cost": 4, "types": ["Action", "Attaque"], "image": "milice.png", "text": "+2 🪙\n\nChaque autre joueur se défausse jusqu’à n’avoir plus que 3 cartes en main.",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
-        { "op": "discard_others_down_to", "target": "others", "amount": 3, "prompt": "Défaussez jusqu’à n’avoir plus que 3 cartes en main." }
-      ] } ]
-    },
-    {
-      "id": "preteur_sur_gage", "name": "Prêteur sur gage", "cost": 4, "types": ["Action"], "image": "preteur_sur_gage.png", "text": "Vous pouvez écarter un Cuivre de votre main. Dans ce cas, +3 🪙.",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "cardId": "base:cuivre", "prompt": "Vous pouvez écarter un Cuivre de votre main." },
-        { "op": "trash_selected", "target": "self" },
-        { "op": "add_resource_per_last_selection", "target": "self", "resource": "coins", "amount": 3 }
-      ] } ]
-    },
-    {
-      "id": "braconniere", "name": "Braconnière", "cost": 4, "types": ["Action"], "image": "braconniere.png", "text": "+1 Carte\n+1 Action\n+1 🪙\n\nDéfaussez une carte par pile vide de la Réserve.",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "draw", "target": "self", "amount": 1 },
-        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
-        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 },
-        { "op": "choose_cards_per_empty_pile", "target": "self", "prompt": "Défaussez une carte par pile vide de la Réserve." },
-        { "op": "discard_selected", "target": "self" }
-      ] } ]
-    },
-    {
-      "id": "renovation", "name": "Rénovation", "cost": 4, "types": ["Action"], "image": "renovation.png", "text": "Écartez une carte de votre main.\n\nRecevez une carte coûtant jusqu’à 2 🪙 de plus que la carte écartée.",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Écartez une carte de votre main." },
-        { "op": "remember_selected_card_cost", "target": "self" },
-        { "op": "trash_selected", "target": "self" },
-        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "useLastSelectionCost": true, "costOffset": 2, "prompt": "Recevez une carte coûtant jusqu’à 2 🪙 de plus que la carte écartée." },
-        { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" }
-      ] } ]
-    },
+    { "id": "milice", "name": "Milice", "cost": 4, "types": ["Action", "Attaque"], "image": "milice.png", "text": "+2 🪙\n\nChaque autre joueur se défausse jusqu’à n’avoir plus que 3 cartes en main.", "abilities": [ { "when": "play", "effects": [ { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 }, { "op": "discard_others_down_to", "target": "others", "amount": 3, "prompt": "Défaussez jusqu’à n’avoir plus que 3 cartes en main." } ] } ] },
+    { "id": "preteur_sur_gage", "name": "Prêteur sur gage", "cost": 4, "types": ["Action"], "image": "preteur_sur_gage.png", "text": "Vous pouvez écarter un Cuivre de votre main. Dans ce cas, +3 🪙.", "abilities": [ { "when": "play", "effects": [ { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "cardId": "base:cuivre", "prompt": "Vous pouvez écarter un Cuivre de votre main." }, { "op": "trash_selected", "target": "self" }, { "op": "add_resource_per_last_selection", "target": "self", "resource": "coins", "amount": 3 } ] } ] },
+    { "id": "braconniere", "name": "Braconnière", "cost": 4, "types": ["Action"], "image": "braconniere.png", "text": "+1 Carte\n+1 Action\n+1 🪙\n\nDéfaussez une carte par pile vide de la Réserve.", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 1 }, { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 }, { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }, { "op": "choose_cards_per_empty_pile", "target": "self", "prompt": "Défaussez une carte par pile vide de la Réserve." }, { "op": "discard_selected", "target": "self" } ] } ] },
+    { "id": "renovation", "name": "Rénovation", "cost": 4, "types": ["Action"], "image": "renovation.png", "text": "Écartez une carte de votre main.\n\nRecevez une carte coûtant jusqu’à 2 🪙 de plus que la carte écartée.", "abilities": [ { "when": "play", "effects": [ { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Écartez une carte de votre main." }, { "op": "remember_selected_card_cost", "target": "self" }, { "op": "trash_selected", "target": "self" }, { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "useLastSelectionCost": true, "costOffset": 2, "prompt": "Recevez une carte coûtant jusqu’à 2 🪙 de plus que la carte écartée." }, { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" } ] } ] },
     { "id": "forge", "name": "Forge", "cost": 4, "types": ["Action"], "image": "forge.png", "text": "+3 Cartes", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 3 } ] } ] },
     { "id": "salle_du_trone", "name": "Salle du trône", "cost": 4, "types": ["Action"], "image": "salle_du_trone.png", "text": "Vous pouvez jouer deux fois une carte Action de votre main." },
     { "id": "brigand", "name": "Brigand", "cost": 5, "types": ["Action", "Attaque"], "image": "brigand.png", "text": "Recevez un Or.\n\nChaque autre joueur révèle les 2 premières cartes de sa pioche, écarte une carte Trésor révélée autre qu’un Cuivre et défausse les autres cartes révélées." },
-    {
-      "id": "salle_du_conseil", "name": "Salle du conseil", "cost": 5, "types": ["Action"], "image": "salle_du_conseil.png", "text": "+4 Cartes\n+1 Achat\n\nChaque autre joueur pioche une carte.",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "draw", "target": "self", "amount": 4 },
-        { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
-        { "op": "draw", "target": "others", "amount": 1 }
-      ] } ]
-    },
-    {
-      "id": "festival", "name": "Festival", "cost": 5, "types": ["Action"], "image": "festival.png", "text": "+2 Actions\n+1 Achat\n+2 🪙",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 },
-        { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
-        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 }
-      ] } ]
-    },
-    {
-      "id": "laboratoire", "name": "Laboratoire", "cost": 5, "types": ["Action"], "image": "laboratoire.png", "text": "+2 Cartes\n+1 Action",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "draw", "target": "self", "amount": 2 },
-        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 }
-      ] } ]
-    },
+    { "id": "salle_du_conseil", "name": "Salle du conseil", "cost": 5, "types": ["Action"], "image": "salle_du_conseil.png", "text": "+4 Cartes\n+1 Achat\n\nChaque autre joueur pioche une carte.", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 4 }, { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 }, { "op": "draw", "target": "others", "amount": 1 } ] } ] },
+    { "id": "festival", "name": "Festival", "cost": 5, "types": ["Action"], "image": "festival.png", "text": "+2 Actions\n+1 Achat\n+2 🪙", "abilities": [ { "when": "play", "effects": [ { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 }, { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 }, { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 } ] } ] },
+    { "id": "laboratoire", "name": "Laboratoire", "cost": 5, "types": ["Action"], "image": "laboratoire.png", "text": "+2 Cartes\n+1 Action", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 2 }, { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 } ] } ] },
     { "id": "bibliotheque", "name": "Bibliothèque", "cost": 5, "types": ["Action"], "image": "bibliotheque.png", "text": "Piochez jusqu’à avoir 7 cartes en main.\n\nVous pouvez ignorer les cartes Action que vous piochez. Mettez-les de côté et défaussez-les ensuite." },
-    {
-      "id": "marche", "name": "Marché", "cost": 5, "types": ["Action"], "image": "marche.png", "text": "+1 Carte\n+1 Action\n+1 Achat\n+1 🪙",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "draw", "target": "self", "amount": 1 },
-        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
-        { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
-        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
-      ] } ]
-    },
-    {
-      "id": "mine", "name": "Mine", "cost": 5, "types": ["Action"], "image": "mine.png", "text": "Vous pouvez écarter une carte Trésor de votre main.\n\nRecevez dans votre main une carte Trésor coûtant jusqu’à 3 🪙 de plus que la carte écartée.",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "cardType": "Trésor", "prompt": "Vous pouvez écarter une carte Trésor de votre main." },
-        { "op": "remember_selected_card_cost", "target": "self" },
-        { "op": "trash_selected", "target": "self", "requiresLastSelection": true },
-        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "cardType": "Trésor", "useLastSelectionCost": true, "costOffset": 3, "requiresLastSelection": true, "allowNoEligible": true, "prompt": "Recevez dans votre main une carte Trésor coûtant jusqu’à 3 🪙 de plus que la carte écartée." },
-        { "op": "gain_selected_supply", "target": "self", "destinationZone": "hand", "requiresLastSelection": true }
-      ] } ]
-    },
+    { "id": "marche", "name": "Marché", "cost": 5, "types": ["Action"], "image": "marche.png", "text": "+1 Carte\n+1 Action\n+1 Achat\n+1 🪙", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 1 }, { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 }, { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 }, { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 } ] } ] },
+    { "id": "mine", "name": "Mine", "cost": 5, "types": ["Action"], "image": "mine.png", "text": "Vous pouvez écarter une carte Trésor de votre main.\n\nRecevez dans votre main une carte Trésor coûtant jusqu’à 3 🪙 de plus que la carte écartée.", "abilities": [ { "when": "play", "effects": [ { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "cardType": "Trésor", "prompt": "Vous pouvez écarter une carte Trésor de votre main." }, { "op": "remember_selected_card_cost", "target": "self" }, { "op": "trash_selected", "target": "self", "requiresLastSelection": true }, { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "cardType": "Trésor", "useLastSelectionCost": true, "costOffset": 3, "requiresLastSelection": true, "allowNoEligible": true, "prompt": "Recevez dans votre main une carte Trésor coûtant jusqu’à 3 🪙 de plus que la carte écartée." }, { "op": "gain_selected_supply", "target": "self", "destinationZone": "hand", "requiresLastSelection": true } ] } ] },
     { "id": "soldat", "name": "Soldat", "cost": 5, "types": ["Action"], "image": "soldat.png", "text": "+1 Carte\n+1 Action\n\nRegardez les 2 premières cartes de votre pioche.\n\nÉcartez et/ou défaussez autant de ces cartes que vous le souhaitez. Replacez les autres sur votre pioche dans l’ordre de votre choix." },
-    {
-      "id": "sorciere", "name": "Sorcière", "cost": 5, "types": ["Action", "Attaque"], "image": "sorciere.png", "text": "+2 Cartes\n\nChaque autre joueur reçoit une Malédiction.",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "draw", "target": "self", "amount": 2 },
-        { "op": "gain_card", "target": "others", "cardId": "base:malediction", "amount": 1, "destinationZone": "discard" }
-      ] } ]
-    },
-    {
-      "id": "artisane", "name": "Artisane", "cost": 6, "types": ["Action"], "image": "artisane.png", "text": "Recevez dans votre main une carte coûtant jusqu’à 5 🪙.\n\nPlacez une carte de votre main sur votre pioche.",
-      "abilities": [ { "when": "play", "effects": [
-        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "maxCost": 5, "prompt": "Recevez dans votre main une carte coûtant jusqu’à 5 🪙." },
-        { "op": "gain_selected_supply", "target": "self", "destinationZone": "hand" },
-        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Placez une carte de votre main sur votre pioche." },
-        { "op": "move_selected", "target": "self", "sourceZone": "hand", "destinationZone": "deck" }
-      ] } ]
-    }
+    { "id": "sorciere", "name": "Sorcière", "cost": 5, "types": ["Action", "Attaque"], "image": "sorciere.png", "text": "+2 Cartes\n\nChaque autre joueur reçoit une Malédiction.", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 2 }, { "op": "gain_card", "target": "others", "cardId": "base:malediction", "amount": 1, "destinationZone": "discard" } ] } ] },
+    { "id": "artisane", "name": "Artisane", "cost": 6, "types": ["Action"], "image": "artisane.png", "text": "Recevez dans votre main une carte coûtant jusqu’à 5 🪙.\n\nPlacez une carte de votre main sur votre pioche.", "abilities": [ { "when": "play", "effects": [ { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "maxCost": 5, "prompt": "Recevez dans votre main une carte coûtant jusqu’à 5 🪙." }, { "op": "gain_selected_supply", "target": "self", "destinationZone": "hand" }, { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Placez une carte de votre main sur votre pioche." }, { "op": "move_selected", "target": "self", "sourceZone": "hand", "destinationZone": "deck" } ] } ] }
   ]
 }
