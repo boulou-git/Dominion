@@ -13,6 +13,7 @@ public sealed class ResolutionQueueSnapshot
     public List<string> AttackProtectedPlayerIds = new List<string>();
     public int LastSelectionCount;
     public int LastSelectedCardCost = -1;
+    public int LastMovedCardInstanceId;
 }
 
 [Serializable]
@@ -89,6 +90,7 @@ public sealed class ResolutionQueue
     public IReadOnlyList<string> SelectedDefinitionIds => _snapshot.SelectedDefinitionIds;
     public int LastSelectionCount => _snapshot.LastSelectionCount;
     public int LastSelectedCardCost => _snapshot.LastSelectedCardCost;
+    public int LastMovedCardInstanceId => _snapshot.LastMovedCardInstanceId;
     public bool IsWaitingForDecision => _snapshot.PendingDecision != null && _snapshot.PendingDecision.IsPending;
 
     private ResolutionQueue(ResolutionQueueSnapshot snapshot) { _snapshot = snapshot; Events = new GameEventBus(snapshot); }
@@ -105,6 +107,7 @@ public sealed class ResolutionQueue
         state.Resolution.SelectedInstanceIds.Clear(); state.Resolution.SelectedDefinitionIds.Clear();
         state.Resolution.AttackProtectedPlayerIds.Clear();
         state.Resolution.LastSelectionCount = 0; state.Resolution.LastSelectedCardCost = -1;
+        state.Resolution.LastMovedCardInstanceId = 0;
         queue = new ResolutionQueue(state.Resolution); return true;
     }
 
@@ -238,6 +241,18 @@ public sealed class ResolutionQueue
         _snapshot.LastSelectedCardCost = cost;
     }
 
+    public void SetLastMovedCardInstanceId(int instanceId)
+    {
+        _snapshot.LastMovedCardInstanceId = Math.Max(0, instanceId);
+    }
+
+    public void ClearSelection()
+    {
+        _snapshot.SelectedInstanceIds.Clear();
+        _snapshot.SelectedDefinitionIds.Clear();
+        _snapshot.LastSelectionCount = 0;
+    }
+
     public void MarkAttackProtected(string playerId)
     {
         if (string.IsNullOrEmpty(playerId)) return;
@@ -265,7 +280,7 @@ public sealed class ResolutionQueue
         _snapshot.IsActive = false; _snapshot.OwnerPlayerId = string.Empty; _snapshot.PendingEvents.Clear();
         _snapshot.PendingDecision.Clear(); _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedDefinitionIds.Clear();
         _snapshot.AttackProtectedPlayerIds.Clear();
-        _snapshot.LastSelectionCount = 0; _snapshot.LastSelectedCardCost = -1;
+        _snapshot.LastSelectionCount = 0; _snapshot.LastSelectedCardCost = -1; _snapshot.LastMovedCardInstanceId = 0;
     }
 
     private static PendingDecisionSnapshot CloneDecision(PendingDecisionSnapshot source)
