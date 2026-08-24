@@ -2,8 +2,8 @@ using System;
 
 /// <summary>
 /// Stable vocabulary emitted by the deterministic rules layer.
-/// Extensions should react to these concepts through the future TriggerResolver rather
-/// than subscribing directly to Photon, UI controllers or card-specific scripts.
+/// Extensions should react to these concepts through TriggerResolver rather than
+/// subscribing directly to Photon, UI controllers or card-specific scripts.
 /// </summary>
 public enum GameEventType
 {
@@ -19,11 +19,6 @@ public enum GameEventType
     DiseaseGained
 }
 
-/// <summary>
-/// Immutable description of one gameplay event.
-/// Keep this object free of Unity/Photon references so it can be consumed by rules,
-/// tests, logs and eventually replay code.
-/// </summary>
 public sealed class GameEvent
 {
     public GameEventType Type { get; }
@@ -49,10 +44,7 @@ public sealed class GameEvent
         DestinationZone = destinationZone;
     }
 
-    public static GameEvent CardPlayed(
-        string playerId,
-        int cardInstanceId,
-        string cardDefinitionId)
+    public static GameEvent CardPlayed(string playerId, int cardInstanceId, string cardDefinitionId)
     {
         return new GameEvent(
             GameEventType.CardPlayed,
@@ -78,9 +70,37 @@ public sealed class GameEvent
             destinationZone);
     }
 
-    public static GameEvent PileEmptied(
+    public static GameEvent CardDiscarded(
+        string playerId,
+        int cardInstanceId,
         string cardDefinitionId,
         int sourceCardInstanceId = 0)
+    {
+        return new GameEvent(
+            GameEventType.CardDiscarded,
+            playerId,
+            cardInstanceId,
+            cardDefinitionId,
+            sourceCardInstanceId,
+            CardZone.Discard);
+    }
+
+    public static GameEvent CardTrashed(
+        string playerId,
+        int cardInstanceId,
+        string cardDefinitionId,
+        int sourceCardInstanceId = 0)
+    {
+        return new GameEvent(
+            GameEventType.CardTrashed,
+            playerId,
+            cardInstanceId,
+            cardDefinitionId,
+            sourceCardInstanceId,
+            CardZone.None);
+    }
+
+    public static GameEvent PileEmptied(string cardDefinitionId, int sourceCardInstanceId = 0)
     {
         return new GameEvent(
             GameEventType.PileEmptied,
