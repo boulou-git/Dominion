@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 /// <summary>
 /// Shared deterministic rules for gaining cards from the Reserve.
@@ -14,7 +13,7 @@ public static class GainRules
         string definitionId,
         CardZone destination,
         int sourceCardInstanceId,
-        List<GameEvent> events,
+        GameEventBus eventBus,
         out int gainedInstanceId,
         out string error)
     {
@@ -63,9 +62,9 @@ public static class GainRules
 
         pile.RemainingCount--;
 
-        if (events != null)
+        if (eventBus != null)
         {
-            events.Add(GameEvent.CardGained(
+            eventBus.Publish(GameEvent.CardGained(
                 owner.PlayerId,
                 gainedInstanceId,
                 definitionId,
@@ -73,7 +72,7 @@ public static class GainRules
                 sourceCardInstanceId));
 
             if (pile.RemainingCount == 0)
-                events.Add(GameEvent.PileEmptied(definitionId, sourceCardInstanceId));
+                eventBus.Publish(GameEvent.PileEmptied(definitionId, sourceCardInstanceId));
         }
 
         return true;
