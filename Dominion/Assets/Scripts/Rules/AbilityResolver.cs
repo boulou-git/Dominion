@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Result of resolving all abilities for one timing point on a card.
+/// Result of resolving abilities for one timing point on a card.
 /// The resolver deliberately propagates WaitingForChoice immediately so a future
 /// resolution queue can persist its cursor and resume from the exact next effect.
 /// </summary>
@@ -59,19 +59,18 @@ public readonly struct AbilityResolutionResult
 }
 
 /// <summary>
-/// Resolves a card's declarative abilities at a named timing point ("play" initially).
+/// Resolves a card's declarative abilities at a named timing point.
 /// It only orchestrates order; the meaning of each operation remains owned by EffectResolver.
-///
-/// This class is intentionally independent from Photon, Unity scenes and UI. The caller is
-/// responsible for providing an authoritative working-copy state and deciding whether that
-/// state is committed. Therefore a Rejected result must never be committed by the caller.
+/// A caller may provide an ability predicate so TriggerResolver can select only abilities
+/// whose scope/filter match the current GameEvent without duplicating effect execution logic.
 /// </summary>
 public static class AbilityResolver
 {
     public static AbilityResolutionResult ResolveTiming(
         ExtensionCardData card,
         string timing,
-        EffectExecutionContext context)
+        EffectExecutionContext context,
+        Func<CardAbilityData, bool> abilityPredicate = null)
     {
         if (card == null)
             return AbilityResolutionResult.Rejected(0, 0, "Card definition is null.");
@@ -93,7 +92,8 @@ public static class AbilityResolver
         {
             CardAbilityData ability = abilities[abilityIndex];
             if (ability == null ||
-                !string.Equals(ability.when, timing, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(ability.when, timing, StringComparison.OrdinalIgnoreCase) ||
+                (abilityPredicate != null && !abilityPredicate(ability)))
                 continue;
 
             matched++;
@@ -123,9 +123,7 @@ public static class AbilityResolver
                 }
 
                 if (effectResult.Status == EffectResolutionStatus.WaitingForChoice)
-                {
                     return AbilityResolutionResult.WaitingForChoice(matched, resolved);
-                }
 
                 resolved++;
             }
