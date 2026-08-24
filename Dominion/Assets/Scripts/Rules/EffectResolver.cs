@@ -47,8 +47,8 @@ public readonly struct EffectResolutionResult
 /// The state passed here is expected to be an authoritative working copy; the resolver
 /// deliberately knows nothing about Photon, scenes, MonoBehaviours or UI.
 ///
-/// Random and EventBus are injected so effects remain deterministic and can publish
-/// follow-up gameplay events into the same transaction instead of mutating global systems.
+/// Random, EventBus and TriggerEvent are injected so effects remain deterministic and can
+/// inspect/publish gameplay events inside the same transaction without global state.
 /// </summary>
 public sealed class EffectExecutionContext
 {
@@ -57,19 +57,22 @@ public sealed class EffectExecutionContext
     public int SourceCardInstanceId { get; }
     public System.Random Random { get; }
     public GameEventBus EventBus { get; }
+    public GameEvent TriggerEvent { get; }
 
     public EffectExecutionContext(
         GameStateSnapshot state,
         PlayerStateSnapshot actor,
         int sourceCardInstanceId = 0,
         System.Random random = null,
-        GameEventBus eventBus = null)
+        GameEventBus eventBus = null,
+        GameEvent triggerEvent = null)
     {
         State = state;
         Actor = actor;
         SourceCardInstanceId = sourceCardInstanceId;
         Random = random;
         EventBus = eventBus;
+        TriggerEvent = triggerEvent;
     }
 }
 
