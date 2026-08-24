@@ -88,6 +88,42 @@ public static class CardZoneRules
         return true;
     }
 
+    /// <summary>
+    /// Moves the top card of a player's deck to another zone. If the deck is empty,
+    /// the discard pile is reshuffled first, exactly like drawing a card.
+    /// Returns instanceId = 0 when no card is available in either deck or discard.
+    /// </summary>
+    public static bool TryMoveTopCardFromDeck(PlayerStateSnapshot player, CardZone destination, System.Random random,
+        out int instanceId, out string error)
+    {
+        instanceId = 0;
+        error = string.Empty;
+        if (player == null) { error = "Player is null."; return false; }
+        if (destination == CardZone.None || destination == CardZone.Deck)
+        { error = "Top-deck movement requires a destination other than deck."; return false; }
+        if (player.Deck == null || player.Discard == null)
+        { error = "Top-deck movement requires deck and discard zones."; return false; }
+
+        List<int> destinationZone = ResolveZone(player, destination);
+        if (destinationZone == null)
+        { error = "Top-deck movement destination zone is unavailable."; return false; }
+
+        if (player.Deck.Count == 0)
+        {
+            if (player.Discard.Count == 0) return true;
+            if (random == null)
+            { error = "Top-deck movement requires an injected random source when the discard pile must be shuffled."; return false; }
+            if (!MoveAll(player.Discard, player.Deck) || !Shuffle(player.Deck, random))
+            { error = "Could not reshuffle the discard pile into the deck."; return false; }
+        }
+
+        int topIndex = player.Deck.Count - 1;
+        instanceId = player.Deck[topIndex];
+        player.Deck.RemoveAt(topIndex);
+        destinationZone.Add(instanceId);
+        return true;
+    }
+
     public static bool DrawCards(PlayerStateSnapshot player, int count, System.Random random, out string error)
     {
         error = string.Empty;
