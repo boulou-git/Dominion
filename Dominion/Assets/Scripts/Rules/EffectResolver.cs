@@ -47,8 +47,8 @@ public readonly struct EffectResolutionResult
 /// The state passed here is expected to be an authoritative working copy; the resolver
 /// deliberately knows nothing about Photon, scenes, MonoBehaviours or UI.
 ///
-/// Random is injected so tests can use a deterministic seed and the future authoritative
-/// rules layer can own every shuffle instead of hiding randomness inside an effect handler.
+/// Random is injected so tests can use a deterministic seed and the authoritative rules
+/// layer owns every shuffle instead of hiding randomness inside an effect handler.
 /// </summary>
 public sealed class EffectExecutionContext
 {
@@ -73,10 +73,7 @@ public sealed class EffectExecutionContext
 /// <summary>
 /// Central registry/dispatcher for declarative card effects.
 /// Adding a new generic operation means registering one handler here rather than adding
-/// card-id conditionals to PlayTreasure/PlayActionCard/NetworkGameState.
-///
-/// IMPORTANT: this resolver is intentionally not wired into live gameplay yet.
-/// Current Treasure behaviour remains unchanged until this layer has been validated.
+/// card-id conditionals to gameplay controllers or NetworkGameState.
 /// </summary>
 public static class EffectResolver
 {
@@ -162,31 +159,8 @@ public static class EffectResolver
         if (effect.amount < 0)
             return EffectResolutionResult.Rejected("draw amount cannot be negative.");
 
-        PlayerStateSnapshot player = context.Actor;
-        if (player.Deck == null || player.Hand == null || player.Discard == null)
-            return EffectResolutionResult.Rejected("draw requires deck, hand and discard zones.");
-
-        for (int i = 0; i < effect.amount; i++)
-        {
-            if (player.Deck.Count == 0)
-            {
-                if (player.Discard.Count == 0)
-                    break;
-
-                if (context.Random == null)
-                    return EffectResolutionResult.Rejected(
-                        "draw requires an injected random source when the discard pile must be shuffled.");
-
-                player.Deck.AddRange(player.Discard);
-                player.Discard.Clear();
-                Shuffle(player.Deck, context.Random);
-            }
-
-            int topIndex = player.Deck.Count - 1;
-            int instanceId = player.Deck[topIndex];
-            player.Deck.RemoveAt(topIndex);
-            player.Hand.Add(instanceId);
-        }
+        if (!CardZoneRules.DrawCards(context.Actor, effect.amount, context.Random, out string error))
+            return EffectResolutionResult.Rejected(error);
 
         return EffectResolutionResult.Applied();
     }
@@ -195,16 +169,5 @@ public static class EffectResolver
     {
         return effect != null &&
                string.Equals(effect.target, "self", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static void Shuffle(List<int> cards, System.Random random)
-    {
-        for (int i = cards.Count - 1; i > 0; i--)
-        {
-            int j = random.Next(i + 1);
-            int temp = cards[i];
-            cards[i] = cards[j];
-            cards[j] = temp;
-        }
     }
 }
