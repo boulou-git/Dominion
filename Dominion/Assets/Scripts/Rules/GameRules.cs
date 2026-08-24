@@ -61,6 +61,8 @@ public static class GameRules
         if (!PrepareResume(s, playerId, decisionId, resolve, out ResolutionQueue q, out GameRuleResult rejected)) return rejected;
         if (!q.TrySubmitDecision(playerId, decisionId, selected, out PendingDecisionSnapshot c, out string err)) return GameRuleResult.Rejected(err, q.Events.SnapshotHistory());
         PlayerStateSnapshot p = Player(s, playerId);
+        if ((c.Operation ?? string.Empty).StartsWith("reveal_each_other_top_trash_type_except|", StringComparison.OrdinalIgnoreCase))
+            return ResolveRevealTrashDecision(s, p, q, c, resolve, random);
         if (!CardZoneRules.TryParseZone(c.Zone, out CardZone choiceZone)) return GameRuleResult.Rejected("Decision source zone is invalid.", q.Events.SnapshotHistory());
         List<int> source = CardZoneRules.ResolveZone(p, choiceZone); if (source == null) return GameRuleResult.Rejected("Decision source zone is unavailable.", q.Events.SnapshotHistory());
         foreach (int id in q.SelectedInstanceIds) if (!source.Contains(id)) return GameRuleResult.Rejected("Selected card is no longer in the decision source zone.", q.Events.SnapshotHistory());
@@ -101,6 +103,19 @@ public static class GameRules
             attack.InstanceId, candidates[0], remaining, triggerEvent, timing, listenerCardInstanceId > 0 ? listenerCardInstanceId : attack.InstanceId,
             abilityIndex, effectIndex, out string err)) return GameRuleResult.Rejected(err, q.Events.SnapshotHistory());
         return GameRuleResult.WaitingForChoice(q.Events.SnapshotHistory());
+    }
+
+    internal static GameRuleResult TryStartRevealTrashForOthers(GameStateSnapshot s, PlayerStateSnapshot attacker, ResolutionQueue q,
+        int revealCount, string cardType, string excludedCardId, string prompt, int sourceCardInstanceId, GameEvent triggerEvent,
+        string timing, int listenerCardInstanceId, int abilityIndex, int effectIndex, System.Random random)
+    {
+        if (s == null || attacker == null || q == null || revealCount <= 0 || string.IsNullOrWhiteSpace(cardType))
+            return GameRuleResult.Rejected("Invalid revealed-card attack request.", q != null ? q.Events.SnapshotHistory() : null);
+        List<string> targets = new List<string>();
+        if (s.Players != null) foreach (PlayerStateSnapshot p in s.Players)
+            if (p != null && p.PlayerId != attacker.PlayerId && !q.IsAttackProtected(p.PlayerId)) targets.Add(p.PlayerId);
+        return TrySuspendNextRevealTrash(s, q, targets, revealCount, cardType, excludedCardId, prompt, sourceCardInstanceId,
+            triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, random);
     }
 
     private static GameRuleResult ResolveAttackReactionDecision(GameStateSnapshot s, PlayerStateSnapshot responder, ResolutionQueue q,
@@ -174,6 +189,94 @@ public static class GameRules
             return GameRuleResult.WaitingForChoice(q.Events.SnapshotHistory());
         }
         return ResumeDecision(s, q, c, resolve, random);
+    }
+
+    private static GameRuleResult ResolveRevealTrashDecision(GameStateSnapshot s, PlayerStateSnapshot responder, ResolutionQueue q,
+        PendingDecisionSnapshot c, Func<string, ExtensionCardData> resolve, System.Random random)
+    {
+        string[] parts = (c.Operation ?? string.Empty).Split('|');
+        if (parts.Length != 4 || !int.TryParse(parts[1], out int revealCount) || revealCount <= 0 || responder == null)
+            return GameRuleResult.Rejected("Revealed-card continuation is invalid.", q.Events.SnapshotHistory());
+        List<int> revealed = new List<int>();
+        if (c.CandidateDefinitionIds != null) foreach (string raw in c.CandidateDefinitionIds) if (int.TryParse(raw, out int id)) revealed.Add(id);
+        List<int> selected = q.TakeSelectedInstanceIds();
+        if (selected.Count != 1 || !revealed.Contains(selected[0])) return GameRuleResult.Rejected("Revealed-card trash selection is invalid.", q.Events.SnapshotHistory());
+        int trashedId = selected[0]; CardInstance trashed = Card(s, trashedId); if (trashed == null) return GameRuleResult.Rejected("Revealed trash card was not found.", q.Events.SnapshotHistory());
+        if (s.TrashedCards == null) s.TrashedCards = new List<int>(); s.TrashedCards.Add(trashedId);
+        q.Events.Publish(GameEvent.CardTrashed(responder.PlayerId, trashedId, trashed.DefinitionId, c.SourceCardInstanceId));
+        foreach (int id in revealed)
+        {
+            if (id == trashedId) continue; CardInstance card = Card(s, id); if (card == null) return GameRuleResult.Rejected("Revealed discard card was not found.", q.Events.SnapshotHistory());
+            if (responder.Discard == null) responder.Discard = new List<int>(); responder.Discard.Add(id);
+            q.Events.Publish(GameEvent.CardDiscarded(responder.PlayerId, id, card.DefinitionId, c.SourceCardInstanceId));
+        }
+        GameRuleResult next = TrySuspendNextRevealTrash(s, q, c.RemainingPlayerIds != null ? new List<string>(c.RemainingPlayerIds) : new List<string>(),
+            revealCount, parts[2], parts[3], c.Prompt, c.SourceCardInstanceId, RestoreEvent(c), c.Timing, c.ListenerCardInstanceId,
+            c.AbilityIndex, c.EffectIndex, random);
+        if (next.Status != GameRuleStatus.Applied) return next;
+        return ResumeDecision(s, q, c, resolve, random);
+    }
+
+    private static GameRuleResult TrySuspendNextRevealTrash(GameStateSnapshot s, ResolutionQueue q, List<string> remaining,
+        int revealCount, string cardType, string excludedCardId, string prompt, int sourceCardInstanceId, GameEvent triggerEvent,
+        string timing, int listenerCardInstanceId, int abilityIndex, int effectIndex, System.Random random)
+    {
+        remaining = remaining ?? new List<string>();
+        while (remaining.Count > 0)
+        {
+            string playerId = remaining[0]; remaining.RemoveAt(0); PlayerStateSnapshot p = Player(s, playerId); if (p == null) continue;
+            if (!TryTakeTopCards(p, revealCount, random, out List<int> revealed, out string revealError)) return GameRuleResult.Rejected(revealError, q.Events.SnapshotHistory());
+            List<int> candidates = new List<int>();
+            foreach (int id in revealed)
+            {
+                CardInstance card = Card(s, id); ExtensionCardData definition = card != null ? ExtensionCatalog.FindCard(card.DefinitionId.Substring(0, card.DefinitionId.IndexOf(':')), card.DefinitionId.Substring(card.DefinitionId.IndexOf(':') + 1)) : null;
+                if (card != null && definition != null && CardDefinitionRules.HasType(definition, cardType) && !Eq(card.DefinitionId, excludedCardId)) candidates.Add(id);
+            }
+            if (candidates.Count == 0)
+            {
+                if (!DiscardDetached(s, p, revealed, sourceCardInstanceId, q.Events, out string discardError)) return GameRuleResult.Rejected(discardError, q.Events.SnapshotHistory());
+                continue;
+            }
+            string op = "reveal_each_other_top_trash_type_except|" + revealCount + "|" + cardType + "|" + (excludedCardId ?? string.Empty);
+            if (!q.TrySuspendForDecision(p.PlayerId, op, "deck", string.IsNullOrWhiteSpace(prompt) ? "Choisissez une carte révélée à écarter." : prompt,
+                sourceCardInstanceId, 1, 1, candidates, triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, out string err))
+                return GameRuleResult.Rejected(err, q.Events.SnapshotHistory());
+            q.PendingDecision.RemainingPlayerIds.AddRange(remaining);
+            foreach (int id in revealed) q.PendingDecision.CandidateDefinitionIds.Add(id.ToString());
+            return GameRuleResult.WaitingForChoice(q.Events.SnapshotHistory());
+        }
+        return GameRuleResult.Applied(q.Events.SnapshotHistory());
+    }
+
+    private static bool TryTakeTopCards(PlayerStateSnapshot p, int count, System.Random random, out List<int> revealed, out string error)
+    {
+        revealed = new List<int>(); error = string.Empty;
+        if (p == null || p.Deck == null || p.Discard == null || count < 0) { error = "Reveal requires a valid player, deck and discard."; return false; }
+        for (int n = 0; n < count; n++)
+        {
+            if (p.Deck.Count == 0)
+            {
+                if (p.Discard.Count == 0) break;
+                if (random == null) { error = "Reveal requires an injected random source when the discard pile must be shuffled."; return false; }
+                if (!CardZoneRules.MoveAll(p.Discard, p.Deck) || !CardZoneRules.Shuffle(p.Deck, random)) { error = "Could not reshuffle discard for reveal."; return false; }
+            }
+            int index = p.Deck.Count - 1; int id = p.Deck[index]; p.Deck.RemoveAt(index); revealed.Add(id);
+        }
+        return true;
+    }
+
+    private static bool DiscardDetached(GameStateSnapshot s, PlayerStateSnapshot owner, List<int> cards, int sourceCardInstanceId,
+        GameEventBus events, out string error)
+    {
+        error = string.Empty; if (owner == null) { error = "Detached discard owner is missing."; return false; }
+        if (owner.Discard == null) owner.Discard = new List<int>();
+        if (cards == null) return true;
+        foreach (int id in cards)
+        {
+            CardInstance card = Card(s, id); if (card == null) { error = "Detached discard card was not found."; return false; }
+            owner.Discard.Add(id); events?.Publish(GameEvent.CardDiscarded(owner.PlayerId, id, card.DefinitionId, sourceCardInstanceId));
+        }
+        return true;
     }
 
     private static List<int> Eligible(GameStateSnapshot s, PlayerStateSnapshot p, CardZone z, string cardId, string cardType,
