@@ -5,18 +5,18 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Generic presentation for durable card-selection decisions.
-/// It never decides game rules: candidates/bounds/prompt come from GameStateSnapshot and
-/// the validated selection is sent back through PlayersTurnsHandler.
+/// Hand choices bind existing hand visuals; other owned zones render a temporary choice grid.
 /// </summary>
 public sealed class PendingDecisionController : MonoBehaviour
 {
     private readonly HashSet<int> _selected = new HashSet<int>();
-    private readonly Dictionary<CardPointerInteraction, Action> _selectionHandlers =
-        new Dictionary<CardPointerInteraction, Action>();
+    private readonly Dictionary<CardPointerInteraction, Action> _selectionHandlers = new Dictionary<CardPointerInteraction, Action>();
     private readonly Dictionary<Image, Color> _originalImageColors = new Dictionary<Image, Color>();
     private readonly List<Outline> _selectionOutlines = new List<Outline>();
+    private readonly List<GameObject> _externalCards = new List<GameObject>();
 
     private RectTransform _panel;
+    private RectTransform _externalCardsRoot;
     private Text _promptText;
     private Text _countText;
     private Button _confirmButton;
@@ -35,92 +35,79 @@ public sealed class PendingDecisionController : MonoBehaviour
     {
         NetworkGameState.StateChanged -= Refresh;
         ClearCardBindings();
+        ClearExternalCards();
     }
 
     private void Refresh(GameStateSnapshot state)
     {
         PendingDecisionSnapshot decision = ResolveLocalDecision(state);
-        if (decision == null)
-        {
-            HideDecision();
-            return;
-        }
-
+        if (decision == null) { HideDecision(); return; }
         EnsurePanel();
 
-        if (!string.Equals(_boundDecisionId, decision.DecisionId, StringComparison.Ordinal))
+        bool newDecision = !string.Equals(_boundDecisionId, decision.DecisionId, StringComparison.Ordinal);
+        if (newDecision)
         {
             ClearCardBindings();
+            ClearExternalCards();
             _selected.Clear();
             _submitPending = false;
             _boundDecisionId = decision.DecisionId;
         }
 
-        if (_panel != null)
-            _panel.gameObject.SetActive(true);
+        if (_panel != null) _panel.gameObject.SetActive(true);
+        if (_promptText != null) _promptText.text = string.IsNullOrWhiteSpace(decision.Prompt) ? "Choisissez des cartes." : decision.Prompt;
 
-        if (_promptText != null)
-            _promptText.text = string.IsNullOrWhiteSpace(decision.Prompt)
-                ? "Choisissez des cartes de votre main."
-                : decision.Prompt;
+        CardZone choiceZone = ResolveDecisionZone(decision);
+        ConfigurePanelForZone(choiceZone);
+        if (choiceZone == CardZone.Hand)
+        {
+            if (_externalCardsRoot != null) _externalCardsRoot.gameObject.SetActive(false);
+            BindHandCards(decision);
+        }
+        else if (newDecision)
+        {
+            BuildExternalCards(state, decision);
+        }
 
-        BindHandCards(decision);
         RefreshSelectionUi(decision);
+    }
+
+    private static CardZone ResolveDecisionZone(PendingDecisionSnapshot decision)
+    {
+        if (decision == null || string.IsNullOrWhiteSpace(decision.Zone)) return CardZone.Hand;
+        return CardZoneRules.TryParseZone(decision.Zone, out CardZone zone) ? zone : CardZone.Hand;
     }
 
     private PendingDecisionSnapshot ResolveLocalDecision(GameStateSnapshot state)
     {
-        if (state == null ||
-            !state.IsStarted ||
-            state.IsPaused ||
-            state.Resolution == null ||
-            !state.Resolution.IsActive)
-            return null;
-
+        if (state == null || !state.IsStarted || state.IsPaused || state.Resolution == null || !state.Resolution.IsActive) return null;
         PendingDecisionSnapshot decision = state.Resolution.PendingDecision;
-        if (decision == null ||
-            !decision.IsPending ||
-            !string.Equals(decision.PlayerId, NetworkGameState.LocalPlayerId, StringComparison.Ordinal))
-            return null;
-
+        if (decision == null || !decision.IsPending || !string.Equals(decision.PlayerId, NetworkGameState.LocalPlayerId, StringComparison.Ordinal)) return null;
         return decision;
     }
 
     private void BindHandCards(PendingDecisionSnapshot decision)
     {
         Transform handRoot = FindHandCardsRoot();
-        if (handRoot == null)
-            return;
-
+        if (handRoot == null) return;
         HashSet<int> candidates = new HashSet<int>(decision.CandidateInstanceIds ?? new List<int>());
 
         for (int i = 0; i < handRoot.childCount; i++)
         {
             Transform child = handRoot.GetChild(i);
             HandCardMotion motion = child.GetComponent<HandCardMotion>();
-            if (motion == null || motion.InstanceId <= 0)
-                continue;
-
+            if (motion == null || motion.InstanceId <= 0) continue;
             int instanceId = motion.InstanceId;
             bool candidate = candidates.Contains(instanceId);
 
             HandGameplayInteraction gameplay = child.GetComponent<HandGameplayInteraction>();
-            if (gameplay != null)
-                gameplay.SetPlayable(false);
-
+            if (gameplay != null) gameplay.SetPlayable(false);
             Image image = child.GetComponent<Image>();
-            if (image != null && !_originalImageColors.ContainsKey(image))
-                _originalImageColors.Add(image, image.color);
-
-            if (image != null)
-                image.color = candidate
-                    ? _originalImageColors[image]
-                    : MultiplyRgb(_originalImageColors[image], 0.55f);
+            if (image != null && !_originalImageColors.ContainsKey(image)) _originalImageColors.Add(image, image.color);
+            if (image != null) image.color = candidate ? _originalImageColors[image] : MultiplyRgb(_originalImageColors[image], 0.55f);
 
             CardPointerInteraction pointer = child.GetComponent<CardPointerInteraction>();
-            if (!candidate || pointer == null || _selectionHandlers.ContainsKey(pointer))
-                continue;
-
+            if (!candidate || pointer == null || _selectionHandlers.ContainsKey(pointer)) continue;
             int capturedId = instanceId;
             Action handler = () => ToggleSelection(capturedId);
             pointer.PrimaryActionRequested += handler;
@@ -128,266 +115,201 @@ public sealed class PendingDecisionController : MonoBehaviour
         }
     }
 
+    private void BuildExternalCards(GameStateSnapshot state, PendingDecisionSnapshot decision)
+    {
+        ClearExternalCards();
+        if (_externalCardsRoot == null || state == null || decision == null) return;
+        _externalCardsRoot.gameObject.SetActive(true);
+
+        foreach (int instanceId in decision.CandidateInstanceIds ?? new List<int>())
+        {
+            CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
+            if (instance == null) continue;
+            ExtensionPackageData extension;
+            ExtensionCardData definition;
+            if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition)) continue;
+
+            GameObject card = new GameObject("DecisionCard_" + instanceId, typeof(RectTransform), typeof(Image), typeof(LayoutElement), typeof(CardPointerInteraction));
+            card.transform.SetParent(_externalCardsRoot, false);
+            RectTransform rect = card.GetComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(82f, 127f);
+            Image image = card.GetComponent<Image>();
+            image.sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition);
+            image.preserveAspect = true;
+            image.color = image.sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);
+            image.raycastTarget = true;
+            LayoutElement layout = card.GetComponent<LayoutElement>();
+            layout.preferredWidth = 82f; layout.preferredHeight = 127f;
+
+            CardPointerInteraction pointer = card.GetComponent<CardPointerInteraction>();
+            pointer.InspectOnLongPress = false;
+            int capturedId = instanceId;
+            Action handler = () => ToggleSelection(capturedId);
+            pointer.PrimaryActionRequested += handler;
+            _selectionHandlers.Add(pointer, handler);
+            _externalCards.Add(card);
+        }
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_externalCardsRoot);
+    }
+
     private void ToggleSelection(int instanceId)
     {
-        GameStateSnapshot state = NetworkGameState.State;
-        PendingDecisionSnapshot decision = ResolveLocalDecision(state);
-        if (decision == null || _submitPending)
-            return;
-
-        if (decision.CandidateInstanceIds == null || !decision.CandidateInstanceIds.Contains(instanceId))
-            return;
-
-        if (_selected.Contains(instanceId))
-        {
-            _selected.Remove(instanceId);
-        }
+        PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
+        if (decision == null || _submitPending || decision.CandidateInstanceIds == null || !decision.CandidateInstanceIds.Contains(instanceId)) return;
+        if (_selected.Contains(instanceId)) _selected.Remove(instanceId);
         else
         {
             int max = Math.Max(decision.MinSelections, decision.MaxSelections);
-            if (_selected.Count >= max)
-                return;
+            if (_selected.Count >= max) return;
             _selected.Add(instanceId);
         }
-
         RefreshSelectionUi(decision);
     }
 
     private void RefreshSelectionUi(PendingDecisionSnapshot decision)
     {
-        if (decision == null)
-            return;
-
+        if (decision == null) return;
         if (_countText != null)
-        {
-            if (decision.MinSelections == decision.MaxSelections)
-                _countText.text = _selected.Count + " / " + decision.MaxSelections;
-            else
-                _countText.text = _selected.Count + " sélectionnée(s) — " +
-                                  decision.MinSelections + " à " + decision.MaxSelections;
-        }
-
+            _countText.text = decision.MinSelections == decision.MaxSelections
+                ? _selected.Count + " / " + decision.MaxSelections
+                : _selected.Count + " sélectionnée(s) — " + decision.MinSelections + " à " + decision.MaxSelections;
         if (_confirmButton != null)
-        {
-            bool validCount = _selected.Count >= decision.MinSelections &&
-                              _selected.Count <= decision.MaxSelections;
-            _confirmButton.interactable = validCount && !_submitPending;
-        }
-
+            _confirmButton.interactable = _selected.Count >= decision.MinSelections && _selected.Count <= decision.MaxSelections && !_submitPending;
         RefreshSelectionMarkers();
     }
 
     private void RefreshSelectionMarkers()
     {
-        foreach (Outline outline in _selectionOutlines)
-        {
-            if (outline != null)
-                Destroy(outline);
-        }
+        foreach (Outline outline in _selectionOutlines) if (outline != null) Destroy(outline);
         _selectionOutlines.Clear();
 
         Transform handRoot = FindHandCardsRoot();
-        if (handRoot == null)
-            return;
+        if (handRoot != null)
+            for (int i = 0; i < handRoot.childCount; i++)
+            {
+                Transform child = handRoot.GetChild(i);
+                HandCardMotion motion = child.GetComponent<HandCardMotion>();
+                if (motion != null && _selected.Contains(motion.InstanceId)) AddSelectionOutline(child.gameObject);
+            }
 
-        for (int i = 0; i < handRoot.childCount; i++)
+        foreach (GameObject card in _externalCards)
         {
-            Transform child = handRoot.GetChild(i);
-            HandCardMotion motion = child.GetComponent<HandCardMotion>();
-            if (motion == null || !_selected.Contains(motion.InstanceId))
-                continue;
-
-            Outline outline = child.gameObject.AddComponent<Outline>();
-            outline.effectColor = new Color(1f, 1f, 1f, 0.95f);
-            outline.effectDistance = new Vector2(6f, -6f);
-            outline.useGraphicAlpha = true;
-            _selectionOutlines.Add(outline);
+            if (card == null) continue;
+            int id = ResolveExternalInstanceId(card.name);
+            if (_selected.Contains(id)) AddSelectionOutline(card);
         }
+    }
+
+    private void AddSelectionOutline(GameObject target)
+    {
+        Outline outline = target.AddComponent<Outline>();
+        outline.effectColor = new Color(1f, 1f, 1f, 0.95f);
+        outline.effectDistance = new Vector2(2f, -2f);
+        outline.useGraphicAlpha = true;
+        _selectionOutlines.Add(outline);
+    }
+
+    private static int ResolveExternalInstanceId(string objectName)
+    {
+        const string prefix = "DecisionCard_";
+        if (string.IsNullOrEmpty(objectName) || !objectName.StartsWith(prefix, StringComparison.Ordinal)) return 0;
+        return int.TryParse(objectName.Substring(prefix.Length), out int id) ? id : 0;
     }
 
     private void Submit()
     {
-        GameStateSnapshot state = NetworkGameState.State;
-        PendingDecisionSnapshot decision = ResolveLocalDecision(state);
-        if (decision == null || _submitPending)
-            return;
-
-        if (_selected.Count < decision.MinSelections || _selected.Count > decision.MaxSelections)
-            return;
-
+        PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
+        if (decision == null || _submitPending || _selected.Count < decision.MinSelections || _selected.Count > decision.MaxSelections) return;
         PlayersTurnsHandler handler = PlayersTurnsHandler.Instance;
-        if (handler == null)
-            return;
-
+        if (handler == null) return;
         _submitPending = true;
-        if (_confirmButton != null)
-            _confirmButton.interactable = false;
-
-        int[] selected = new int[_selected.Count];
-        _selected.CopyTo(selected);
+        if (_confirmButton != null) _confirmButton.interactable = false;
+        int[] selected = new int[_selected.Count]; _selected.CopyTo(selected);
         handler.SubmitDecision(decision.DecisionId, selected);
     }
 
     private void HideDecision()
     {
-        ClearCardBindings();
-        _selected.Clear();
-        _boundDecisionId = string.Empty;
-        _submitPending = false;
-
-        if (_panel != null)
-            _panel.gameObject.SetActive(false);
+        ClearCardBindings(); ClearExternalCards(); _selected.Clear(); _boundDecisionId = string.Empty; _submitPending = false;
+        if (_panel != null) _panel.gameObject.SetActive(false);
     }
 
     private void ClearCardBindings()
     {
         foreach (KeyValuePair<CardPointerInteraction, Action> pair in _selectionHandlers)
-        {
-            if (pair.Key != null)
-                pair.Key.PrimaryActionRequested -= pair.Value;
-        }
+            if (pair.Key != null) pair.Key.PrimaryActionRequested -= pair.Value;
         _selectionHandlers.Clear();
-
-        foreach (KeyValuePair<Image, Color> pair in _originalImageColors)
-        {
-            if (pair.Key != null)
-                pair.Key.color = pair.Value;
-        }
+        foreach (KeyValuePair<Image, Color> pair in _originalImageColors) if (pair.Key != null) pair.Key.color = pair.Value;
         _originalImageColors.Clear();
-
-        foreach (Outline outline in _selectionOutlines)
-        {
-            if (outline != null)
-                Destroy(outline);
-        }
+        foreach (Outline outline in _selectionOutlines) if (outline != null) Destroy(outline);
         _selectionOutlines.Clear();
+    }
+
+    private void ClearExternalCards()
+    {
+        foreach (GameObject card in _externalCards) if (card != null) Destroy(card);
+        _externalCards.Clear();
     }
 
     private void EnsurePanel()
     {
-        if (_panel != null)
-            return;
-
-        Transform existing = FindDeepChild(transform, "PendingDecisionPanel");
-        if (existing is RectTransform existingRect)
-        {
-            _panel = existingRect;
-            return;
-        }
-
-        GameObject panelObject = new GameObject(
-            "PendingDecisionPanel",
-            typeof(RectTransform),
-            typeof(Image));
+        if (_panel != null) return;
+        GameObject panelObject = new GameObject("PendingDecisionPanel", typeof(RectTransform), typeof(Image));
         panelObject.transform.SetParent(transform, false);
         _panel = panelObject.GetComponent<RectTransform>();
-        _panel.anchorMin = new Vector2(0.30f, 0.245f);
-        _panel.anchorMax = new Vector2(0.70f, 0.34f);
-        _panel.offsetMin = Vector2.zero;
-        _panel.offsetMax = Vector2.zero;
         panelObject.GetComponent<Image>().color = new Color(0.08f, 0.075f, 0.065f, 0.97f);
 
         GameObject promptObject = new GameObject("Prompt", typeof(RectTransform), typeof(Text));
-        promptObject.transform.SetParent(_panel, false);
-        RectTransform promptRect = promptObject.GetComponent<RectTransform>();
-        SetAnchors(promptRect, new Vector2(0.03f, 0.40f), new Vector2(0.70f, 0.94f));
-        _promptText = promptObject.GetComponent<Text>();
-        ConfigureText(_promptText, 17, TextAnchor.MiddleLeft);
-
+        promptObject.transform.SetParent(_panel, false); _promptText = promptObject.GetComponent<Text>(); ConfigureText(_promptText, 17, TextAnchor.MiddleLeft);
         GameObject countObject = new GameObject("Count", typeof(RectTransform), typeof(Text));
-        countObject.transform.SetParent(_panel, false);
-        RectTransform countRect = countObject.GetComponent<RectTransform>();
-        SetAnchors(countRect, new Vector2(0.03f, 0.06f), new Vector2(0.70f, 0.42f));
-        _countText = countObject.GetComponent<Text>();
-        ConfigureText(_countText, 14, TextAnchor.MiddleLeft);
+        countObject.transform.SetParent(_panel, false); _countText = countObject.GetComponent<Text>(); ConfigureText(_countText, 14, TextAnchor.MiddleLeft);
 
-        GameObject buttonObject = new GameObject(
-            "ConfirmDecision",
-            typeof(RectTransform),
-            typeof(Image),
-            typeof(Button));
-        buttonObject.transform.SetParent(_panel, false);
-        RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
-        SetAnchors(buttonRect, new Vector2(0.73f, 0.15f), new Vector2(0.97f, 0.85f));
-        Image buttonImage = buttonObject.GetComponent<Image>();
-        buttonImage.color = new Color(0.30f, 0.26f, 0.16f, 1f);
-        _confirmButton = buttonObject.GetComponent<Button>();
-        _confirmButton.targetGraphic = buttonImage;
-        _confirmButton.onClick.AddListener(Submit);
+        GameObject cardsObject = new GameObject("DecisionCards", typeof(RectTransform), typeof(GridLayoutGroup));
+        cardsObject.transform.SetParent(_panel, false); _externalCardsRoot = cardsObject.GetComponent<RectTransform>();
+        GridLayoutGroup grid = cardsObject.GetComponent<GridLayoutGroup>();
+        grid.cellSize = new Vector2(82f, 127f); grid.spacing = new Vector2(8f, 8f); grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = 7; grid.childAlignment = TextAnchor.MiddleCenter;
 
+        GameObject buttonObject = new GameObject("ConfirmDecision", typeof(RectTransform), typeof(Image), typeof(Button));
+        buttonObject.transform.SetParent(_panel, false); Image buttonImage = buttonObject.GetComponent<Image>(); buttonImage.color = new Color(0.30f, 0.26f, 0.16f, 1f);
+        _confirmButton = buttonObject.GetComponent<Button>(); _confirmButton.targetGraphic = buttonImage; _confirmButton.onClick.AddListener(Submit);
         GameObject buttonTextObject = new GameObject("Label", typeof(RectTransform), typeof(Text));
-        buttonTextObject.transform.SetParent(buttonObject.transform, false);
-        RectTransform buttonTextRect = buttonTextObject.GetComponent<RectTransform>();
-        SetAnchors(buttonTextRect, Vector2.zero, Vector2.one);
-        _confirmText = buttonTextObject.GetComponent<Text>();
-        ConfigureText(_confirmText, 16, TextAnchor.MiddleCenter);
-        _confirmText.fontStyle = FontStyle.Bold;
-        _confirmText.text = "VALIDER";
-        _confirmText.raycastTarget = false;
+        buttonTextObject.transform.SetParent(buttonObject.transform, false); _confirmText = buttonTextObject.GetComponent<Text>();
+        ConfigureText(_confirmText, 16, TextAnchor.MiddleCenter); _confirmText.fontStyle = FontStyle.Bold; _confirmText.text = "VALIDER"; _confirmText.raycastTarget = false;
 
+        SetAnchors(buttonTextObject.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
         _panel.gameObject.SetActive(false);
+        ConfigurePanelForZone(CardZone.Hand);
+    }
+
+    private void ConfigurePanelForZone(CardZone zone)
+    {
+        if (_panel == null) return;
+        bool hand = zone == CardZone.Hand;
+        SetAnchors(_panel, hand ? new Vector2(0.30f, 0.245f) : new Vector2(0.12f, 0.20f), hand ? new Vector2(0.70f, 0.34f) : new Vector2(0.88f, 0.66f));
+        SetAnchors(_promptText.rectTransform, hand ? new Vector2(0.03f, 0.40f) : new Vector2(0.03f, 0.82f), hand ? new Vector2(0.70f, 0.94f) : new Vector2(0.78f, 0.97f));
+        SetAnchors(_countText.rectTransform, new Vector2(0.03f, 0.06f), hand ? new Vector2(0.70f, 0.42f) : new Vector2(0.62f, 0.16f));
+        SetAnchors(_confirmButton.GetComponent<RectTransform>(), hand ? new Vector2(0.73f, 0.15f) : new Vector2(0.80f, 0.82f), hand ? new Vector2(0.97f, 0.85f) : new Vector2(0.97f, 0.96f));
+        if (_externalCardsRoot != null)
+        {
+            SetAnchors(_externalCardsRoot, new Vector2(0.03f, 0.18f), new Vector2(0.97f, 0.79f));
+            _externalCardsRoot.gameObject.SetActive(!hand);
+        }
     }
 
     private Transform FindHandCardsRoot()
     {
-        Transform localHand = FindDeepChild(transform, "LocalHand");
-        return FindDirectChild(localHand, "Cards");
+        Transform localHand = FindDeepChild(transform, "LocalHand"); return FindDirectChild(localHand, "Cards");
     }
 
-    private static Color MultiplyRgb(Color color, float multiplier)
-    {
-        return new Color(
-            color.r * multiplier,
-            color.g * multiplier,
-            color.b * multiplier,
-            color.a);
-    }
-
+    private static Color MultiplyRgb(Color color, float multiplier) => new Color(color.r * multiplier, color.g * multiplier, color.b * multiplier, color.a);
     private static void ConfigureText(Text text, int fontSize, TextAnchor alignment)
-    {
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        text.fontSize = fontSize;
-        text.alignment = alignment;
-        text.color = Color.white;
-        text.raycastTarget = false;
-    }
-
+    { text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); text.fontSize = fontSize; text.alignment = alignment; text.color = Color.white; text.raycastTarget = false; }
     private static void SetAnchors(RectTransform rect, Vector2 min, Vector2 max)
-    {
-        if (rect == null)
-            return;
-        rect.anchorMin = min;
-        rect.anchorMax = max;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-    }
-
+    { if (rect == null) return; rect.anchorMin = min; rect.anchorMax = max; rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero; }
     private static Transform FindDirectChild(Transform parent, string name)
-    {
-        if (parent == null)
-            return null;
-        for (int i = 0; i < parent.childCount; i++)
-        {
-            Transform child = parent.GetChild(i);
-            if (string.Equals(child.name, name, StringComparison.Ordinal))
-                return child;
-        }
-        return null;
-    }
-
+    { if (parent == null) return null; for (int i = 0; i < parent.childCount; i++) { Transform child = parent.GetChild(i); if (string.Equals(child.name, name, StringComparison.Ordinal)) return child; } return null; }
     private static Transform FindDeepChild(Transform parent, string name)
-    {
-        if (parent == null)
-            return null;
-        for (int i = 0; i < parent.childCount; i++)
-        {
-            Transform child = parent.GetChild(i);
-            if (string.Equals(child.name, name, StringComparison.Ordinal))
-                return child;
-            Transform nested = FindDeepChild(child, name);
-            if (nested != null)
-                return nested;
-        }
-        return null;
-    }
+    { if (parent == null) return null; for (int i = 0; i < parent.childCount; i++) { Transform child = parent.GetChild(i); if (string.Equals(child.name, name, StringComparison.Ordinal)) return child; Transform nested = FindDeepChild(child, name); if (nested != null) return nested; } return null; }
 }
