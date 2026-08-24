@@ -1,25 +1,14 @@
 using System;
 using System.Collections.Generic;
 
-public enum EffectResolutionStatus
-{
-    Applied,
-    WaitingForChoice,
-    Rejected
-}
+public enum EffectResolutionStatus { Applied, WaitingForChoice, Rejected }
 
 public readonly struct EffectResolutionResult
 {
     public EffectResolutionStatus Status { get; }
     public string Error { get; }
     public bool Succeeded => Status == EffectResolutionStatus.Applied;
-
-    private EffectResolutionResult(EffectResolutionStatus status, string error)
-    {
-        Status = status;
-        Error = error ?? string.Empty;
-    }
-
+    private EffectResolutionResult(EffectResolutionStatus status, string error) { Status = status; Error = error ?? string.Empty; }
     public static EffectResolutionResult Applied() => new EffectResolutionResult(EffectResolutionStatus.Applied, string.Empty);
     public static EffectResolutionResult WaitingForChoice() => new EffectResolutionResult(EffectResolutionStatus.WaitingForChoice, string.Empty);
     public static EffectResolutionResult Rejected(string error) => new EffectResolutionResult(EffectResolutionStatus.Rejected, error);
@@ -39,89 +28,49 @@ public sealed class EffectExecutionContext
     public int AbilityIndex { get; }
     public int EffectIndex { get; }
 
-    public EffectExecutionContext(
-        GameStateSnapshot state,
-        PlayerStateSnapshot actor,
-        int sourceCardInstanceId = 0,
-        System.Random random = null,
-        ResolutionQueue resolution = null,
-        GameEvent triggerEvent = null,
-        string timing = null,
-        int listenerCardInstanceId = 0,
-        int abilityIndex = -1,
-        int effectIndex = -1)
+    public EffectExecutionContext(GameStateSnapshot state, PlayerStateSnapshot actor, int sourceCardInstanceId = 0,
+        System.Random random = null, ResolutionQueue resolution = null, GameEvent triggerEvent = null,
+        string timing = null, int listenerCardInstanceId = 0, int abilityIndex = -1, int effectIndex = -1)
     {
-        State = state;
-        Actor = actor;
-        SourceCardInstanceId = sourceCardInstanceId;
-        Random = random;
-        Resolution = resolution;
-        TriggerEvent = triggerEvent;
-        Timing = timing ?? string.Empty;
-        ListenerCardInstanceId = listenerCardInstanceId;
-        AbilityIndex = abilityIndex;
-        EffectIndex = effectIndex;
+        State = state; Actor = actor; SourceCardInstanceId = sourceCardInstanceId; Random = random;
+        Resolution = resolution; TriggerEvent = triggerEvent; Timing = timing ?? string.Empty;
+        ListenerCardInstanceId = listenerCardInstanceId; AbilityIndex = abilityIndex; EffectIndex = effectIndex;
     }
 
     public EffectExecutionContext WithCursor(string timing, int listenerCardInstanceId, int abilityIndex, int effectIndex)
     {
-        return new EffectExecutionContext(
-            State,
-            Actor,
-            SourceCardInstanceId,
-            Random,
-            Resolution,
-            TriggerEvent,
-            timing,
-            listenerCardInstanceId,
-            abilityIndex,
-            effectIndex);
+        return new EffectExecutionContext(State, Actor, SourceCardInstanceId, Random, Resolution, TriggerEvent,
+            timing, listenerCardInstanceId, abilityIndex, effectIndex);
     }
 }
 
 public static class EffectResolver
 {
     private delegate EffectResolutionResult EffectHandler(CardEffectData effect, EffectExecutionContext context);
-
-    private static readonly Dictionary<string, EffectHandler> Handlers =
-        new Dictionary<string, EffectHandler>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "add_resource", ResolveAddResource },
-            { "draw", ResolveDraw },
-            { "draw_last_selection_count", ResolveDrawLastSelectionCount },
-            { "choose_cards", ResolveChooseCards },
-            { "trash_selected", ResolveTrashSelected },
-            { "discard_selected", ResolveDiscardSelected }
-        };
-
-    public static bool IsSupported(string operation)
+    private static readonly Dictionary<string, EffectHandler> Handlers = new Dictionary<string, EffectHandler>(StringComparer.OrdinalIgnoreCase)
     {
-        return !string.IsNullOrWhiteSpace(operation) && Handlers.ContainsKey(operation);
-    }
+        { "add_resource", ResolveAddResource }, { "draw", ResolveDraw },
+        { "draw_last_selection_count", ResolveDrawLastSelectionCount }, { "choose_cards", ResolveChooseCards },
+        { "trash_selected", ResolveTrashSelected }, { "discard_selected", ResolveDiscardSelected },
+        { "move_selected", ResolveMoveSelected }
+    };
+
+    public static bool IsSupported(string operation) => !string.IsNullOrWhiteSpace(operation) && Handlers.ContainsKey(operation);
 
     public static EffectResolutionResult Resolve(CardEffectData effect, EffectExecutionContext context)
     {
-        if (effect == null)
-            return EffectResolutionResult.Rejected("Effect is null.");
-        if (context == null || context.State == null || context.Actor == null)
-            return EffectResolutionResult.Rejected("Effect execution context is incomplete.");
-        if (string.IsNullOrWhiteSpace(effect.op))
-            return EffectResolutionResult.Rejected("Effect operation is missing.");
-        if (!Handlers.TryGetValue(effect.op, out EffectHandler handler))
-            return EffectResolutionResult.Rejected("Unsupported effect operation: " + effect.op);
-
+        if (effect == null) return EffectResolutionResult.Rejected("Effect is null.");
+        if (context == null || context.State == null || context.Actor == null) return EffectResolutionResult.Rejected("Effect execution context is incomplete.");
+        if (string.IsNullOrWhiteSpace(effect.op)) return EffectResolutionResult.Rejected("Effect operation is missing.");
+        if (!Handlers.TryGetValue(effect.op, out EffectHandler handler)) return EffectResolutionResult.Rejected("Unsupported effect operation: " + effect.op);
         return handler(effect, context);
     }
 
     private static EffectResolutionResult ResolveAddResource(CardEffectData effect, EffectExecutionContext context)
     {
-        if (!TargetsSelf(effect))
-            return EffectResolutionResult.Rejected("add_resource currently supports target 'self' only.");
-        if (effect.amount < 0)
-            return EffectResolutionResult.Rejected("add_resource amount cannot be negative.");
-        if (string.IsNullOrWhiteSpace(effect.resource))
-            return EffectResolutionResult.Rejected("add_resource resource is missing.");
-
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("add_resource currently supports target 'self' only.");
+        if (effect.amount < 0) return EffectResolutionResult.Rejected("add_resource amount cannot be negative.");
+        if (string.IsNullOrWhiteSpace(effect.resource)) return EffectResolutionResult.Rejected("add_resource resource is missing.");
         switch (effect.resource.Trim().ToLowerInvariant())
         {
             case "actions": context.Actor.Actions += effect.amount; break;
@@ -129,40 +78,31 @@ public static class EffectResolver
             case "coins": context.Actor.Coins += effect.amount; break;
             default: return EffectResolutionResult.Rejected("Unsupported add_resource resource: " + effect.resource);
         }
-
         return EffectResolutionResult.Applied();
     }
 
     private static EffectResolutionResult ResolveDraw(CardEffectData effect, EffectExecutionContext context)
     {
-        if (!TargetsSelf(effect))
-            return EffectResolutionResult.Rejected("draw currently supports target 'self' only.");
-        if (effect.amount < 0)
-            return EffectResolutionResult.Rejected("draw amount cannot be negative.");
-        if (!CardZoneRules.DrawCards(context.Actor, effect.amount, context.Random, out string error))
-            return EffectResolutionResult.Rejected(error);
-        return EffectResolutionResult.Applied();
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("draw currently supports target 'self' only.");
+        if (effect.amount < 0) return EffectResolutionResult.Rejected("draw amount cannot be negative.");
+        return CardZoneRules.DrawCards(context.Actor, effect.amount, context.Random, out string error)
+            ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(error);
     }
 
     private static EffectResolutionResult ResolveDrawLastSelectionCount(CardEffectData effect, EffectExecutionContext context)
     {
-        if (!TargetsSelf(effect))
-            return EffectResolutionResult.Rejected("draw_last_selection_count currently supports target 'self' only.");
-        if (context.Resolution == null)
-            return EffectResolutionResult.Rejected("draw_last_selection_count requires an active ResolutionQueue.");
-        if (!CardZoneRules.DrawCards(context.Actor, context.Resolution.LastSelectionCount, context.Random, out string error))
-            return EffectResolutionResult.Rejected(error);
-        return EffectResolutionResult.Applied();
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("draw_last_selection_count currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("draw_last_selection_count requires an active ResolutionQueue.");
+        return CardZoneRules.DrawCards(context.Actor, context.Resolution.LastSelectionCount, context.Random, out string error)
+            ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(error);
     }
 
     private static EffectResolutionResult ResolveChooseCards(CardEffectData effect, EffectExecutionContext context)
     {
-        if (!TargetsSelf(effect))
-            return EffectResolutionResult.Rejected("choose_cards currently supports target 'self' only.");
-        if (context.Resolution == null)
-            return EffectResolutionResult.Rejected("choose_cards requires an active ResolutionQueue.");
-        if (!string.Equals(effect.zone, "hand", StringComparison.OrdinalIgnoreCase))
-            return EffectResolutionResult.Rejected("choose_cards currently supports zone 'hand' only.");
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("choose_cards currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("choose_cards requires an active ResolutionQueue.");
+        if (!CardZoneRules.TryParseZone(effect.zone, out CardZone choiceZone) || (choiceZone != CardZone.Hand && choiceZone != CardZone.Discard))
+            return EffectResolutionResult.Rejected("choose_cards currently supports zones 'hand' and 'discard'.");
         if (context.AbilityIndex < 0 || context.EffectIndex < 0 || context.ListenerCardInstanceId <= 0)
             return EffectResolutionResult.Rejected("choose_cards is missing its continuation cursor.");
         if (context.TriggerEvent == null || context.TriggerEvent.CardInstanceId != context.ListenerCardInstanceId)
@@ -170,78 +110,54 @@ public static class EffectResolver
 
         int min = Math.Max(0, effect.min);
         int max = effect.max > 0 ? effect.max : min;
-        if (max < min)
-            return EffectResolutionResult.Rejected("choose_cards max cannot be lower than min.");
+        if (max < min) return EffectResolutionResult.Rejected("choose_cards max cannot be lower than min.");
 
-        List<int> candidates = context.Actor.Hand != null ? new List<int>(context.Actor.Hand) : new List<int>();
+        List<int> source = CardZoneRules.ResolveZone(context.Actor, choiceZone);
+        List<int> candidates = source != null ? new List<int>(source) : new List<int>();
         max = Math.Min(max, candidates.Count);
-        if (min > candidates.Count)
-            return EffectResolutionResult.Rejected("choose_cards does not have enough eligible cards for its minimum.");
+        if (min > candidates.Count) return EffectResolutionResult.Rejected("choose_cards does not have enough eligible cards for its minimum.");
+        if (candidates.Count == 0 && min == 0) return EffectResolutionResult.Applied();
 
-        if (!context.Resolution.TrySuspendForDecision(
-                context.Actor.PlayerId,
-                "choose_cards",
-                effect.prompt,
-                context.SourceCardInstanceId,
-                min,
-                max,
-                candidates,
-                context.TriggerEvent,
-                context.Timing,
-                context.ListenerCardInstanceId,
-                context.AbilityIndex,
-                context.EffectIndex,
-                out string error))
+        if (!context.Resolution.TrySuspendForDecision(context.Actor.PlayerId, "choose_cards", effect.zone, effect.prompt,
+                context.SourceCardInstanceId, min, max, candidates, context.TriggerEvent, context.Timing,
+                context.ListenerCardInstanceId, context.AbilityIndex, context.EffectIndex, out string error))
             return EffectResolutionResult.Rejected(error);
-
         return EffectResolutionResult.WaitingForChoice();
     }
 
     private static EffectResolutionResult ResolveTrashSelected(CardEffectData effect, EffectExecutionContext context)
     {
-        if (!TargetsSelf(effect))
-            return EffectResolutionResult.Rejected("trash_selected currently supports target 'self' only.");
-        if (context.Resolution == null)
-            return EffectResolutionResult.Rejected("trash_selected requires an active ResolutionQueue.");
-
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("trash_selected currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("trash_selected requires an active ResolutionQueue.");
         List<int> selected = context.Resolution.TakeSelectedInstanceIds();
         foreach (int instanceId in selected)
-        {
-            if (!TrashRules.TryTrashFromHand(
-                    context.State,
-                    context.Actor,
-                    instanceId,
-                    context.SourceCardInstanceId,
-                    context.EventBus,
-                    out string error))
+            if (!TrashRules.TryTrashFromHand(context.State, context.Actor, instanceId, context.SourceCardInstanceId, context.EventBus, out string error))
                 return EffectResolutionResult.Rejected(error);
-        }
-
         return EffectResolutionResult.Applied();
     }
 
     private static EffectResolutionResult ResolveDiscardSelected(CardEffectData effect, EffectExecutionContext context)
     {
-        if (!TargetsSelf(effect))
-            return EffectResolutionResult.Rejected("discard_selected currently supports target 'self' only.");
-        if (context.Resolution == null)
-            return EffectResolutionResult.Rejected("discard_selected requires an active ResolutionQueue.");
-
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("discard_selected currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("discard_selected requires an active ResolutionQueue.");
         List<int> selected = context.Resolution.TakeSelectedInstanceIds();
-        if (!DiscardRules.TryDiscardSelectedFromHand(
-                context.State,
-                context.Actor,
-                selected,
-                context.SourceCardInstanceId,
-                context.EventBus,
-                out string error))
-            return EffectResolutionResult.Rejected(error);
+        return DiscardRules.TryDiscardSelectedFromHand(context.State, context.Actor, selected, context.SourceCardInstanceId,
+            context.EventBus, out string error) ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(error);
+    }
 
+    private static EffectResolutionResult ResolveMoveSelected(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("move_selected currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("move_selected requires an active ResolutionQueue.");
+        if (!CardZoneRules.TryParseZone(effect.sourceZone, out CardZone source) || !CardZoneRules.TryParseZone(effect.destinationZone, out CardZone destination))
+            return EffectResolutionResult.Rejected("move_selected requires valid sourceZone and destinationZone.");
+        if (source == destination) return EffectResolutionResult.Rejected("move_selected source and destination cannot match.");
+        List<int> selected = context.Resolution.TakeSelectedInstanceIds();
+        foreach (int instanceId in selected)
+            if (!CardZoneRules.MoveCard(context.Actor, source, destination, instanceId))
+                return EffectResolutionResult.Rejected("Selected card could not be moved from " + source + " to " + destination + ".");
         return EffectResolutionResult.Applied();
     }
 
-    private static bool TargetsSelf(CardEffectData effect)
-    {
-        return effect != null && string.Equals(effect.target, "self", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool TargetsSelf(CardEffectData effect) => effect != null && string.Equals(effect.target, "self", StringComparison.OrdinalIgnoreCase);
 }
