@@ -113,6 +113,10 @@ public static class GameRules
         if (sourceZone == null) return GameRuleResult.Rejected("Decision source zone is unavailable.", resolution.Events.SnapshotHistory());
         foreach (int instanceId in resolution.SelectedInstanceIds)
             if (!sourceZone.Contains(instanceId)) return GameRuleResult.Rejected("Selected card is no longer in the decision source zone.", resolution.Events.SnapshotHistory());
+
+        if (string.Equals(continuation.Operation, "discard_down_to", StringComparison.OrdinalIgnoreCase))
+            return ResolveDiscardDownDecision(state, player, resolution, continuation, resolveCardDefinition, random);
+
         return ResumeDecision(state, resolution, continuation, resolveCardDefinition, random);
     }
 
@@ -134,6 +138,59 @@ public static class GameRules
         }
 
         return ResumeDecision(state, resolution, continuation, resolveCardDefinition, random);
+    }
+
+    private static GameRuleResult ResolveDiscardDownDecision(GameStateSnapshot state, PlayerStateSnapshot responder,
+        ResolutionQueue resolution, PendingDecisionSnapshot continuation,
+        Func<string, ExtensionCardData> resolveCardDefinition, System.Random random)
+    {
+        List<int> selected = resolution.TakeSelectedInstanceIds();
+        if (!DiscardRules.TryDiscardSelectedFromHand(
+                state,
+                responder,
+                selected,
+                continuation.SourceCardInstanceId,
+                resolution.Events,
+                out string discardError))
+            return GameRuleResult.Rejected(discardError, resolution.Events.SnapshotHistory());
+
+        List<string> remaining = continuation.RemainingPlayerIds != null
+            ? new List<string>(continuation.RemainingPlayerIds)
+            : new List<string>();
+
+        while (remaining.Count > 0)
+        {
+            string nextPlayerId = remaining[0];
+            remaining.RemoveAt(0);
+            PlayerStateSnapshot nextPlayer = FindPlayer(state, nextPlayerId);
+            if (nextPlayer == null || nextPlayer.Hand == null || nextPlayer.Hand.Count <= continuation.TargetHandSize)
+                continue;
+
+            if (!resolution.TrySuspendForDiscardDownDecision(
+                    nextPlayer.PlayerId,
+                    continuation.Prompt,
+                    continuation.SourceCardInstanceId,
+                    continuation.TargetHandSize,
+                    nextPlayer.Hand,
+                    remaining,
+                    RestoreTriggerEvent(continuation),
+                    continuation.Timing,
+                    continuation.ListenerCardInstanceId,
+                    continuation.AbilityIndex,
+                    continuation.EffectIndex,
+                    out string suspendError))
+                return GameRuleResult.Rejected(suspendError, resolution.Events.SnapshotHistory());
+
+            return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+        }
+
+        return ResumeDecision(state, resolution, continuation, resolveCardDefinition, random);
+    }
+
+    private static GameEvent RestoreTriggerEvent(PendingDecisionSnapshot continuation)
+    {
+        if (continuation == null || continuation.TriggerEvent == null) return null;
+        return continuation.TriggerEvent.TryToRuntime(out GameEvent gameEvent) ? gameEvent : null;
     }
 
     private static bool PrepareDecisionResume(GameStateSnapshot state, string playerId, string decisionId,
