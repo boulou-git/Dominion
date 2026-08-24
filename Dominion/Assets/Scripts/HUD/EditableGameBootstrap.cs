@@ -77,6 +77,11 @@ public static class EditableGameBootstrap
             root.AddComponent<PendingDecisionController>();
 
         ConfigureFixedReserveLayout(root.transform);
+
+        // Pure presentation layer: applies the optional low-poly medieval GameBoard skin
+        // from Resources/UI/GameBoardSkin without changing anchors, gameplay bindings or data.
+        if (root.GetComponent<GameBoardSkinApplier>() == null)
+            root.AddComponent<GameBoardSkinApplier>();
     }
 
     private static void RemoveLegacyBaseSupplyLayout(Transform root)
