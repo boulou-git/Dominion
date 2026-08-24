@@ -265,7 +265,7 @@ public static class NetworkGameState
         foreach (PlayerStateSnapshot player in state.Players)
         {
             if (player == null) continue;
-            player.Deck.Clear(); player.Hand.Clear(); player.Discard.Clear(); player.InPlay.Clear();
+            player.Deck.Clear(); player.Hand.Clear(); player.Discard.Clear(); player.InPlay.Clear(); player.Inspected.Clear();
             for (int i = 0; i < StartingCopperCount; i++)
                 if (!CardInstanceRules.TryCreateOwnedCard(state, player, CopperDefinitionId, CardZone.Deck, out _, out string error))
                 { Debug.LogError("Could not create starter Copper: " + error); return false; }
@@ -407,6 +407,7 @@ public static class NetworkGameState
             if (player.Hand == null) player.Hand = new List<int>();
             if (player.Discard == null) player.Discard = new List<int>();
             if (player.InPlay == null) player.InPlay = new List<int>();
+            if (player.Inspected == null) player.Inspected = new List<int>();
         }
         ResolutionQueue.EnsureSnapshot(state);
     }
