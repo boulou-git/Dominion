@@ -79,8 +79,8 @@ public sealed class CardTriggerFilterData
 
 /// <summary>
 /// Declarative effect instruction consumed by the rules engine.
-/// Only fields needed by the first generic operations live here for now. New operation-specific
-/// fields can be added without changing existing extension files or the play-card pipeline.
+/// Generic fields are shared by many operations; choice fields are intentionally data-only
+/// so extensions can request interaction without owning UI, networking or continuation code.
 /// </summary>
 [Serializable]
 public sealed class CardEffectData
@@ -89,6 +89,12 @@ public sealed class CardEffectData
     public string target;
     public string resource;
     public int amount;
+
+    // Interactive operations such as choose_cards.
+    public string zone;
+    public int min;
+    public int max;
+    public string prompt;
 }
 
 /// <summary>
