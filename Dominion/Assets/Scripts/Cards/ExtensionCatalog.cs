@@ -65,8 +65,13 @@ public sealed class CardEffectData
     public string cardId;
     public string cardType;
 
-    // Supply-choice constraint. Negative means no cost ceiling.
+    // Supply-choice constraints. Negative maxCost means no fixed cost ceiling.
     public int maxCost = -1;
+
+    // When true, choose_supply uses LastSelectedCardCost + costOffset as its ceiling.
+    // This is intentionally separate from maxCost so cards such as Rénovation/Mine stay data-driven.
+    public bool useLastSelectionCost;
+    public int costOffset;
 }
 
 public static class ExtensionCatalog
