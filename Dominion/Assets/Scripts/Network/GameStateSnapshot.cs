@@ -32,6 +32,10 @@ public class GameStateSnapshot
     public int NextCardInstanceId = 1;
     public List<CardInstance> CardInstances = new List<CardInstance>();
 
+    // Cards removed from player decks by the Dominion "trash" operation.
+    // The physical CardInstance remains in CardInstances for logs/replay/inspection.
+    public List<int> TrashedCards = new List<int>();
+
     // Authoritative remaining card counts for every Reserve pile.
     // DefinitionId uses qualified refs such as "base:cuivre".
     public List<SupplyPileSnapshot> SupplyPiles = new List<SupplyPileSnapshot>();
