@@ -2,6 +2,19 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
+/// Stable zone vocabulary used by the deterministic rules layer.
+/// None is reserved for events/operations that do not target a player card zone.
+/// </summary>
+public enum CardZone
+{
+    None,
+    Deck,
+    Hand,
+    Discard,
+    InPlay
+}
+
+/// <summary>
 /// Pure helpers for manipulating Dominion card zones.
 ///
 /// A deck's top card is the last item in its list. These helpers deliberately know
@@ -10,6 +23,26 @@ using System.Collections.Generic;
 /// </summary>
 public static class CardZoneRules
 {
+    public static List<int> ResolveZone(PlayerStateSnapshot player, CardZone zone)
+    {
+        if (player == null)
+            return null;
+
+        switch (zone)
+        {
+            case CardZone.Deck:
+                return player.Deck;
+            case CardZone.Hand:
+                return player.Hand;
+            case CardZone.Discard:
+                return player.Discard;
+            case CardZone.InPlay:
+                return player.InPlay;
+            default:
+                return null;
+        }
+    }
+
     public static bool MoveCard(List<int> source, List<int> destination, int instanceId)
     {
         if (source == null || destination == null || instanceId <= 0)
@@ -22,6 +55,18 @@ public static class CardZoneRules
         source.RemoveAt(index);
         destination.Add(instanceId);
         return true;
+    }
+
+    public static bool MoveCard(
+        PlayerStateSnapshot player,
+        CardZone source,
+        CardZone destination,
+        int instanceId)
+    {
+        return MoveCard(
+            ResolveZone(player, source),
+            ResolveZone(player, destination),
+            instanceId);
     }
 
     /// <summary>
@@ -48,6 +93,18 @@ public static class CardZoneRules
 
         source.Clear();
         return true;
+    }
+
+    public static bool MoveAll(
+        PlayerStateSnapshot player,
+        CardZone source,
+        CardZone destination,
+        bool reverseOrder = false)
+    {
+        return MoveAll(
+            ResolveZone(player, source),
+            ResolveZone(player, destination),
+            reverseOrder);
     }
 
     public static bool Shuffle(List<int> cards, System.Random random)
