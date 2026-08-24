@@ -9,7 +9,7 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class CardSelectionHalo : MonoBehaviour
 {
-    private static readonly Color DefaultColor = new Color(0.32f, 0.76f, 1f, 1f);
+    private static readonly Color DefaultColor = new Color(1.0f, 0.843f, 0.0f, 1.0f);
     private readonly List<Image> _segments = new List<Image>();
     private bool _built;
 
