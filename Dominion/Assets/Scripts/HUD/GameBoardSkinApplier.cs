@@ -42,22 +42,25 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             return;
         }
 
-        ApplyImage("Background", _background, Image.Type.Simple);
+        ApplyImage("Background", _background, Image.Type.Simple, Color.white);
 
-        // Primary focus areas deliberately share the richer visual language.
-        ApplyImage("LocalHand", _handPanel, Image.Type.Sliced);
-        ApplyImage("StatusPanel", _turnPanel, Image.Type.Sliced);
+        // Primary focus areas: strongest contrast and full opacity.
+        ApplyImage("LocalHand", _handPanel, Image.Type.Sliced, Color.white);
+        ApplyImage("StatusPanel", _turnPanel, Image.Type.Sliced, Color.white);
 
-        // Secondary information areas use the quieter common board frame.
-        ApplyImage("SupplyPanel", _secondaryPanel, Image.Type.Sliced);
-        ApplyImage("InPlayPanel", _secondaryPanel, Image.Type.Sliced);
-        ApplyImage("JournalPanel", _secondaryPanel, Image.Type.Sliced);
+        // Secondary information areas deliberately sit one visual level lower.
+        Color secondaryTint = new Color(0.90f, 0.88f, 0.84f, 0.94f);
+        ApplyImage("SupplyPanel", _secondaryPanel, Image.Type.Sliced, secondaryTint);
+        ApplyImage("InPlayPanel", _secondaryPanel, Image.Type.Sliced, secondaryTint);
+        ApplyImage("JournalPanel", _secondaryPanel, Image.Type.Sliced, secondaryTint);
 
-        // Legacy prototype content backgrounds must not sit on top of the new frame.
+        // Legacy prototype fills must not sit on top of the new skin.
         MakeContentRootTransparent("InPlayPanel", "Cards");
 
+        StyleTopBar();
         ApplyTitlePlates();
         ApplyButtons();
+        StyleDeckAndDiscardTiles();
         ApplyTopBarSeparator();
 
         _applied = true;
@@ -79,7 +82,6 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
 
         _background = CreateWholeSprite(backgroundTexture, Vector4.zero);
 
-        // Source rectangles use top-left image-editor coordinates.
         _secondaryPanel = CreateCroppedSprite(
             boardTexture,
             new RectInt(6, 348, 1431, 367),
@@ -100,7 +102,6 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             new RectInt(71, 131, 1907, 360),
             new Vector4(150f, 48f, 150f, 48f));
 
-        // buttons.png contains three vertically stacked states: Normal, Hover, Pressed.
         _buttonNormal = CreateCroppedSprite(
             buttonTexture,
             new RectInt(94, 58, 1349, 271),
@@ -173,7 +174,7 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             Mathf.Clamp(border.w, 0f, maxVertical));
     }
 
-    private void ApplyImage(string objectName, Sprite sprite, Image.Type type)
+    private void ApplyImage(string objectName, Sprite sprite, Image.Type type, Color tint)
     {
         if (sprite == null)
             return;
@@ -188,24 +189,18 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
 
         image.sprite = sprite;
         image.type = type;
-        image.color = Color.white;
+        image.color = tint;
         image.preserveAspect = false;
         image.raycastTarget = false;
     }
 
-    /// <summary>
-    /// Removes only the obsolete visual fill from a named content root. The RectTransform,
-    /// layout and children remain intact, so gameplay presentation is unaffected.
-    /// </summary>
     private void MakeContentRootTransparent(string panelName, string contentName)
     {
         Transform panel = FindDeepChild(transform, panelName);
         if (panel == null)
             return;
 
-        Transform content = FindDirectChild(panel, contentName);
-        if (content == null)
-            content = FindDeepChild(panel, contentName);
+        Transform content = FindDirectChild(panel, contentName) ?? FindDeepChild(panel, contentName);
         if (content == null)
             return;
 
@@ -217,6 +212,26 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         color.a = 0f;
         image.color = color;
         image.raycastTarget = false;
+    }
+
+    /// <summary>
+    /// Removes the prototype-black TopBar while keeping its exact layout and children.
+    /// The wood background remains visible through a subtle warm translucent strip.
+    /// </summary>
+    private void StyleTopBar()
+    {
+        Transform topBar = FindDeepChild(transform, "TopBar");
+        if (topBar == null)
+            return;
+
+        Image image = topBar.GetComponent<Image>();
+        if (image != null)
+        {
+            image.sprite = null;
+            image.type = Image.Type.Simple;
+            image.color = new Color(0.10f, 0.065f, 0.035f, 0.68f);
+            image.raycastTarget = false;
+        }
     }
 
     private void ApplyButtons()
@@ -248,6 +263,46 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// The deck/discard counters are not Buttons, so they escaped the regular button skin
+    /// and remained black prototype rectangles. Detect their labels and skin the nearest
+    /// Image-bearing parent with the quieter Normal button sprite.
+    /// </summary>
+    private void StyleDeckAndDiscardTiles()
+    {
+        Text[] labels = GetComponentsInChildren<Text>(true);
+        foreach (Text label in labels)
+        {
+            if (label == null || string.IsNullOrWhiteSpace(label.text))
+                continue;
+
+            string value = label.text.Trim().ToUpperInvariant();
+            if (!value.StartsWith("PIOCHE", StringComparison.Ordinal) &&
+                !value.StartsWith("DÉFAUSSE", StringComparison.Ordinal) &&
+                !value.StartsWith("DEFAUSSE", StringComparison.Ordinal))
+                continue;
+
+            Transform current = label.transform.parent;
+            Image tileImage = null;
+            for (int depth = 0; depth < 3 && current != null; depth++, current = current.parent)
+            {
+                tileImage = current.GetComponent<Image>();
+                if (tileImage != null)
+                    break;
+            }
+
+            if (tileImage == null)
+                continue;
+
+            tileImage.sprite = _buttonNormal;
+            tileImage.type = Image.Type.Sliced;
+            tileImage.color = new Color(0.80f, 0.72f, 0.58f, 0.96f);
+            tileImage.raycastTarget = false;
+
+            label.color = new Color(0.98f, 0.94f, 0.84f, 1f);
+        }
+    }
+
     private void ApplyTitlePlates()
     {
         Text[] labels = GetComponentsInChildren<Text>(true);
@@ -256,8 +311,10 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             if (label == null || !ShouldDecorateTitle(label.text))
                 continue;
 
+            NudgeTitleInward(label);
             EnsureCompactTitlePlateBehind(label);
             label.color = new Color(0.98f, 0.93f, 0.80f, 1f);
+            label.fontStyle = FontStyle.Bold;
         }
     }
 
@@ -272,10 +329,19 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
     }
 
     /// <summary>
-    /// Title labels in the editable prefab often use stretched RectTransforms. Copying those
-    /// anchors made the decorative plaque span an entire panel. The plaque now gets a fixed,
-    /// text-driven size and is positioned according to the label alignment instead.
+    /// Existing title labels sit directly on the outer frame edge. Move them a few pixels
+    /// into the content area while preserving their anchors and controller references.
     /// </summary>
+    private static void NudgeTitleInward(Text label)
+    {
+        RectTransform rect = label.rectTransform;
+        if (rect == null || rect.gameObject.GetComponent<TitleSkinAdjustedMarker>() != null)
+            return;
+
+        rect.anchoredPosition += new Vector2(8f, -8f);
+        rect.gameObject.AddComponent<TitleSkinAdjustedMarker>();
+    }
+
     private void EnsureCompactTitlePlateBehind(Text label)
     {
         RectTransform labelRect = label.rectTransform;
@@ -310,10 +376,9 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             return;
 
         float preferredWidth = Mathf.Max(1f, label.preferredWidth);
-        float plateWidth = Mathf.Clamp(preferredWidth + 52f, 132f, 300f);
-        float plateHeight = Mathf.Clamp(Mathf.Max(label.preferredHeight + 18f, 38f), 38f, 54f);
+        float plateWidth = Mathf.Clamp(preferredWidth + 38f, 118f, 285f);
+        float plateHeight = Mathf.Clamp(Mathf.Max(label.preferredHeight + 12f, 32f), 32f, 46f);
 
-        // Use the centre of the label's anchor region as a stable non-stretched anchor.
         Vector2 anchor = (labelRect.anchorMin + labelRect.anchorMax) * 0.5f;
         plateRect.anchorMin = anchor;
         plateRect.anchorMax = anchor;
@@ -339,14 +404,13 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
                 break;
         }
 
-        // Account for labels whose pivot is not centred.
         position.x += (0.5f - labelRect.pivot.x) * labelRect.rect.width;
         position.y += (0.5f - labelRect.pivot.y) * labelRect.rect.height;
         plateRect.anchoredPosition = position;
 
         plateImage.sprite = _titlePlate;
         plateImage.type = Image.Type.Sliced;
-        plateImage.color = Color.white;
+        plateImage.color = new Color(0.90f, 0.82f, 0.67f, 0.94f);
         plateImage.raycastTarget = false;
     }
 
@@ -384,14 +448,14 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         if (rect == null || image == null)
             return;
 
-        rect.anchorMin = new Vector2(0.015f, 0f);
-        rect.anchorMax = new Vector2(0.985f, 0.10f);
+        rect.anchorMin = new Vector2(0.02f, 0f);
+        rect.anchorMax = new Vector2(0.98f, 0.075f);
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
 
         image.sprite = _separator;
         image.type = Image.Type.Sliced;
-        image.color = Color.white;
+        image.color = new Color(0.82f, 0.70f, 0.48f, 0.82f);
         image.raycastTarget = false;
     }
 
@@ -427,5 +491,13 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Marker only: prevents the runtime skin from nudging title labels more than once if
+    /// Apply is called manually after Start. It carries no state and no gameplay behaviour.
+    /// </summary>
+    private sealed class TitleSkinAdjustedMarker : MonoBehaviour
+    {
     }
 }
