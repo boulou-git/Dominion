@@ -63,9 +63,8 @@ public sealed class GameEventSnapshot
 }
 
 /// <summary>
-/// Durable decision placeholder. A concrete choose/discard/trash operation will populate
-/// these fields and its operation-specific payload before returning WaitingForChoice.
-/// Keeping the generic identity/cursor data here avoids UI- or Photon-owned decision state.
+/// Durable decision placeholder. A concrete choose/discard/trash operation populates this
+/// before returning WaitingForChoice. No decision state belongs to UI or Photon.
 /// </summary>
 [Serializable]
 public sealed class PendingDecisionSnapshot
@@ -115,6 +114,7 @@ public sealed class ResolutionQueue
     private readonly ResolutionQueueSnapshot _snapshot;
 
     public GameEventBus Events { get; }
+    public PendingDecisionSnapshot PendingDecision => _snapshot.PendingDecision;
     public bool IsWaitingForDecision =>
         _snapshot.PendingDecision != null && _snapshot.PendingDecision.IsPending;
 
@@ -182,6 +182,67 @@ public sealed class ResolutionQueue
         }
 
         queue = new ResolutionQueue(state.Resolution);
+        return true;
+    }
+
+    public bool TrySuspendForDecision(
+        string playerId,
+        string operation,
+        string prompt,
+        int sourceCardInstanceId,
+        int minSelections,
+        int maxSelections,
+        IEnumerable<int> candidateInstanceIds,
+        GameEvent triggerEvent,
+        string timing,
+        int listenerCardInstanceId,
+        int abilityIndex,
+        int effectIndex,
+        out string error)
+    {
+        error = string.Empty;
+
+        if (IsWaitingForDecision)
+        {
+            error = "A decision is already pending for this resolution.";
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(playerId))
+        {
+            error = "Decision player is missing.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(operation))
+        {
+            error = "Decision operation is missing.";
+            return false;
+        }
+
+        if (minSelections < 0 || maxSelections < minSelections)
+        {
+            error = "Decision selection bounds are invalid.";
+            return false;
+        }
+
+        PendingDecisionSnapshot decision = _snapshot.PendingDecision;
+        decision.Clear();
+        decision.IsPending = true;
+        decision.DecisionId = Guid.NewGuid().ToString("N");
+        decision.PlayerId = playerId;
+        decision.Operation = operation;
+        decision.Prompt = prompt ?? string.Empty;
+        decision.SourceCardInstanceId = sourceCardInstanceId;
+        decision.MinSelections = minSelections;
+        decision.MaxSelections = maxSelections;
+        if (candidateInstanceIds != null)
+            decision.CandidateInstanceIds.AddRange(candidateInstanceIds);
+        decision.TriggerEventType = triggerEvent != null ? triggerEvent.Type.ToString() : string.Empty;
+        decision.Timing = timing ?? string.Empty;
+        decision.ListenerCardInstanceId = listenerCardInstanceId;
+        decision.AbilityIndex = abilityIndex;
+        decision.EffectIndex = effectIndex;
         return true;
     }
 
