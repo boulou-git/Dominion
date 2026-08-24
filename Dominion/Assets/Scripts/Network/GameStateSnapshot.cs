@@ -40,12 +40,35 @@ public class GameStateSnapshot
     // DefinitionId uses qualified refs such as "base:cuivre".
     public List<SupplyPileSnapshot> SupplyPiles = new List<SupplyPileSnapshot>();
 
+    // Durable bookkeeping for declarative abilities limited to one resolution per turn.
+    // Keeping this in authoritative state makes the limit survive replication/reconnects.
+    public List<AbilityUsageSnapshot> AbilityUsages = new List<AbilityUsageSnapshot>();
+
     // Durable in-progress rules resolution. Usually inactive/empty between commands, but
     // survives room replication when an effect must pause for a player's decision.
     public ResolutionQueueSnapshot Resolution = new ResolutionQueueSnapshot();
 
     // Player order is fixed once the match starts.
     public List<PlayerStateSnapshot> Players = new List<PlayerStateSnapshot>();
+}
+
+[Serializable]
+public class AbilityUsageSnapshot
+{
+    public int CardInstanceId;
+    public int AbilityIndex;
+    public int TurnNumber;
+
+    public AbilityUsageSnapshot()
+    {
+    }
+
+    public AbilityUsageSnapshot(int cardInstanceId, int abilityIndex, int turnNumber)
+    {
+        CardInstanceId = cardInstanceId;
+        AbilityIndex = abilityIndex;
+        TurnNumber = turnNumber;
+    }
 }
 
 [Serializable]
