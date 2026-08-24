@@ -34,6 +34,7 @@ public sealed class CardAbilityData
     public string when;
     public string scope;
     public CardTriggerFilterData filter;
+    public bool oncePerTurn;
     public List<CardEffectData> effects = new List<CardEffectData>();
 }
 
