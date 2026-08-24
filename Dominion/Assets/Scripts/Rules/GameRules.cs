@@ -167,8 +167,6 @@ public static class GameRules
         if (player == null)
             return GameRuleResult.Rejected("Decision player was not found.", resolution.Events.SnapshotHistory());
 
-        // Candidate ids are snapshotted when the decision is created. No other gameplay
-        // command may execute during an active resolution, but still validate zone ownership.
         foreach (int instanceId in resolution.SelectedInstanceIds)
         {
             if (player.Hand == null || !player.Hand.Contains(instanceId))
@@ -201,14 +199,14 @@ public static class GameRules
         consumesAction = false;
         if (string.Equals(state.Phase, ActionPhase, StringComparison.Ordinal))
         {
-            if (!HasType(definition, "Action")) return "Only Action cards can be played during the Action phase.";
+            if (!CardDefinitionRules.HasType(definition, "Action")) return "Only Action cards can be played during the Action phase.";
             if (player.Actions <= 0) return "No Actions remain.";
             consumesAction = true;
             return string.Empty;
         }
         if (string.Equals(state.Phase, BuyPhase, StringComparison.Ordinal))
         {
-            if (!HasType(definition, "Trésor")) return "Only Treasure cards can be played during the Buy phase.";
+            if (!CardDefinitionRules.HasType(definition, "Trésor")) return "Only Treasure cards can be played during the Buy phase.";
             return string.Empty;
         }
         return "Cards cannot be played during phase: " + (state.Phase ?? string.Empty);
@@ -221,16 +219,8 @@ public static class GameRules
         {
             CardInstance instance = FindCardInstance(state, instanceId);
             if (instance == null) continue;
-            if (HasType(resolveCardDefinition(instance.DefinitionId), type)) return true;
+            if (CardDefinitionRules.HasType(resolveCardDefinition(instance.DefinitionId), type)) return true;
         }
-        return false;
-    }
-
-    private static bool HasType(ExtensionCardData definition, string type)
-    {
-        if (definition == null || definition.types == null || string.IsNullOrEmpty(type)) return false;
-        for (int i = 0; i < definition.types.Count; i++)
-            if (string.Equals(definition.types[i], type, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
 
