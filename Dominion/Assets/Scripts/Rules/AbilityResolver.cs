@@ -1,25 +1,15 @@
 using System;
 using System.Collections.Generic;
 
-/// <summary>
-/// Result of resolving abilities for one timing point on a card.
-/// The resolver deliberately propagates WaitingForChoice immediately so a future
-/// resolution queue can persist its cursor and resume from the exact next effect.
-/// </summary>
 public readonly struct AbilityResolutionResult
 {
     public EffectResolutionStatus Status { get; }
     public int AbilitiesMatched { get; }
     public int EffectsResolved { get; }
     public string Error { get; }
-
     public bool Succeeded => Status == EffectResolutionStatus.Applied;
 
-    private AbilityResolutionResult(
-        EffectResolutionStatus status,
-        int abilitiesMatched,
-        int effectsResolved,
-        string error)
+    private AbilityResolutionResult(EffectResolutionStatus status, int abilitiesMatched, int effectsResolved, string error)
     {
         Status = status;
         AbilitiesMatched = abilitiesMatched;
@@ -27,42 +17,19 @@ public readonly struct AbilityResolutionResult
         Error = error ?? string.Empty;
     }
 
-    public static AbilityResolutionResult Applied(int abilitiesMatched, int effectsResolved)
-    {
-        return new AbilityResolutionResult(
-            EffectResolutionStatus.Applied,
-            abilitiesMatched,
-            effectsResolved,
-            string.Empty);
-    }
+    public static AbilityResolutionResult Applied(int abilitiesMatched, int effectsResolved) =>
+        new AbilityResolutionResult(EffectResolutionStatus.Applied, abilitiesMatched, effectsResolved, string.Empty);
 
-    public static AbilityResolutionResult WaitingForChoice(int abilitiesMatched, int effectsResolved)
-    {
-        return new AbilityResolutionResult(
-            EffectResolutionStatus.WaitingForChoice,
-            abilitiesMatched,
-            effectsResolved,
-            string.Empty);
-    }
+    public static AbilityResolutionResult WaitingForChoice(int abilitiesMatched, int effectsResolved) =>
+        new AbilityResolutionResult(EffectResolutionStatus.WaitingForChoice, abilitiesMatched, effectsResolved, string.Empty);
 
-    public static AbilityResolutionResult Rejected(
-        int abilitiesMatched,
-        int effectsResolved,
-        string error)
-    {
-        return new AbilityResolutionResult(
-            EffectResolutionStatus.Rejected,
-            abilitiesMatched,
-            effectsResolved,
-            error);
-    }
+    public static AbilityResolutionResult Rejected(int abilitiesMatched, int effectsResolved, string error) =>
+        new AbilityResolutionResult(EffectResolutionStatus.Rejected, abilitiesMatched, effectsResolved, error);
 }
 
 /// <summary>
-/// Resolves a card's declarative abilities at a named timing point.
-/// It only orchestrates order; the meaning of each operation remains owned by EffectResolver.
-/// A caller may provide an ability predicate so TriggerResolver can select only abilities
-/// whose scope/filter match the current GameEvent without duplicating effect execution logic.
+/// Executes declarative abilities in deterministic list order. The optional cursor lets a
+/// suspended ResolutionQueue resume after the exact effect that requested a player decision.
 /// </summary>
 public static class AbilityResolver
 {
@@ -72,12 +39,21 @@ public static class AbilityResolver
         EffectExecutionContext context,
         Func<CardAbilityData, bool> abilityPredicate = null)
     {
+        return ResolveTimingFromCursor(card, timing, context, abilityPredicate, 0, 0);
+    }
+
+    public static AbilityResolutionResult ResolveTimingFromCursor(
+        ExtensionCardData card,
+        string timing,
+        EffectExecutionContext context,
+        Func<CardAbilityData, bool> abilityPredicate,
+        int startAbilityIndex,
+        int startEffectIndex)
+    {
         if (card == null)
             return AbilityResolutionResult.Rejected(0, 0, "Card definition is null.");
-
         if (string.IsNullOrWhiteSpace(timing))
             return AbilityResolutionResult.Rejected(0, 0, "Ability timing is missing.");
-
         if (context == null || context.State == null || context.Actor == null)
             return AbilityResolutionResult.Rejected(0, 0, "Effect execution context is incomplete.");
 
@@ -85,10 +61,12 @@ public static class AbilityResolver
         if (abilities == null || abilities.Count == 0)
             return AbilityResolutionResult.Applied(0, 0);
 
+        startAbilityIndex = Math.Max(0, startAbilityIndex);
+        startEffectIndex = Math.Max(0, startEffectIndex);
         int matched = 0;
         int resolved = 0;
 
-        for (int abilityIndex = 0; abilityIndex < abilities.Count; abilityIndex++)
+        for (int abilityIndex = startAbilityIndex; abilityIndex < abilities.Count; abilityIndex++)
         {
             CardAbilityData ability = abilities[abilityIndex];
             if (ability == null ||
@@ -97,30 +75,31 @@ public static class AbilityResolver
                 continue;
 
             matched++;
-
             if (ability.effects == null || ability.effects.Count == 0)
                 continue;
 
-            for (int effectIndex = 0; effectIndex < ability.effects.Count; effectIndex++)
+            int firstEffect = abilityIndex == startAbilityIndex ? startEffectIndex : 0;
+            for (int effectIndex = firstEffect; effectIndex < ability.effects.Count; effectIndex++)
             {
                 CardEffectData effect = ability.effects[effectIndex];
                 if (effect == null)
-                {
                     return AbilityResolutionResult.Rejected(
                         matched,
                         resolved,
                         BuildError(card, timing, abilityIndex, effectIndex, "Effect is null."));
-                }
 
-                EffectResolutionResult effectResult = EffectResolver.Resolve(effect, context);
+                EffectExecutionContext effectContext = context.WithCursor(
+                    timing,
+                    context.SourceCardInstanceId,
+                    abilityIndex,
+                    effectIndex);
+                EffectResolutionResult effectResult = EffectResolver.Resolve(effect, effectContext);
 
                 if (effectResult.Status == EffectResolutionStatus.Rejected)
-                {
                     return AbilityResolutionResult.Rejected(
                         matched,
                         resolved,
                         BuildError(card, timing, abilityIndex, effectIndex, effectResult.Error));
-                }
 
                 if (effectResult.Status == EffectResolutionStatus.WaitingForChoice)
                     return AbilityResolutionResult.WaitingForChoice(matched, resolved);
@@ -132,9 +111,7 @@ public static class AbilityResolver
         return AbilityResolutionResult.Applied(matched, resolved);
     }
 
-    public static AbilityResolutionResult ResolvePlay(
-        ExtensionCardData card,
-        EffectExecutionContext context)
+    public static AbilityResolutionResult ResolvePlay(ExtensionCardData card, EffectExecutionContext context)
     {
         return ResolveTiming(card, "play", context);
     }
