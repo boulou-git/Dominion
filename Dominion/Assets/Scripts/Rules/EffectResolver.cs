@@ -88,7 +88,8 @@ public static class EffectResolver
         {
             { "add_resource", ResolveAddResource },
             { "draw", ResolveDraw },
-            { "choose_cards", ResolveChooseCards }
+            { "choose_cards", ResolveChooseCards },
+            { "trash_selected", ResolveTrashSelected }
         };
 
     public static bool IsSupported(string operation)
@@ -181,6 +182,29 @@ public static class EffectResolver
             return EffectResolutionResult.Rejected(error);
 
         return EffectResolutionResult.WaitingForChoice();
+    }
+
+    private static EffectResolutionResult ResolveTrashSelected(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect))
+            return EffectResolutionResult.Rejected("trash_selected currently supports target 'self' only.");
+        if (context.Resolution == null)
+            return EffectResolutionResult.Rejected("trash_selected requires an active ResolutionQueue.");
+
+        List<int> selected = context.Resolution.TakeSelectedInstanceIds();
+        foreach (int instanceId in selected)
+        {
+            if (!TrashRules.TryTrashFromHand(
+                    context.State,
+                    context.Actor,
+                    instanceId,
+                    context.SourceCardInstanceId,
+                    context.EventBus,
+                    out string error))
+                return EffectResolutionResult.Rejected(error);
+        }
+
+        return EffectResolutionResult.Applied();
     }
 
     private static bool TargetsSelf(CardEffectData effect)
