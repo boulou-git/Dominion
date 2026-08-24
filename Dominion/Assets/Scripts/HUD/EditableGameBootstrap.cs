@@ -71,6 +71,11 @@ public static class EditableGameBootstrap
         if (root.GetComponent<BuyPhaseGameplayController>() == null)
             root.AddComponent<BuyPhaseGameplayController>();
 
+        // Generic durable decision presentation. This is attached at runtime so local
+        // GameScreen prefab edits never need to be rebuilt just to support new card choices.
+        if (root.GetComponent<PendingDecisionController>() == null)
+            root.AddComponent<PendingDecisionController>();
+
         ConfigureFixedReserveLayout(root.transform);
     }
 
