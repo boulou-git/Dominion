@@ -111,9 +111,9 @@
       "abilities": [ { "when": "play", "effects": [
         { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "cardType": "Trésor", "prompt": "Vous pouvez écarter une carte Trésor de votre main." },
         { "op": "remember_selected_card_cost", "target": "self" },
-        { "op": "trash_selected", "target": "self" },
-        { "op": "choose_supply", "target": "self", "min": 0, "max": 1, "cardType": "Trésor", "useLastSelectionCost": true, "costOffset": 3, "prompt": "Recevez dans votre main une carte Trésor coûtant jusqu’à 3 🪙 de plus que la carte écartée." },
-        { "op": "gain_selected_supply", "target": "self", "destinationZone": "hand" }
+        { "op": "trash_selected", "target": "self", "requiresLastSelection": true },
+        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "cardType": "Trésor", "useLastSelectionCost": true, "costOffset": 3, "requiresLastSelection": true, "allowNoEligible": true, "prompt": "Recevez dans votre main une carte Trésor coûtant jusqu’à 3 🪙 de plus que la carte écartée." },
+        { "op": "gain_selected_supply", "target": "self", "destinationZone": "hand", "requiresLastSelection": true }
       ] } ]
     },
     { "id": "soldat", "name": "Soldat", "cost": 5, "types": ["Action"], "image": "soldat.png", "text": "+1 Carte\n+1 Action\n\nRegardez les 2 premières cartes de votre pioche.\n\nÉcartez et/ou défaussez autant de ces cartes que vous le souhaitez. Replacez les autres sur votre pioche dans l’ordre de votre choix." },
