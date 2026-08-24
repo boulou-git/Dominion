@@ -16,162 +16,95 @@ public enum CardZone
 
 /// <summary>
 /// Pure helpers for manipulating Dominion card zones.
-///
-/// A deck's top card is the last item in its list. These helpers deliberately know
-/// nothing about Photon, UI or card definitions, so setup, cleanup and card effects
-/// all share exactly the same movement/shuffle semantics.
+/// A deck's top card is the last item in its list.
 /// </summary>
 public static class CardZoneRules
 {
+    public static bool TryParseZone(string value, out CardZone zone)
+    {
+        zone = CardZone.None;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        string normalized = value.Trim().Replace("_", string.Empty).Replace("-", string.Empty);
+        if (string.Equals(normalized, "deck", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.Deck; return true; }
+        if (string.Equals(normalized, "hand", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.Hand; return true; }
+        if (string.Equals(normalized, "discard", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.Discard; return true; }
+        if (string.Equals(normalized, "inplay", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.InPlay; return true; }
+        return false;
+    }
+
     public static List<int> ResolveZone(PlayerStateSnapshot player, CardZone zone)
     {
-        if (player == null)
-            return null;
-
+        if (player == null) return null;
         switch (zone)
         {
-            case CardZone.Deck:
-                return player.Deck;
-            case CardZone.Hand:
-                return player.Hand;
-            case CardZone.Discard:
-                return player.Discard;
-            case CardZone.InPlay:
-                return player.InPlay;
-            default:
-                return null;
+            case CardZone.Deck: return player.Deck;
+            case CardZone.Hand: return player.Hand;
+            case CardZone.Discard: return player.Discard;
+            case CardZone.InPlay: return player.InPlay;
+            default: return null;
         }
     }
 
     public static bool MoveCard(List<int> source, List<int> destination, int instanceId)
     {
-        if (source == null || destination == null || instanceId <= 0)
-            return false;
-
+        if (source == null || destination == null || instanceId <= 0) return false;
         int index = source.IndexOf(instanceId);
-        if (index < 0)
-            return false;
-
+        if (index < 0) return false;
         source.RemoveAt(index);
         destination.Add(instanceId);
         return true;
     }
 
-    public static bool MoveCard(
-        PlayerStateSnapshot player,
-        CardZone source,
-        CardZone destination,
-        int instanceId)
+    public static bool MoveCard(PlayerStateSnapshot player, CardZone source, CardZone destination, int instanceId)
     {
-        return MoveCard(
-            ResolveZone(player, source),
-            ResolveZone(player, destination),
-            instanceId);
+        return MoveCard(ResolveZone(player, source), ResolveZone(player, destination), instanceId);
     }
 
-    /// <summary>
-    /// Moves every card from source to destination. When reverseOrder is true, cards
-    /// are appended from source right-to-left before source is cleared.
-    /// </summary>
     public static bool MoveAll(List<int> source, List<int> destination, bool reverseOrder = false)
     {
-        if (source == null || destination == null)
-            return false;
-
-        if (ReferenceEquals(source, destination))
-            return false;
-
+        if (source == null || destination == null || ReferenceEquals(source, destination)) return false;
         if (reverseOrder)
         {
-            for (int i = source.Count - 1; i >= 0; i--)
-                destination.Add(source[i]);
+            for (int i = source.Count - 1; i >= 0; i--) destination.Add(source[i]);
         }
-        else
-        {
-            destination.AddRange(source);
-        }
-
+        else destination.AddRange(source);
         source.Clear();
         return true;
     }
 
-    public static bool MoveAll(
-        PlayerStateSnapshot player,
-        CardZone source,
-        CardZone destination,
-        bool reverseOrder = false)
+    public static bool MoveAll(PlayerStateSnapshot player, CardZone source, CardZone destination, bool reverseOrder = false)
     {
-        return MoveAll(
-            ResolveZone(player, source),
-            ResolveZone(player, destination),
-            reverseOrder);
+        return MoveAll(ResolveZone(player, source), ResolveZone(player, destination), reverseOrder);
     }
 
     public static bool Shuffle(List<int> cards, System.Random random)
     {
-        if (cards == null || random == null)
-            return false;
-
+        if (cards == null || random == null) return false;
         for (int i = cards.Count - 1; i > 0; i--)
         {
             int j = random.Next(i + 1);
-            int temp = cards[i];
-            cards[i] = cards[j];
-            cards[j] = temp;
+            int temp = cards[i]; cards[i] = cards[j]; cards[j] = temp;
         }
-
         return true;
     }
 
-    /// <summary>
-    /// Draws up to count cards. If the deck empties, the discard pile is moved into
-    /// the deck and shuffled before drawing continues. Running out of all cards is a
-    /// normal successful short draw; malformed zones or missing required randomness reject.
-    /// </summary>
-    public static bool DrawCards(
-        PlayerStateSnapshot player,
-        int count,
-        System.Random random,
-        out string error)
+    public static bool DrawCards(PlayerStateSnapshot player, int count, System.Random random, out string error)
     {
         error = string.Empty;
-
-        if (player == null)
-        {
-            error = "Player is null.";
-            return false;
-        }
-
-        if (count < 0)
-        {
-            error = "Draw count cannot be negative.";
-            return false;
-        }
-
+        if (player == null) { error = "Player is null."; return false; }
+        if (count < 0) { error = "Draw count cannot be negative."; return false; }
         if (player.Deck == null || player.Hand == null || player.Discard == null)
-        {
-            error = "Draw requires deck, hand and discard zones.";
-            return false;
-        }
+        { error = "Draw requires deck, hand and discard zones."; return false; }
 
         for (int i = 0; i < count; i++)
         {
             if (player.Deck.Count == 0)
             {
-                if (player.Discard.Count == 0)
-                    break;
-
+                if (player.Discard.Count == 0) break;
                 if (random == null)
-                {
-                    error = "Draw requires an injected random source when the discard pile must be shuffled.";
-                    return false;
-                }
-
+                { error = "Draw requires an injected random source when the discard pile must be shuffled."; return false; }
                 if (!MoveAll(player.Discard, player.Deck) || !Shuffle(player.Deck, random))
-                {
-                    error = "Could not reshuffle the discard pile into the deck.";
-                    return false;
-                }
+                { error = "Could not reshuffle the discard pile into the deck."; return false; }
             }
 
             int topIndex = player.Deck.Count - 1;
@@ -179,7 +112,6 @@ public static class CardZoneRules
             player.Deck.RemoveAt(topIndex);
             player.Hand.Add(instanceId);
         }
-
         return true;
     }
 }
