@@ -47,8 +47,8 @@ public sealed class GameRuleResult
 /// Deterministic Dominion rules that know nothing about Photon, scenes or UI.
 /// The caller owns cloning/committing the GameStateSnapshot and injects card lookup/randomness.
 ///
-/// Commands mutate a working copy, publish semantic GameEvents, then let TriggerResolver
-/// resolve declarative abilities from those events before a successful result is returned.
+/// Commands mutate a working copy, publish semantic GameEvents into the state's durable
+/// ResolutionQueue, then let TriggerResolver resolve those events before returning.
 /// </summary>
 public static class GameRules
 {
@@ -93,22 +93,24 @@ public static class GameRules
         if (!string.IsNullOrEmpty(policyError))
             return GameRuleResult.Rejected(policyError);
 
+        if (!ResolutionQueue.TryBegin(state, playerId, out ResolutionQueue resolution, out string resolutionError))
+            return GameRuleResult.Rejected(resolutionError);
+
         if (!CardZoneRules.MoveCard(player, CardZone.Hand, CardZone.InPlay, instanceId))
             return GameRuleResult.Rejected("Could not move the card from hand to in-play.");
 
         if (consumesAction)
             player.Actions--;
 
-        GameEventBus eventBus = new GameEventBus();
-        eventBus.Publish(GameEvent.CardPlayed(playerId, instanceId, instance.DefinitionId));
+        resolution.Events.Publish(GameEvent.CardPlayed(playerId, instanceId, instance.DefinitionId));
 
         TriggerResolutionResult triggerResult = TriggerResolver.ResolvePending(
-            eventBus,
+            resolution.Events,
             state,
             resolveCardDefinition,
             random);
 
-        List<GameEvent> events = eventBus.SnapshotHistory();
+        List<GameEvent> events = resolution.Events.SnapshotHistory();
         if (triggerResult.Status == EffectResolutionStatus.Rejected)
         {
             return GameRuleResult.Rejected(
@@ -117,7 +119,16 @@ public static class GameRules
         }
 
         if (triggerResult.Status == EffectResolutionStatus.WaitingForChoice)
+        {
+            if (!resolution.IsWaitingForDecision)
+            {
+                return GameRuleResult.Rejected(
+                    "A trigger reported WaitingForChoice without creating a durable PendingDecision.",
+                    events);
+            }
+
             return GameRuleResult.WaitingForChoice(events);
+        }
 
         // During the current migration every playable card must still declare at least
         // one concrete play effect. This keeps the pre-event behaviour unchanged.
@@ -128,6 +139,7 @@ public static class GameRules
                 events);
         }
 
+        resolution.CompleteIfIdle();
         return GameRuleResult.Applied(events);
     }
 
@@ -168,32 +180,44 @@ public static class GameRules
         if (definition.cost > player.Coins)
             return GameRuleResult.Rejected("Not enough Coins to buy card: " + definitionId);
 
+        if (!ResolutionQueue.TryBegin(state, playerId, out ResolutionQueue resolution, out string resolutionError))
+            return GameRuleResult.Rejected(resolutionError);
+
         player.Coins -= definition.cost;
         player.Buys--;
 
-        GameEventBus eventBus = new GameEventBus();
         if (!GainRules.TryGainFromSupply(
                 state,
                 player,
                 definitionId,
                 CardZone.Discard,
                 0,
-                eventBus,
+                resolution.Events,
                 out _,
                 out string gainError))
-            return GameRuleResult.Rejected(gainError, eventBus.SnapshotHistory());
+            return GameRuleResult.Rejected(gainError, resolution.Events.SnapshotHistory());
 
         TriggerResolutionResult triggerResult = TriggerResolver.ResolvePending(
-            eventBus,
+            resolution.Events,
             state,
             resolveCardDefinition,
             random);
 
-        List<GameEvent> events = eventBus.SnapshotHistory();
+        List<GameEvent> events = resolution.Events.SnapshotHistory();
         if (triggerResult.Status == EffectResolutionStatus.Rejected)
             return GameRuleResult.Rejected(triggerResult.Error, events);
+
         if (triggerResult.Status == EffectResolutionStatus.WaitingForChoice)
+        {
+            if (!resolution.IsWaitingForDecision)
+            {
+                return GameRuleResult.Rejected(
+                    "A trigger reported WaitingForChoice without creating a durable PendingDecision.",
+                    events);
+            }
+
             return GameRuleResult.WaitingForChoice(events);
+        }
 
         // Keep Cleanup as a short visible/interactable stage so the UI can animate the
         // hand and in-play cards before the authoritative cleanup/draw is committed.
@@ -201,6 +225,7 @@ public static class GameRules
             (player.Coins <= 0 && !HandContainsType(state, player, resolveCardDefinition, "Trésor")))
             state.Phase = CleanupPhase;
 
+        resolution.CompleteIfIdle();
         return GameRuleResult.Applied(events);
     }
 
