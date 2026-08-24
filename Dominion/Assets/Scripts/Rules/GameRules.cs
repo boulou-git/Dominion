@@ -134,13 +134,14 @@ public static class GameRules
     /// <summary>
     /// Pays one Buy and the card cost, delegates the gain to GainRules, then resolves the
     /// resulting CardGained/PileEmptied event chain before deciding whether cleanup starts.
+    /// Random remains injectable for deterministic tests and future gain triggers that draw.
     /// </summary>
     public static GameRuleResult TryBuyCard(
         GameStateSnapshot state,
         string playerId,
         string definitionId,
         Func<string, ExtensionCardData> resolveCardDefinition,
-        System.Random random)
+        System.Random random = null)
     {
         if (state == null)
             return GameRuleResult.Rejected("Game state is null.");
