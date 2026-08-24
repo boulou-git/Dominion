@@ -55,7 +55,7 @@ public static class EffectResolver
         { "trash_selected", ResolveTrashSelected }, { "discard_selected", ResolveDiscardSelected },
         { "discard_others_down_to", ResolveDiscardOthersDownTo },
         { "move_selected", ResolveMoveSelected }, { "choose_supply", ResolveChooseSupply },
-        { "gain_selected_supply", ResolveGainSelectedSupply }
+        { "gain_card", ResolveGainCard }, { "gain_selected_supply", ResolveGainSelectedSupply }
     };
 
     public static bool IsSupported(string operation) => !string.IsNullOrWhiteSpace(operation) && Handlers.ContainsKey(operation);
@@ -310,6 +310,46 @@ public static class EffectResolver
         foreach (int instanceId in selected)
             if (!CardZoneRules.MoveCard(context.Actor, source, destination, instanceId))
                 return EffectResolutionResult.Rejected("Selected card could not be moved from " + source + " to " + destination + ".");
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult ResolveGainCard(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect) && !TargetsOthers(effect))
+            return EffectResolutionResult.Rejected("gain_card supports targets 'self' and 'others'.");
+        if (string.IsNullOrWhiteSpace(effect.cardId))
+            return EffectResolutionResult.Rejected("gain_card requires cardId.");
+        if (effect.amount < 0)
+            return EffectResolutionResult.Rejected("gain_card amount cannot be negative.");
+
+        CardZone destination = CardZone.Discard;
+        if (!string.IsNullOrWhiteSpace(effect.destinationZone) && !CardZoneRules.TryParseZone(effect.destinationZone, out destination))
+            return EffectResolutionResult.Rejected("gain_card destinationZone is invalid.");
+
+        int count = effect.amount > 0 ? effect.amount : 1;
+        List<PlayerStateSnapshot> targets = new List<PlayerStateSnapshot>();
+        if (TargetsSelf(effect)) targets.Add(context.Actor);
+        else if (context.State.Players != null)
+        {
+            foreach (PlayerStateSnapshot player in context.State.Players)
+                if (player != null && !string.Equals(player.PlayerId, context.Actor.PlayerId, StringComparison.Ordinal)) targets.Add(player);
+        }
+
+        foreach (PlayerStateSnapshot target in targets)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                SupplyPileSnapshot pile = context.State.SupplyPiles != null
+                    ? context.State.SupplyPiles.Find(item => item != null && string.Equals(item.DefinitionId, effect.cardId, StringComparison.OrdinalIgnoreCase))
+                    : null;
+                if (pile == null || pile.RemainingCount <= 0) return EffectResolutionResult.Applied();
+
+                if (!GainRules.TryGainFromSupply(context.State, target, effect.cardId, destination, context.SourceCardInstanceId,
+                        context.EventBus, out _, out string error))
+                    return EffectResolutionResult.Rejected(error);
+            }
+        }
+
         return EffectResolutionResult.Applied();
     }
 
