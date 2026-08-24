@@ -172,7 +172,8 @@ public static class NetworkGameState
         }
 
         CreateSupply(state, roomPlayers.Count);
-        CreateStarterDecksAndOpeningHands(state);
+        if (!CreateStarterDecksAndOpeningHands(state))
+            return false;
         UpdatePauseState(state);
 
         PlayerStateSnapshot firstConnectedPlayer = state.Players.Find(player => player.IsConnected);
@@ -366,6 +367,9 @@ public static class NetworkGameState
         return CommitState(next);
     }
 
+    /// <summary>
+    /// Thin network wrapper around the deterministic purchase/gain rules.
+    /// </summary>
     public static bool TryBuyCard(
         string requesterPlayerId,
         string definitionId,
@@ -374,31 +378,25 @@ public static class NetworkGameState
     {
         if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
             return false;
-        if (!string.Equals(_state.Phase, BuyPhase, StringComparison.Ordinal))
-            return false;
 
         GameStateSnapshot next = Clone(_state);
-        PlayerStateSnapshot player = FindPlayer(next, requesterPlayerId);
-        SupplyPileSnapshot pile = FindSupplyPile(next, definitionId);
-        if (player == null || pile == null || pile.RemainingCount <= 0 || player.Buys <= 0)
-            return false;
+        GameRuleResult result = GameRules.TryBuyCard(
+            next,
+            requesterPlayerId,
+            definitionId,
+            ResolveCardDefinition);
 
-        ExtensionPackageData extension;
-        ExtensionCardData definition;
-        if (!RoomGameSetup.TryResolveCard(definitionId, out extension, out definition))
+        if (result.Status == GameRuleStatus.Rejected)
+        {
+            Debug.LogWarning("Rejected BuyCard command: " + result.Error);
             return false;
-        if (definition.cost < 0 || definition.cost > player.Coins)
+        }
+
+        if (result.Status == GameRuleStatus.WaitingForChoice)
+        {
+            Debug.LogWarning("BuyCard cannot wait for a player choice yet.");
             return false;
-
-        pile.RemainingCount--;
-        player.Coins -= definition.cost;
-        player.Buys--;
-        CreateOwnedCardInDiscard(next, player, definitionId);
-
-        // Keep Cleanup as a short visible/interactable stage so the local UI can animate
-        // the hand and played cards into the discard pile before the authoritative draw.
-        if (player.Buys <= 0 || (player.Coins <= 0 && !HandContainsTreasure(next, player)))
-            next.Phase = CleanupPhase;
+        }
 
         return CommitState(next);
     }
@@ -451,10 +449,10 @@ public static class NetworkGameState
         state.SupplyPiles.Add(new SupplyPileSnapshot(definitionId, Math.Max(0, remainingCount)));
     }
 
-    private static void CreateStarterDecksAndOpeningHands(GameStateSnapshot state)
+    private static bool CreateStarterDecksAndOpeningHands(GameStateSnapshot state)
     {
         if (state == null || state.Players == null)
-            return;
+            return false;
 
         System.Random random = NewRandom();
 
@@ -469,28 +467,49 @@ public static class NetworkGameState
             player.InPlay.Clear();
 
             for (int i = 0; i < StartingCopperCount; i++)
-                CreateOwnedCardInDeck(state, player, CopperDefinitionId);
+            {
+                if (!CardInstanceRules.TryCreateOwnedCard(
+                        state,
+                        player,
+                        CopperDefinitionId,
+                        CardZone.Deck,
+                        out _,
+                        out string error))
+                {
+                    Debug.LogError("Could not create starter Copper: " + error);
+                    return false;
+                }
+            }
 
             for (int i = 0; i < StartingEstateCount; i++)
-                CreateOwnedCardInDeck(state, player, EstateDefinitionId);
+            {
+                if (!CardInstanceRules.TryCreateOwnedCard(
+                        state,
+                        player,
+                        EstateDefinitionId,
+                        CardZone.Deck,
+                        out _,
+                        out string error))
+                {
+                    Debug.LogError("Could not create starter Estate: " + error);
+                    return false;
+                }
+            }
 
-            CardZoneRules.Shuffle(player.Deck, random);
-            CardZoneRules.DrawCards(player, StartingHandSize, random, out _);
+            if (!CardZoneRules.Shuffle(player.Deck, random))
+            {
+                Debug.LogError("Could not shuffle starter deck for player " + player.PlayerId + ".");
+                return false;
+            }
+
+            if (!CardZoneRules.DrawCards(player, StartingHandSize, random, out string drawError))
+            {
+                Debug.LogError("Could not draw opening hand: " + drawError);
+                return false;
+            }
         }
-    }
 
-    private static void CreateOwnedCardInDeck(GameStateSnapshot state, PlayerStateSnapshot owner, string definitionId)
-    {
-        int instanceId = state.NextCardInstanceId++;
-        state.CardInstances.Add(new CardInstance(instanceId, definitionId, owner.PlayerId));
-        owner.Deck.Add(instanceId);
-    }
-
-    private static void CreateOwnedCardInDiscard(GameStateSnapshot state, PlayerStateSnapshot owner, string definitionId)
-    {
-        int instanceId = state.NextCardInstanceId++;
-        state.CardInstances.Add(new CardInstance(instanceId, definitionId, owner.PlayerId));
-        owner.Discard.Add(instanceId);
+        return true;
     }
 
     private static bool TryApplyRequestedHandOrder(
@@ -533,11 +552,11 @@ public static class NetworkGameState
         if (current == null)
             return;
 
-        CardZoneRules.MoveAll(current.InPlay, current.Discard);
+        CardZoneRules.MoveAll(current, CardZone.InPlay, CardZone.Discard);
 
         // Hand is stored left-to-right. Moving it in reverse means the visually leftmost
         // card is appended last and therefore remains the visible top discard.
-        CardZoneRules.MoveAll(current.Hand, current.Discard, true);
+        CardZoneRules.MoveAll(current, CardZone.Hand, CardZone.Discard, true);
 
         current.Actions = 1;
         current.Buys = 1;
@@ -579,32 +598,6 @@ public static class NetworkGameState
         return RoomGameSetup.TryResolveCard(definitionId, out extension, out definition)
             ? definition
             : null;
-    }
-
-    private static bool HandContainsTreasure(GameStateSnapshot state, PlayerStateSnapshot player)
-    {
-        if (state == null || player == null || player.Hand == null)
-            return false;
-
-        foreach (int instanceId in player.Hand)
-        {
-            CardInstance instance = FindCardInstance(state, instanceId);
-            if (instance == null)
-                continue;
-
-            ExtensionPackageData extension;
-            ExtensionCardData definition;
-            if (RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition) && IsTreasure(definition))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool IsTreasure(ExtensionCardData definition)
-    {
-        return definition != null && definition.types != null && definition.types.Any(type =>
-            string.Equals(type, "Trésor", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool ValidateActivePlayerCommand(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
