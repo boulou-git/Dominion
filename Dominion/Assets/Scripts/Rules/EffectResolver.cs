@@ -64,6 +64,11 @@ public static class EffectResolver
         if (effect == null) return EffectResolutionResult.Rejected("Effect is null.");
         if (context == null || context.State == null || context.Actor == null) return EffectResolutionResult.Rejected("Effect execution context is incomplete.");
         if (string.IsNullOrWhiteSpace(effect.op)) return EffectResolutionResult.Rejected("Effect operation is missing.");
+        if (effect.requiresLastSelection)
+        {
+            if (context.Resolution == null) return EffectResolutionResult.Rejected("Conditional effect requires an active ResolutionQueue.");
+            if (context.Resolution.LastSelectionCount <= 0) return EffectResolutionResult.Applied();
+        }
         if (!Handlers.TryGetValue(effect.op, out EffectHandler handler)) return EffectResolutionResult.Rejected("Unsupported effect operation: " + effect.op);
         return handler(effect, context);
     }
@@ -212,9 +217,10 @@ public static class EffectResolver
         }
 
         max = Math.Min(max, candidates.Count);
-        if (candidates.Count == 0) return min == 0
-            ? EffectResolutionResult.Applied()
-            : EffectResolutionResult.Rejected("choose_supply has no eligible pile for its required choice.");
+        if (candidates.Count == 0)
+            return (min == 0 || effect.allowNoEligible)
+                ? EffectResolutionResult.Applied()
+                : EffectResolutionResult.Rejected("choose_supply has no eligible pile for its required choice.");
         if (min > candidates.Count) return EffectResolutionResult.Rejected("choose_supply does not have enough eligible piles for its minimum.");
 
         if (!context.Resolution.TrySuspendForSupplyDecision(context.Actor.PlayerId, "choose_supply", effect.prompt,
