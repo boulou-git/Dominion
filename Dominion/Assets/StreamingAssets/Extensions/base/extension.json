@@ -76,7 +76,13 @@
         { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" }
       ] } ]
     },
-    { "id": "bureaucrate", "name": "Bureaucrate", "cost": 4, "types": ["Action", "Attaque"], "image": "bureaucrate.png", "text": "Recevez un Argent et placez-le sur votre pioche.\n\nChaque autre joueur révèle une carte Victoire de sa main et la place sur sa pioche (ou révèle une main ne contenant aucune carte Victoire)." },
+    {
+      "id": "bureaucrate", "name": "Bureaucrate", "cost": 4, "types": ["Action", "Attaque"], "image": "bureaucrate.png", "text": "Recevez un Argent et placez-le sur votre pioche.\n\nChaque autre joueur révèle une carte Victoire de sa main et la place sur sa pioche (ou révèle une main ne contenant aucune carte Victoire).",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "gain_card", "target": "self", "cardId": "base:argent", "amount": 1, "destinationZone": "deck" },
+        { "op": "topdeck_others_card_type", "target": "others", "cardType": "Victoire", "prompt": "Révélez une carte Victoire de votre main et placez-la sur votre pioche." }
+      ] } ]
+    },
     { "id": "jardins", "name": "Jardins", "cost": 4, "types": ["Victoire"], "image": "jardins.png", "text": "Vaut 1 VP par tranche de 10 cartes dans votre deck (arrondi à l’entier inférieur)." },
     {
       "id": "milice", "name": "Milice", "cost": 4, "types": ["Action", "Attaque"], "image": "milice.png", "text": "+2 🪙\n\nChaque autre joueur se défausse jusqu’à n’avoir plus que 3 cartes en main.",
