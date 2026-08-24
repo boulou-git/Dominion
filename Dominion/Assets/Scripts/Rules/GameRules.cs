@@ -114,6 +114,8 @@ public static class GameRules
             return ResolveAttackReactionDecision(state, player, resolution, continuation, resolveCardDefinition, random);
         if (string.Equals(continuation.Operation, "discard_down_to", StringComparison.OrdinalIgnoreCase))
             return ResolveDiscardDownDecision(state, player, resolution, continuation, resolveCardDefinition, random);
+        if (string.Equals(continuation.Operation, "topdeck_card_type", StringComparison.OrdinalIgnoreCase))
+            return ResolveTopdeckCardTypeDecision(state, player, resolution, continuation, resolveCardDefinition, random);
 
         return ResumeDecision(state, resolution, continuation, resolveCardDefinition, random);
     }
@@ -278,6 +280,66 @@ public static class GameRules
         }
 
         return ResumeDecision(state, resolution, continuation, resolveCardDefinition, random);
+    }
+
+    private static GameRuleResult ResolveTopdeckCardTypeDecision(GameStateSnapshot state, PlayerStateSnapshot responder,
+        ResolutionQueue resolution, PendingDecisionSnapshot continuation,
+        Func<string, ExtensionCardData> resolveCardDefinition, System.Random random)
+    {
+        List<int> selected = resolution.TakeSelectedInstanceIds();
+        if (selected.Count != 1)
+            return GameRuleResult.Rejected("Topdeck card-type decision requires exactly one selected card.", resolution.Events.SnapshotHistory());
+        if (!CardZoneRules.MoveCard(responder, CardZone.Hand, CardZone.Deck, selected[0]))
+            return GameRuleResult.Rejected("Selected card could not be moved from hand to deck.", resolution.Events.SnapshotHistory());
+
+        List<string> remaining = continuation.RemainingPlayerIds != null
+            ? new List<string>(continuation.RemainingPlayerIds)
+            : new List<string>();
+        while (remaining.Count > 0)
+        {
+            string nextPlayerId = remaining[0];
+            remaining.RemoveAt(0);
+            PlayerStateSnapshot nextPlayer = FindPlayer(state, nextPlayerId);
+            if (nextPlayer == null) continue;
+
+            List<int> candidates = FindHandCardsByType(state, nextPlayer, continuation.FilterCardType, resolveCardDefinition);
+            if (candidates.Count == 0) continue;
+
+            if (!resolution.TrySuspendForOtherPlayerCardTypeDecision(
+                    nextPlayer.PlayerId,
+                    continuation.Operation,
+                    continuation.Prompt,
+                    continuation.SourceCardInstanceId,
+                    continuation.FilterCardType,
+                    candidates,
+                    remaining,
+                    RestoreTriggerEvent(continuation),
+                    continuation.Timing,
+                    continuation.ListenerCardInstanceId,
+                    continuation.AbilityIndex,
+                    continuation.EffectIndex,
+                    out string suspendError))
+                return GameRuleResult.Rejected(suspendError, resolution.Events.SnapshotHistory());
+
+            return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+        }
+
+        return ResumeDecision(state, resolution, continuation, resolveCardDefinition, random);
+    }
+
+    private static List<int> FindHandCardsByType(GameStateSnapshot state, PlayerStateSnapshot player, string cardType,
+        Func<string, ExtensionCardData> resolveCardDefinition)
+    {
+        List<int> candidates = new List<int>();
+        if (state == null || player == null || player.Hand == null || string.IsNullOrWhiteSpace(cardType) || resolveCardDefinition == null)
+            return candidates;
+        foreach (int instanceId in player.Hand)
+        {
+            CardInstance instance = FindCardInstance(state, instanceId);
+            if (instance != null && CardDefinitionRules.HasType(resolveCardDefinition(instance.DefinitionId), cardType))
+                candidates.Add(instanceId);
+        }
+        return candidates;
     }
 
     private static GameEvent RestoreTriggerEvent(PendingDecisionSnapshot continuation)
