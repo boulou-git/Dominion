@@ -67,14 +67,17 @@ public static class GameRules
             if (advanced.Status != GameRuleStatus.Applied) return advanced;
             return ResumeDecision(s, q, c, resolve, random);
         }
-        if ((c.Operation ?? string.Empty).StartsWith("reveal_each_other_top_trash_type_except|", StringComparison.OrdinalIgnoreCase))
+        string operation = c.Operation ?? string.Empty;
+        if (operation.StartsWith("reveal_each_other_top_trash_type_except|", StringComparison.OrdinalIgnoreCase))
             return ResolveRevealTrashDecision(s, p, q, c, resolve, random);
         if (!CardZoneRules.TryParseZone(c.Zone, out CardZone choiceZone)) return GameRuleResult.Rejected("Decision source zone is invalid.", q.Events.SnapshotHistory());
         List<int> source = CardZoneRules.ResolveZone(p, choiceZone); if (source == null) return GameRuleResult.Rejected("Decision source zone is unavailable.", q.Events.SnapshotHistory());
         foreach (int id in q.SelectedInstanceIds) if (!source.Contains(id)) return GameRuleResult.Rejected("Selected card is no longer in the decision source zone.", q.Events.SnapshotHistory());
         if (Eq(c.Operation, "block_attack_reaction")) return ResolveAttackReactionDecision(s, p, q, c, resolve, random);
         if (Eq(c.Operation, "discard_down_to")) return ResolveDiscardDownDecision(s, p, q, c, resolve, random);
-        if ((c.Operation ?? string.Empty).StartsWith("choose_each_other_cards|", StringComparison.OrdinalIgnoreCase)) return ResolveEachOtherCardDecision(s, p, q, c, resolve, random);
+        if (operation.StartsWith("choose_each_other_cards|", StringComparison.OrdinalIgnoreCase) ||
+            operation.StartsWith("choose_each_other_cards_reveal|", StringComparison.OrdinalIgnoreCase))
+            return ResolveEachOtherCardDecision(s, p, q, c, resolve, random);
         return ResumeDecision(s, q, c, resolve, random);
     }
 
@@ -127,7 +130,12 @@ public static class GameRules
     private static GameRuleResult ResolveAttackReactionDecision(GameStateSnapshot s, PlayerStateSnapshot responder, ResolutionQueue q,
         PendingDecisionSnapshot c, Func<string, ExtensionCardData> resolve, System.Random random)
     {
-        List<int> selected = q.TakeSelectedInstanceIds(); if (selected.Count > 0) q.MarkAttackProtected(responder.PlayerId);
+        List<int> selected = q.TakeSelectedInstanceIds();
+        if (selected.Count > 0)
+        {
+            foreach (int id in selected) JournalRules.RecordReveal(s, responder, id);
+            q.MarkAttackProtected(responder.PlayerId);
+        }
         CardInstance attack = Card(s, c.SourceCardInstanceId); if (attack == null) return GameRuleResult.Rejected("Attack card was not found while resuming reactions.", q.Events.SnapshotHistory());
         PlayerStateSnapshot attacker = Player(s, attack.OwnerPlayerId); ExtensionCardData d = resolve(attack.DefinitionId);
         if (attacker == null || d == null || !CardDefinitionRules.HasType(d, "Attaque")) return GameRuleResult.Rejected("Attack continuation is invalid.", q.Events.SnapshotHistory());
@@ -181,13 +189,24 @@ public static class GameRules
         string[] parts = (c.Operation ?? string.Empty).Split('|');
         if (parts.Length != 4 || !CardZoneRules.TryParseZone(c.Zone, out CardZone src) || !CardZoneRules.TryParseZone(parts[3], out CardZone dst) || src == dst)
             return GameRuleResult.Rejected("Opponent card-choice continuation is invalid.", q.Events.SnapshotHistory());
+        bool publicReveal = Eq(parts[0], "choose_each_other_cards_reveal");
         string cardId = parts[1], cardType = parts[2];
-        foreach (int id in q.TakeSelectedInstanceIds()) if (!CardZoneRules.MoveCard(responder, src, dst, id)) return GameRuleResult.Rejected("Chosen card could not be moved.", q.Events.SnapshotHistory());
+        List<int> selected = q.TakeSelectedInstanceIds();
+        foreach (int id in selected)
+        {
+            if (publicReveal) JournalRules.RecordReveal(s, responder, id);
+            if (!CardZoneRules.MoveCard(responder, src, dst, id)) return GameRuleResult.Rejected("Chosen card could not be moved.", q.Events.SnapshotHistory());
+        }
         List<string> remaining = c.RemainingPlayerIds != null ? new List<string>(c.RemainingPlayerIds) : new List<string>();
         while (remaining.Count > 0)
         {
             string nextId = remaining[0]; remaining.RemoveAt(0); PlayerStateSnapshot p = Player(s, nextId); if (p == null) continue;
-            List<int> cand = Eligible(s, p, src, cardId, cardType, resolve); if (cand.Count < c.MinSelections) continue;
+            List<int> cand = Eligible(s, p, src, cardId, cardType, resolve);
+            if (cand.Count < c.MinSelections)
+            {
+                if (publicReveal) JournalRules.RecordRevealZone(s, p, src);
+                continue;
+            }
             if (!q.TrySuspendForDecision(p.PlayerId, c.Operation, c.Zone, c.Prompt, c.SourceCardInstanceId, c.MinSelections,
                 Math.Min(c.MaxSelections, cand.Count), cand, RestoreEvent(c), c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err))
                 return GameRuleResult.Rejected(err, q.Events.SnapshotHistory());
@@ -232,6 +251,7 @@ public static class GameRules
         {
             string playerId = remaining[0]; remaining.RemoveAt(0); PlayerStateSnapshot p = Player(s, playerId); if (p == null) continue;
             if (!TryTakeTopCards(p, revealCount, random, out List<int> revealed, out string revealError)) return GameRuleResult.Rejected(revealError, q.Events.SnapshotHistory());
+            foreach (int id in revealed) JournalRules.RecordReveal(s, p, id);
             List<int> candidates = new List<int>();
             foreach (int id in revealed)
             {
