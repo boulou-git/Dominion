@@ -4,9 +4,9 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Applies the low-poly medieval GameBoard skin without changing gameplay layout or logic.
-/// The skin is intentionally asset-driven: drop the source PNGs in
-/// Assets/Resources/UI/GameBoardSkin/ and this component builds the required runtime sprites,
-/// including cropped 9-sliced panel sprites and the Normal/Hover/Pressed button states.
+/// Source PNGs live in Assets/Resources/UI/GameBoardSkin/.
+/// Runtime-created sprites keep the skin modular and let the current editable GameScreen
+/// prefab keep its anchors, card containers and gameplay controllers untouched.
 /// </summary>
 public sealed class GameBoardSkinApplier : MonoBehaviour
 {
@@ -53,6 +53,9 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         ApplyImage("InPlayPanel", _secondaryPanel, Image.Type.Sliced);
         ApplyImage("JournalPanel", _secondaryPanel, Image.Type.Sliced);
 
+        // Legacy prototype content backgrounds must not sit on top of the new frame.
+        MakeContentRootTransparent("InPlayPanel", "Cards");
+
         ApplyTitlePlates();
         ApplyButtons();
         ApplyTopBarSeparator();
@@ -76,28 +79,47 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
 
         _background = CreateWholeSprite(backgroundTexture, Vector4.zero);
 
-        // Rects are based on the supplied source canvases. Coordinates here are expressed
-        // top-left so the values remain easy to compare with the artwork files.
-        _secondaryPanel = CreateCroppedSprite(boardTexture,
-            new RectInt(6, 348, 1431, 367), new Vector4(72f, 52f, 72f, 52f));
-        _handPanel = CreateCroppedSprite(handTexture,
-            new RectInt(3, 111, 2040, 439), new Vector4(86f, 62f, 86f, 62f));
-        _turnPanel = CreateCroppedSprite(turnTexture,
-            new RectInt(29, 25, 966, 1477), new Vector4(76f, 82f, 76f, 82f));
-        _titlePlate = CreateCroppedSprite(titleTexture,
-            new RectInt(71, 131, 1907, 360), new Vector4(150f, 48f, 150f, 48f));
+        // Source rectangles use top-left image-editor coordinates.
+        _secondaryPanel = CreateCroppedSprite(
+            boardTexture,
+            new RectInt(6, 348, 1431, 367),
+            new Vector4(72f, 52f, 72f, 52f));
+
+        _handPanel = CreateCroppedSprite(
+            handTexture,
+            new RectInt(3, 111, 2040, 439),
+            new Vector4(86f, 62f, 86f, 62f));
+
+        _turnPanel = CreateCroppedSprite(
+            turnTexture,
+            new RectInt(29, 25, 966, 1477),
+            new Vector4(76f, 82f, 76f, 82f));
+
+        _titlePlate = CreateCroppedSprite(
+            titleTexture,
+            new RectInt(71, 131, 1907, 360),
+            new Vector4(150f, 48f, 150f, 48f));
 
         // buttons.png contains three vertically stacked states: Normal, Hover, Pressed.
-        _buttonNormal = CreateCroppedSprite(buttonTexture,
-            new RectInt(94, 58, 1349, 271), new Vector4(82f, 38f, 82f, 38f));
-        _buttonHover = CreateCroppedSprite(buttonTexture,
-            new RectInt(93, 372, 1350, 272), new Vector4(82f, 38f, 82f, 38f));
-        _buttonPressed = CreateCroppedSprite(buttonTexture,
-            new RectInt(94, 690, 1349, 276), new Vector4(82f, 38f, 82f, 38f));
+        _buttonNormal = CreateCroppedSprite(
+            buttonTexture,
+            new RectInt(94, 58, 1349, 271),
+            new Vector4(82f, 38f, 82f, 38f));
 
-        // Use the first (long) supplied separator for the board-wide divider.
-        _separator = CreateCroppedSprite(separatorTexture,
-            new RectInt(32, 123, 1472, 99), new Vector4(68f, 16f, 68f, 16f));
+        _buttonHover = CreateCroppedSprite(
+            buttonTexture,
+            new RectInt(93, 372, 1350, 272),
+            new Vector4(82f, 38f, 82f, 38f));
+
+        _buttonPressed = CreateCroppedSprite(
+            buttonTexture,
+            new RectInt(94, 690, 1349, 276),
+            new Vector4(82f, 38f, 82f, 38f));
+
+        _separator = CreateCroppedSprite(
+            separatorTexture,
+            new RectInt(32, 123, 1472, 99),
+            new Vector4(68f, 16f, 68f, 16f));
 
         return _background != null && _secondaryPanel != null && _handPanel != null &&
                _turnPanel != null && _titlePlate != null &&
@@ -119,10 +141,6 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             border);
     }
 
-    /// <summary>
-    /// SourceRect uses image-editor coordinates (origin at top-left). Unity Sprite.Create
-    /// uses bottom-left coordinates, so conversion is centralised here.
-    /// </summary>
     private static Sprite CreateCroppedSprite(Texture2D texture, RectInt sourceRect, Vector4 border)
     {
         if (texture == null || sourceRect.width <= 0 || sourceRect.height <= 0)
@@ -175,6 +193,32 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         image.raycastTarget = false;
     }
 
+    /// <summary>
+    /// Removes only the obsolete visual fill from a named content root. The RectTransform,
+    /// layout and children remain intact, so gameplay presentation is unaffected.
+    /// </summary>
+    private void MakeContentRootTransparent(string panelName, string contentName)
+    {
+        Transform panel = FindDeepChild(transform, panelName);
+        if (panel == null)
+            return;
+
+        Transform content = FindDirectChild(panel, contentName);
+        if (content == null)
+            content = FindDeepChild(panel, contentName);
+        if (content == null)
+            return;
+
+        Image image = content.GetComponent<Image>();
+        if (image == null)
+            return;
+
+        Color color = image.color;
+        color.a = 0f;
+        image.color = color;
+        image.raycastTarget = false;
+    }
+
     private void ApplyButtons()
     {
         Button[] buttons = GetComponentsInChildren<Button>(true);
@@ -212,8 +256,8 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             if (label == null || !ShouldDecorateTitle(label.text))
                 continue;
 
-            EnsureTitlePlateBehind(label);
-            label.color = new Color(0.96f, 0.90f, 0.73f, 1f);
+            EnsureCompactTitlePlateBehind(label);
+            label.color = new Color(0.98f, 0.93f, 0.80f, 1f);
         }
     }
 
@@ -227,22 +271,31 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
                value.StartsWith("PLATEAU", StringComparison.Ordinal) || value == "JOURNAL";
     }
 
-    private void EnsureTitlePlateBehind(Text label)
+    /// <summary>
+    /// Title labels in the editable prefab often use stretched RectTransforms. Copying those
+    /// anchors made the decorative plaque span an entire panel. The plaque now gets a fixed,
+    /// text-driven size and is positioned according to the label alignment instead.
+    /// </summary>
+    private void EnsureCompactTitlePlateBehind(Text label)
     {
         RectTransform labelRect = label.rectTransform;
-        Transform parent = labelRect.parent;
-        if (parent == null)
+        RectTransform parentRect = labelRect.parent as RectTransform;
+        if (parentRect == null)
             return;
 
         string plateName = "SkinTitlePlate_" + label.gameObject.name;
-        Transform existing = FindDirectChild(parent, plateName);
+        Transform existing = FindDirectChild(parentRect, plateName);
         RectTransform plateRect;
         Image plateImage;
 
         if (existing == null)
         {
-            GameObject plateObject = new GameObject(plateName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            plateObject.transform.SetParent(parent, false);
+            GameObject plateObject = new GameObject(
+                plateName,
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image));
+            plateObject.transform.SetParent(parentRect, false);
             plateObject.transform.SetSiblingIndex(labelRect.GetSiblingIndex());
             plateRect = (RectTransform)plateObject.transform;
             plateImage = plateObject.GetComponent<Image>();
@@ -256,12 +309,40 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         if (plateRect == null || plateImage == null)
             return;
 
-        plateRect.anchorMin = labelRect.anchorMin;
-        plateRect.anchorMax = labelRect.anchorMax;
-        plateRect.pivot = labelRect.pivot;
-        plateRect.anchoredPosition = labelRect.anchoredPosition;
-        plateRect.sizeDelta = labelRect.sizeDelta + new Vector2(26f, 14f);
+        float preferredWidth = Mathf.Max(1f, label.preferredWidth);
+        float plateWidth = Mathf.Clamp(preferredWidth + 52f, 132f, 300f);
+        float plateHeight = Mathf.Clamp(Mathf.Max(label.preferredHeight + 18f, 38f), 38f, 54f);
+
+        // Use the centre of the label's anchor region as a stable non-stretched anchor.
+        Vector2 anchor = (labelRect.anchorMin + labelRect.anchorMax) * 0.5f;
+        plateRect.anchorMin = anchor;
+        plateRect.anchorMax = anchor;
+        plateRect.pivot = new Vector2(0.5f, 0.5f);
+        plateRect.sizeDelta = new Vector2(plateWidth, plateHeight);
         plateRect.localScale = Vector3.one;
+
+        Vector2 position = labelRect.anchoredPosition;
+        float availableWidth = Mathf.Max(labelRect.rect.width, preferredWidth);
+        float horizontalTravel = Mathf.Max(0f, (availableWidth - plateWidth) * 0.5f);
+
+        switch (label.alignment)
+        {
+            case TextAnchor.UpperLeft:
+            case TextAnchor.MiddleLeft:
+            case TextAnchor.LowerLeft:
+                position.x -= horizontalTravel;
+                break;
+            case TextAnchor.UpperRight:
+            case TextAnchor.MiddleRight:
+            case TextAnchor.LowerRight:
+                position.x += horizontalTravel;
+                break;
+        }
+
+        // Account for labels whose pivot is not centred.
+        position.x += (0.5f - labelRect.pivot.x) * labelRect.rect.width;
+        position.y += (0.5f - labelRect.pivot.y) * labelRect.rect.height;
+        plateRect.anchoredPosition = position;
 
         plateImage.sprite = _titlePlate;
         plateImage.type = Image.Type.Sliced;
@@ -285,7 +366,10 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         if (existing == null)
         {
             GameObject separatorObject = new GameObject(
-                "SkinBottomSeparator", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                "SkinBottomSeparator",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image));
             separatorObject.transform.SetParent(topBar, false);
             separatorObject.transform.SetAsFirstSibling();
             rect = (RectTransform)separatorObject.transform;
@@ -301,9 +385,10 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             return;
 
         rect.anchorMin = new Vector2(0.015f, 0f);
-        rect.anchorMax = new Vector2(0.985f, 0.12f);
+        rect.anchorMax = new Vector2(0.985f, 0.10f);
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
+
         image.sprite = _separator;
         image.type = Image.Type.Sliced;
         image.color = Color.white;
