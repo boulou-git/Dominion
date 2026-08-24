@@ -53,6 +53,7 @@ public static class EffectResolver
         { "draw", ResolveDraw }, { "draw_last_selection_count", ResolveDrawLastSelectionCount },
         { "choose_cards", ResolveChooseCards }, { "remember_selected_card_cost", ResolveRememberSelectedCardCost },
         { "trash_selected", ResolveTrashSelected }, { "discard_selected", ResolveDiscardSelected },
+        { "discard_others_down_to", ResolveDiscardOthersDownTo },
         { "move_selected", ResolveMoveSelected }, { "choose_supply", ResolveChooseSupply },
         { "gain_selected_supply", ResolveGainSelectedSupply }
     };
@@ -250,6 +251,44 @@ public static class EffectResolver
             context.EventBus, out string error) ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(error);
     }
 
+    private static EffectResolutionResult ResolveDiscardOthersDownTo(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsOthers(effect)) return EffectResolutionResult.Rejected("discard_others_down_to requires target 'others'.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("discard_others_down_to requires an active ResolutionQueue.");
+        if (!HasDecisionCursor(context)) return EffectResolutionResult.Rejected("discard_others_down_to is missing its continuation cursor.");
+        if (effect.amount < 0) return EffectResolutionResult.Rejected("discard_others_down_to target hand size cannot be negative.");
+        if (context.State.Players == null || context.State.Players.Count <= 1) return EffectResolutionResult.Applied();
+
+        List<PlayerStateSnapshot> targets = new List<PlayerStateSnapshot>();
+        foreach (PlayerStateSnapshot player in context.State.Players)
+        {
+            if (player == null || string.Equals(player.PlayerId, context.Actor.PlayerId, StringComparison.Ordinal)) continue;
+            if (player.Hand != null && player.Hand.Count > effect.amount) targets.Add(player);
+        }
+        if (targets.Count == 0) return EffectResolutionResult.Applied();
+
+        PlayerStateSnapshot first = targets[0];
+        List<string> remaining = new List<string>();
+        for (int i = 1; i < targets.Count; i++) remaining.Add(targets[i].PlayerId);
+
+        if (!context.Resolution.TrySuspendForDiscardDownDecision(
+                first.PlayerId,
+                string.IsNullOrWhiteSpace(effect.prompt) ? "Défaussez jusqu’à la taille de main demandée." : effect.prompt,
+                context.SourceCardInstanceId,
+                effect.amount,
+                first.Hand,
+                remaining,
+                context.TriggerEvent,
+                context.Timing,
+                context.ListenerCardInstanceId,
+                context.AbilityIndex,
+                context.EffectIndex,
+                out string error))
+            return EffectResolutionResult.Rejected(error);
+
+        return EffectResolutionResult.WaitingForChoice();
+    }
+
     private static EffectResolutionResult ResolveMoveSelected(CardEffectData effect, EffectExecutionContext context)
     {
         if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("move_selected currently supports target 'self' only.");
@@ -301,4 +340,5 @@ public static class EffectResolver
     }
 
     private static bool TargetsSelf(CardEffectData effect) => effect != null && string.Equals(effect.target, "self", StringComparison.OrdinalIgnoreCase);
+    private static bool TargetsOthers(CardEffectData effect) => effect != null && string.Equals(effect.target, "others", StringComparison.OrdinalIgnoreCase);
 }
