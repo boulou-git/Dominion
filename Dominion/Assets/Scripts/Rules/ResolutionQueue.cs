@@ -10,6 +10,7 @@ public sealed class ResolutionQueueSnapshot
     public PendingDecisionSnapshot PendingDecision = new PendingDecisionSnapshot();
     public List<int> SelectedInstanceIds = new List<int>();
     public List<string> SelectedDefinitionIds = new List<string>();
+    public List<string> AttackProtectedPlayerIds = new List<string>();
     public int LastSelectionCount;
     public int LastSelectedCardCost = -1;
 }
@@ -59,7 +60,7 @@ public sealed class PendingDecisionSnapshot
     public List<int> CandidateInstanceIds = new List<int>();
     public List<string> CandidateDefinitionIds = new List<string>();
 
-    // Optional continuation data for one effect that must ask several players in sequence.
+    // Optional continuation data for one effect/sequence that must ask several players in order.
     public List<string> RemainingPlayerIds = new List<string>();
     public int TargetHandSize;
 
@@ -102,6 +103,7 @@ public sealed class ResolutionQueue
         state.Resolution.IsActive = true; state.Resolution.OwnerPlayerId = ownerPlayerId;
         state.Resolution.PendingEvents.Clear(); state.Resolution.PendingDecision.Clear();
         state.Resolution.SelectedInstanceIds.Clear(); state.Resolution.SelectedDefinitionIds.Clear();
+        state.Resolution.AttackProtectedPlayerIds.Clear();
         state.Resolution.LastSelectionCount = 0; state.Resolution.LastSelectedCardCost = -1;
         queue = new ResolutionQueue(state.Resolution); return true;
     }
@@ -150,6 +152,20 @@ public sealed class ResolutionQueue
                 triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, out PendingDecisionSnapshot decision, out error))
             return false;
         decision.TargetHandSize = Math.Max(0, targetHandSize);
+        decision.CandidateInstanceIds.AddRange(candidates);
+        if (remainingPlayerIds != null) decision.RemainingPlayerIds.AddRange(remainingPlayerIds);
+        return true;
+    }
+
+    public bool TrySuspendForAttackReaction(string playerId, string prompt, int attackCardInstanceId,
+        IEnumerable<int> candidateInstanceIds, IEnumerable<string> remainingPlayerIds, out string error)
+    {
+        error = string.Empty;
+        List<int> candidates = candidateInstanceIds != null ? new List<int>(candidateInstanceIds) : new List<int>();
+        if (candidates.Count == 0) { error = "Attack reaction decision has no candidates."; return false; }
+        if (!PrepareDecision(playerId, "block_attack_reaction", "hand", prompt, attackCardInstanceId, 0, 1,
+                null, string.Empty, attackCardInstanceId, -1, -1, out PendingDecisionSnapshot decision, out error))
+            return false;
         decision.CandidateInstanceIds.AddRange(candidates);
         if (remainingPlayerIds != null) decision.RemainingPlayerIds.AddRange(remainingPlayerIds);
         return true;
@@ -222,6 +238,17 @@ public sealed class ResolutionQueue
         _snapshot.LastSelectedCardCost = cost;
     }
 
+    public void MarkAttackProtected(string playerId)
+    {
+        if (string.IsNullOrEmpty(playerId)) return;
+        if (!_snapshot.AttackProtectedPlayerIds.Contains(playerId)) _snapshot.AttackProtectedPlayerIds.Add(playerId);
+    }
+
+    public bool IsAttackProtected(string playerId)
+    {
+        return !string.IsNullOrEmpty(playerId) && _snapshot.AttackProtectedPlayerIds.Contains(playerId);
+    }
+
     public List<int> TakeSelectedInstanceIds()
     {
         List<int> selected = new List<int>(_snapshot.SelectedInstanceIds); _snapshot.SelectedInstanceIds.Clear(); return selected;
@@ -237,6 +264,7 @@ public sealed class ResolutionQueue
         if (Events.PendingCount > 0 || IsWaitingForDecision) return;
         _snapshot.IsActive = false; _snapshot.OwnerPlayerId = string.Empty; _snapshot.PendingEvents.Clear();
         _snapshot.PendingDecision.Clear(); _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedDefinitionIds.Clear();
+        _snapshot.AttackProtectedPlayerIds.Clear();
         _snapshot.LastSelectionCount = 0; _snapshot.LastSelectedCardCost = -1;
     }
 
@@ -268,5 +296,6 @@ public sealed class ResolutionQueue
         if (state.Resolution.PendingDecision.RemainingPlayerIds == null) state.Resolution.PendingDecision.RemainingPlayerIds = new List<string>();
         if (state.Resolution.SelectedInstanceIds == null) state.Resolution.SelectedInstanceIds = new List<int>();
         if (state.Resolution.SelectedDefinitionIds == null) state.Resolution.SelectedDefinitionIds = new List<string>();
+        if (state.Resolution.AttackProtectedPlayerIds == null) state.Resolution.AttackProtectedPlayerIds = new List<string>();
     }
 }
