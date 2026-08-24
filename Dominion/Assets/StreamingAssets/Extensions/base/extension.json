@@ -108,11 +108,11 @@
         { "op": "draw", "target": "self", "amount": 1 },
         { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
         { "op": "reveal_top_cards", "target": "self", "amount": 2 },
-        { "op": "choose_cards", "target": "self", "zone": "revealed", "min": 0, "max": 99, "prompt": "Choisissez les cartes révélées à écarter." },
-        { "op": "trash_selected", "target": "self", "sourceZone": "revealed" },
-        { "op": "choose_cards", "target": "self", "zone": "revealed", "min": 0, "max": 99, "prompt": "Choisissez les cartes révélées à défausser." },
-        { "op": "discard_selected", "target": "self", "sourceZone": "revealed" },
-        { "op": "move_all_ordered", "target": "self", "sourceZone": "revealed", "destinationZone": "deck", "prompt": "Choisissez la carte à replacer en premier sur votre pioche ; les choix suivants seront placés au-dessus." }
+        { "op": "choose_cards", "target": "self", "zone": "inspected", "min": 0, "max": 99, "prompt": "Choisissez parmi les cartes regardées celles à écarter." },
+        { "op": "trash_selected", "target": "self", "sourceZone": "inspected" },
+        { "op": "choose_cards", "target": "self", "zone": "inspected", "min": 0, "max": 99, "prompt": "Choisissez parmi les cartes regardées celles à défausser." },
+        { "op": "discard_selected", "target": "self", "sourceZone": "inspected" },
+        { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "deck", "prompt": "Choisissez la carte à replacer en premier sur votre pioche ; les choix suivants seront placés au-dessus." }
       ] } ]
     },
     { "id": "sorciere", "name": "Sorcière", "cost": 5, "types": ["Action", "Attaque"], "image": "sorciere.png", "text": "+2 Cartes\n\nChaque autre joueur reçoit une Malédiction.", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 2 }, { "op": "gain_card", "target": "others", "cardId": "base:malediction", "amount": 1, "destinationZone": "discard" } ] } ] },
