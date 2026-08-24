@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 public readonly struct TriggerResolutionResult
 {
@@ -64,14 +65,19 @@ public readonly struct TriggerResolutionResult
 }
 
 /// <summary>
-/// Deterministically consumes GameEvents and resolves declarative abilities triggered by
-/// them. The first supported trigger source is the card that is the subject of the event
-/// itself (played/gained/discarded/trashed). External listeners/reactions can be added here
-/// later without changing command, network or effect code.
+/// Deterministically consumes GameEvents and resolves declarative abilities triggered by them.
+///
+/// Existing abilities default to scope="subject": the card involved in CardPlayed/CardGained/etc.
+/// Explicit listeners may use scope="in_hand" or scope="in_play" and optional event filters.
+/// No global subscription state is kept; listeners are discovered from the authoritative working
+/// copy for every event, so reconnect/save/replay remain data-driven and deterministic.
 /// </summary>
 public static class TriggerResolver
 {
     private const int MaxEventsPerResolution = 512;
+    private const string SubjectScope = "subject";
+    private const string InHandScope = "in_hand";
+    private const string InPlayScope = "in_play";
 
     public static TriggerResolutionResult ResolvePending(
         GameEventBus eventBus,
@@ -102,26 +108,59 @@ public static class TriggerResolver
                     "Event resolution limit exceeded. A trigger loop is likely present.");
             }
 
-            AbilityResolutionResult abilityResult = ResolveSubjectAbility(
+            string timing = ResolveTiming(gameEvent != null ? gameEvent.Type : default);
+            if (string.IsNullOrEmpty(timing))
+                continue;
+
+            AbilityResolutionResult subjectResult = ResolveSubjectAbility(
                 gameEvent,
+                timing,
                 eventBus,
                 state,
                 resolveCardDefinition,
                 random);
 
-            abilitiesMatched += abilityResult.AbilitiesMatched;
-            effectsResolved += abilityResult.EffectsResolved;
+            abilitiesMatched += subjectResult.AbilitiesMatched;
+            effectsResolved += subjectResult.EffectsResolved;
 
-            if (abilityResult.Status == EffectResolutionStatus.Rejected)
+            if (subjectResult.Status == EffectResolutionStatus.Rejected)
             {
                 return TriggerResolutionResult.Rejected(
                     eventsProcessed,
                     abilitiesMatched,
                     effectsResolved,
-                    abilityResult.Error);
+                    subjectResult.Error);
             }
 
-            if (abilityResult.Status == EffectResolutionStatus.WaitingForChoice)
+            if (subjectResult.Status == EffectResolutionStatus.WaitingForChoice)
+            {
+                return TriggerResolutionResult.WaitingForChoice(
+                    eventsProcessed,
+                    abilitiesMatched,
+                    effectsResolved);
+            }
+
+            AbilityResolutionResult listenerResult = ResolveExternalListeners(
+                gameEvent,
+                timing,
+                eventBus,
+                state,
+                resolveCardDefinition,
+                random);
+
+            abilitiesMatched += listenerResult.AbilitiesMatched;
+            effectsResolved += listenerResult.EffectsResolved;
+
+            if (listenerResult.Status == EffectResolutionStatus.Rejected)
+            {
+                return TriggerResolutionResult.Rejected(
+                    eventsProcessed,
+                    abilitiesMatched,
+                    effectsResolved,
+                    listenerResult.Error);
+            }
+
+            if (listenerResult.Status == EffectResolutionStatus.WaitingForChoice)
             {
                 return TriggerResolutionResult.WaitingForChoice(
                     eventsProcessed,
@@ -135,25 +174,22 @@ public static class TriggerResolver
 
     private static AbilityResolutionResult ResolveSubjectAbility(
         GameEvent gameEvent,
+        string timing,
         GameEventBus eventBus,
         GameStateSnapshot state,
         Func<string, ExtensionCardData> resolveCardDefinition,
         System.Random random)
     {
-        if (gameEvent == null)
+        if (gameEvent == null || gameEvent.CardInstanceId <= 0)
             return AbilityResolutionResult.Applied(0, 0);
-
-        string timing = ResolveTiming(gameEvent.Type);
-        if (string.IsNullOrEmpty(timing) || gameEvent.CardInstanceId <= 0)
-            return AbilityResolutionResult.Applied(0, 0);
-
-        PlayerStateSnapshot actor = FindPlayer(state, gameEvent.PlayerId);
-        if (actor == null)
-            return AbilityResolutionResult.Rejected(0, 0, "Trigger actor was not found for event " + gameEvent.Type + ".");
 
         CardInstance instance = FindCardInstance(state, gameEvent.CardInstanceId);
         if (instance == null)
             return AbilityResolutionResult.Rejected(0, 0, "Trigger card instance was not found for event " + gameEvent.Type + ".");
+
+        PlayerStateSnapshot owner = FindPlayer(state, instance.OwnerPlayerId);
+        if (owner == null)
+            return AbilityResolutionResult.Rejected(0, 0, "Trigger card owner was not found for event " + gameEvent.Type + ".");
 
         string definitionId = !string.IsNullOrEmpty(gameEvent.CardDefinitionId)
             ? gameEvent.CardDefinitionId
@@ -165,14 +201,218 @@ public static class TriggerResolver
         return AbilityResolver.ResolveTiming(
             definition,
             timing,
-            new EffectExecutionContext(
+            BuildContext(state, owner, instance.InstanceId, random, eventBus, gameEvent),
+            ability => IsSubjectScope(ability) && FilterMatches(
+                ability != null ? ability.filter : null,
+                gameEvent,
+                owner,
+                resolveCardDefinition));
+    }
+
+    private static AbilityResolutionResult ResolveExternalListeners(
+        GameEvent gameEvent,
+        string timing,
+        GameEventBus eventBus,
+        GameStateSnapshot state,
+        Func<string, ExtensionCardData> resolveCardDefinition,
+        System.Random random)
+    {
+        int matched = 0;
+        int resolved = 0;
+
+        if (gameEvent == null || state.Players == null)
+            return AbilityResolutionResult.Applied(0, 0);
+
+        foreach (PlayerStateSnapshot owner in state.Players)
+        {
+            if (owner == null)
+                continue;
+
+            AbilityResolutionResult handResult = ResolveZoneListeners(
+                owner,
+                owner.Hand,
+                InHandScope,
+                gameEvent,
+                timing,
+                eventBus,
                 state,
-                actor,
-                gameEvent.SourceCardInstanceId > 0
-                    ? gameEvent.SourceCardInstanceId
-                    : gameEvent.CardInstanceId,
-                random,
-                eventBus));
+                resolveCardDefinition,
+                random);
+
+            matched += handResult.AbilitiesMatched;
+            resolved += handResult.EffectsResolved;
+            if (handResult.Status == EffectResolutionStatus.Rejected)
+                return AbilityResolutionResult.Rejected(matched, resolved, handResult.Error);
+            if (handResult.Status == EffectResolutionStatus.WaitingForChoice)
+                return AbilityResolutionResult.WaitingForChoice(matched, resolved);
+
+            AbilityResolutionResult inPlayResult = ResolveZoneListeners(
+                owner,
+                owner.InPlay,
+                InPlayScope,
+                gameEvent,
+                timing,
+                eventBus,
+                state,
+                resolveCardDefinition,
+                random);
+
+            matched += inPlayResult.AbilitiesMatched;
+            resolved += inPlayResult.EffectsResolved;
+            if (inPlayResult.Status == EffectResolutionStatus.Rejected)
+                return AbilityResolutionResult.Rejected(matched, resolved, inPlayResult.Error);
+            if (inPlayResult.Status == EffectResolutionStatus.WaitingForChoice)
+                return AbilityResolutionResult.WaitingForChoice(matched, resolved);
+        }
+
+        return AbilityResolutionResult.Applied(matched, resolved);
+    }
+
+    private static AbilityResolutionResult ResolveZoneListeners(
+        PlayerStateSnapshot owner,
+        List<int> zone,
+        string requiredScope,
+        GameEvent gameEvent,
+        string timing,
+        GameEventBus eventBus,
+        GameStateSnapshot state,
+        Func<string, ExtensionCardData> resolveCardDefinition,
+        System.Random random)
+    {
+        int matched = 0;
+        int resolved = 0;
+
+        if (zone == null || zone.Count == 0)
+            return AbilityResolutionResult.Applied(0, 0);
+
+        // Snapshot the instance ids because a triggered effect may mutate this zone.
+        int[] listenerIds = zone.ToArray();
+        foreach (int instanceId in listenerIds)
+        {
+            // If an earlier trigger moved this listener away, it no longer listens from this scope.
+            if (!zone.Contains(instanceId))
+                continue;
+
+            CardInstance instance = FindCardInstance(state, instanceId);
+            if (instance == null)
+                return AbilityResolutionResult.Rejected(matched, resolved, "Listener card instance was not found: " + instanceId);
+
+            ExtensionCardData definition = resolveCardDefinition(instance.DefinitionId);
+            if (definition == null)
+                return AbilityResolutionResult.Rejected(matched, resolved, "Listener card definition could not be resolved: " + instance.DefinitionId);
+
+            AbilityResolutionResult result = AbilityResolver.ResolveTiming(
+                definition,
+                timing,
+                BuildContext(state, owner, instanceId, random, eventBus, gameEvent),
+                ability => ScopeEquals(ability, requiredScope) && FilterMatches(
+                    ability != null ? ability.filter : null,
+                    gameEvent,
+                    owner,
+                    resolveCardDefinition));
+
+            matched += result.AbilitiesMatched;
+            resolved += result.EffectsResolved;
+
+            if (result.Status == EffectResolutionStatus.Rejected)
+                return AbilityResolutionResult.Rejected(matched, resolved, result.Error);
+            if (result.Status == EffectResolutionStatus.WaitingForChoice)
+                return AbilityResolutionResult.WaitingForChoice(matched, resolved);
+        }
+
+        return AbilityResolutionResult.Applied(matched, resolved);
+    }
+
+    private static EffectExecutionContext BuildContext(
+        GameStateSnapshot state,
+        PlayerStateSnapshot owner,
+        int sourceCardInstanceId,
+        System.Random random,
+        GameEventBus eventBus,
+        GameEvent gameEvent)
+    {
+        return new EffectExecutionContext(
+            state,
+            owner,
+            sourceCardInstanceId,
+            random,
+            eventBus,
+            gameEvent);
+    }
+
+    private static bool IsSubjectScope(CardAbilityData ability)
+    {
+        return ability != null &&
+               (string.IsNullOrWhiteSpace(ability.scope) ||
+                string.Equals(ability.scope, SubjectScope, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool ScopeEquals(CardAbilityData ability, string scope)
+    {
+        return ability != null &&
+               !string.IsNullOrWhiteSpace(ability.scope) &&
+               string.Equals(ability.scope, scope, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool FilterMatches(
+        CardTriggerFilterData filter,
+        GameEvent gameEvent,
+        PlayerStateSnapshot listenerOwner,
+        Func<string, ExtensionCardData> resolveCardDefinition)
+    {
+        if (filter == null)
+            return true;
+
+        string eventPlayer = string.IsNullOrWhiteSpace(filter.eventPlayer)
+            ? "any"
+            : filter.eventPlayer.Trim();
+
+        if (string.Equals(eventPlayer, "self", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrEmpty(gameEvent.PlayerId) ||
+                !string.Equals(gameEvent.PlayerId, listenerOwner.PlayerId, StringComparison.Ordinal))
+                return false;
+        }
+        else if (string.Equals(eventPlayer, "other", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrEmpty(gameEvent.PlayerId) ||
+                string.Equals(gameEvent.PlayerId, listenerOwner.PlayerId, StringComparison.Ordinal))
+                return false;
+        }
+        else if (!string.Equals(eventPlayer, "any", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.cardId) &&
+            !string.Equals(filter.cardId, gameEvent.CardDefinitionId, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(filter.cardType))
+        {
+            if (string.IsNullOrEmpty(gameEvent.CardDefinitionId))
+                return false;
+
+            ExtensionCardData eventCard = resolveCardDefinition(gameEvent.CardDefinitionId);
+            if (!HasType(eventCard, filter.cardType))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool HasType(ExtensionCardData definition, string type)
+    {
+        if (definition == null || definition.types == null || string.IsNullOrWhiteSpace(type))
+            return false;
+
+        foreach (string declaredType in definition.types)
+        {
+            if (string.Equals(declaredType, type, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     private static string ResolveTiming(GameEventType eventType)
