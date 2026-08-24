@@ -330,6 +330,63 @@ public static class NetworkGameState
         return CommitState(next);
     }
 
+    public static bool TryPlayAction(
+        string requesterPlayerId,
+        int instanceId,
+        int expectedVersion,
+        int expectedAuthorityEpoch)
+    {
+        if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch))
+            return false;
+        if (!string.Equals(_state.Phase, ActionPhase, StringComparison.Ordinal))
+            return false;
+
+        GameStateSnapshot next = Clone(_state);
+        PlayerStateSnapshot player = FindPlayer(next, requesterPlayerId);
+        if (player == null || player.Actions <= 0 || !player.Hand.Contains(instanceId))
+            return false;
+
+        CardInstance instance = FindCardInstance(next, instanceId);
+        if (instance == null || !string.Equals(instance.OwnerPlayerId, requesterPlayerId, StringComparison.Ordinal))
+            return false;
+
+        ExtensionPackageData extension;
+        ExtensionCardData definition;
+        if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition) || !IsAction(definition))
+            return false;
+
+        player.Hand.Remove(instanceId);
+        player.InPlay.Add(instanceId);
+        player.Actions--;
+
+        AbilityResolutionResult abilityResult = AbilityResolver.ResolvePlay(
+            definition,
+            new EffectExecutionContext(next, player, instanceId, NewRandom()));
+
+        if (abilityResult.Status == EffectResolutionStatus.Rejected)
+        {
+            Debug.LogWarning(
+                "Rejected declarative Action ability for " + instance.DefinitionId + ": " + abilityResult.Error);
+            return false;
+        }
+
+        if (abilityResult.Status == EffectResolutionStatus.WaitingForChoice)
+        {
+            Debug.LogWarning(
+                "Action play cannot wait for a player choice yet: " + instance.DefinitionId);
+            return false;
+        }
+
+        if (abilityResult.AbilitiesMatched == 0 || abilityResult.EffectsResolved == 0)
+        {
+            Debug.LogWarning(
+                "Action has no resolvable play effects yet: " + instance.DefinitionId);
+            return false;
+        }
+
+        return CommitState(next);
+    }
+
     public static bool TryPlayTreasure(
         string requesterPlayerId,
         int instanceId,
@@ -663,6 +720,12 @@ public static class NetworkGameState
         }
 
         return false;
+    }
+
+    private static bool IsAction(ExtensionCardData definition)
+    {
+        return definition != null && definition.types != null && definition.types.Any(type =>
+            string.Equals(type, "Action", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsTreasure(ExtensionCardData definition)
