@@ -58,6 +58,11 @@ public sealed class PendingDecisionSnapshot
     public int MaxSelections;
     public List<int> CandidateInstanceIds = new List<int>();
     public List<string> CandidateDefinitionIds = new List<string>();
+
+    // Optional continuation data for one effect that must ask several players in sequence.
+    public List<string> RemainingPlayerIds = new List<string>();
+    public int TargetHandSize;
+
     public GameEventSnapshot TriggerEvent;
     public string Timing;
     public int ListenerCardInstanceId;
@@ -68,7 +73,8 @@ public sealed class PendingDecisionSnapshot
     {
         IsPending = false; DecisionId = string.Empty; PlayerId = string.Empty; Operation = string.Empty;
         Zone = string.Empty; Prompt = string.Empty; SourceCardInstanceId = 0; MinSelections = 0; MaxSelections = 0;
-        CandidateInstanceIds.Clear(); CandidateDefinitionIds.Clear(); TriggerEvent = null; Timing = string.Empty;
+        CandidateInstanceIds.Clear(); CandidateDefinitionIds.Clear(); RemainingPlayerIds.Clear(); TargetHandSize = 0;
+        TriggerEvent = null; Timing = string.Empty;
         ListenerCardInstanceId = 0; AbilityIndex = -1; EffectIndex = -1;
     }
 }
@@ -130,6 +136,22 @@ public sealed class ResolutionQueue
                 triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, out PendingDecisionSnapshot decision, out error))
             return false;
         if (candidateDefinitionIds != null) decision.CandidateDefinitionIds.AddRange(candidateDefinitionIds);
+        return true;
+    }
+
+    public bool TrySuspendForDiscardDownDecision(string playerId, string prompt, int sourceCardInstanceId, int targetHandSize,
+        IEnumerable<int> candidateInstanceIds, IEnumerable<string> remainingPlayerIds, GameEvent triggerEvent, string timing,
+        int listenerCardInstanceId, int abilityIndex, int effectIndex, out string error)
+    {
+        error = string.Empty;
+        List<int> candidates = candidateInstanceIds != null ? new List<int>(candidateInstanceIds) : new List<int>();
+        int required = Math.Max(0, candidates.Count - Math.Max(0, targetHandSize));
+        if (!PrepareDecision(playerId, "discard_down_to", "hand", prompt, sourceCardInstanceId, required, required,
+                triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, out PendingDecisionSnapshot decision, out error))
+            return false;
+        decision.TargetHandSize = Math.Max(0, targetHandSize);
+        decision.CandidateInstanceIds.AddRange(candidates);
+        if (remainingPlayerIds != null) decision.RemainingPlayerIds.AddRange(remainingPlayerIds);
         return true;
     }
 
@@ -225,11 +247,13 @@ public sealed class ResolutionQueue
             IsPending = source.IsPending, DecisionId = source.DecisionId, PlayerId = source.PlayerId,
             Operation = source.Operation, Zone = source.Zone, Prompt = source.Prompt,
             SourceCardInstanceId = source.SourceCardInstanceId, MinSelections = source.MinSelections,
-            MaxSelections = source.MaxSelections, TriggerEvent = source.TriggerEvent, Timing = source.Timing,
+            MaxSelections = source.MaxSelections, TargetHandSize = source.TargetHandSize,
+            TriggerEvent = source.TriggerEvent, Timing = source.Timing,
             ListenerCardInstanceId = source.ListenerCardInstanceId, AbilityIndex = source.AbilityIndex, EffectIndex = source.EffectIndex
         };
         clone.CandidateInstanceIds.AddRange(source.CandidateInstanceIds);
         clone.CandidateDefinitionIds.AddRange(source.CandidateDefinitionIds);
+        clone.RemainingPlayerIds.AddRange(source.RemainingPlayerIds);
         return clone;
     }
 
@@ -241,6 +265,7 @@ public sealed class ResolutionQueue
         if (state.Resolution.PendingDecision == null) state.Resolution.PendingDecision = new PendingDecisionSnapshot();
         if (state.Resolution.PendingDecision.CandidateInstanceIds == null) state.Resolution.PendingDecision.CandidateInstanceIds = new List<int>();
         if (state.Resolution.PendingDecision.CandidateDefinitionIds == null) state.Resolution.PendingDecision.CandidateDefinitionIds = new List<string>();
+        if (state.Resolution.PendingDecision.RemainingPlayerIds == null) state.Resolution.PendingDecision.RemainingPlayerIds = new List<string>();
         if (state.Resolution.SelectedInstanceIds == null) state.Resolution.SelectedInstanceIds = new List<int>();
         if (state.Resolution.SelectedDefinitionIds == null) state.Resolution.SelectedDefinitionIds = new List<string>();
     }
