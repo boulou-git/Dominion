@@ -39,7 +39,18 @@
         { "op": "move_selected", "target": "self", "sourceZone": "discard", "destinationZone": "deck" }
       ] } ]
     },
-    { "id": "marchande", "name": "Marchande", "cost": 3, "types": ["Action"], "image": "marchande.png", "text": "+1 Carte\n+1 Action\n\nLa première fois que vous jouez un Argent pendant ce tour, +1 🪙." },
+    {
+      "id": "marchande", "name": "Marchande", "cost": 3, "types": ["Action"], "image": "marchande.png", "text": "+1 Carte\n+1 Action\n\nLa première fois que vous jouez un Argent pendant ce tour, +1 🪙.",
+      "abilities": [
+        { "when": "play", "effects": [
+          { "op": "draw", "target": "self", "amount": 1 },
+          { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 }
+        ] },
+        { "when": "play", "scope": "in_play", "oncePerTurn": true, "filter": { "eventPlayer": "self", "cardId": "base:argent" }, "effects": [
+          { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
+        ] }
+      ]
+    },
     { "id": "vassal", "name": "Vassal", "cost": 3, "types": ["Action"], "image": "vassal.png", "text": "+2 🪙\n\nDéfaussez la première carte de votre pioche. Si c’est une carte Action, vous pouvez la jouer." },
     {
       "id": "village", "name": "Village", "cost": 3, "types": ["Action"], "image": "village.png", "text": "+1 Carte\n+2 Actions",
