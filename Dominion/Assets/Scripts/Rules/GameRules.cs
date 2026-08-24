@@ -105,7 +105,7 @@ public static class GameRules
         resolution.Events.Publish(GameEvent.CardPlayed(playerId, instanceId, instance.DefinitionId));
 
         TriggerResolutionResult triggerResult = TriggerResolver.ResolvePending(
-            resolution.Events,
+            resolution,
             state,
             resolveCardDefinition,
             random);
@@ -130,8 +130,6 @@ public static class GameRules
             return GameRuleResult.WaitingForChoice(events);
         }
 
-        // During the current migration every playable card must still declare at least
-        // one concrete play effect. This keeps the pre-event behaviour unchanged.
         if (triggerResult.AbilitiesMatched == 0 || triggerResult.EffectsResolved == 0)
         {
             return GameRuleResult.Rejected(
@@ -143,11 +141,6 @@ public static class GameRules
         return GameRuleResult.Applied(events);
     }
 
-    /// <summary>
-    /// Pays one Buy and the card cost, delegates the gain to GainRules, then resolves the
-    /// resulting CardGained/PileEmptied event chain before deciding whether cleanup starts.
-    /// Random remains injectable for deterministic tests and future gain triggers that draw.
-    /// </summary>
     public static GameRuleResult TryBuyCard(
         GameStateSnapshot state,
         string playerId,
@@ -198,7 +191,7 @@ public static class GameRules
             return GameRuleResult.Rejected(gainError, resolution.Events.SnapshotHistory());
 
         TriggerResolutionResult triggerResult = TriggerResolver.ResolvePending(
-            resolution.Events,
+            resolution,
             state,
             resolveCardDefinition,
             random);
@@ -219,8 +212,6 @@ public static class GameRules
             return GameRuleResult.WaitingForChoice(events);
         }
 
-        // Keep Cleanup as a short visible/interactable stage so the UI can animate the
-        // hand and in-play cards before the authoritative cleanup/draw is committed.
         if (player.Buys <= 0 ||
             (player.Coins <= 0 && !HandContainsType(state, player, resolveCardDefinition, "Trésor")))
             state.Phase = CleanupPhase;
