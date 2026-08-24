@@ -63,6 +63,7 @@ public sealed class PendingDecisionSnapshot
     // Optional continuation data for one effect/sequence that must ask several players in order.
     public List<string> RemainingPlayerIds = new List<string>();
     public int TargetHandSize;
+    public string FilterCardType;
 
     public GameEventSnapshot TriggerEvent;
     public string Timing;
@@ -75,6 +76,7 @@ public sealed class PendingDecisionSnapshot
         IsPending = false; DecisionId = string.Empty; PlayerId = string.Empty; Operation = string.Empty;
         Zone = string.Empty; Prompt = string.Empty; SourceCardInstanceId = 0; MinSelections = 0; MaxSelections = 0;
         CandidateInstanceIds.Clear(); CandidateDefinitionIds.Clear(); RemainingPlayerIds.Clear(); TargetHandSize = 0;
+        FilterCardType = string.Empty;
         TriggerEvent = null; Timing = string.Empty;
         ListenerCardInstanceId = 0; AbilityIndex = -1; EffectIndex = -1;
     }
@@ -152,6 +154,24 @@ public sealed class ResolutionQueue
                 triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, out PendingDecisionSnapshot decision, out error))
             return false;
         decision.TargetHandSize = Math.Max(0, targetHandSize);
+        decision.CandidateInstanceIds.AddRange(candidates);
+        if (remainingPlayerIds != null) decision.RemainingPlayerIds.AddRange(remainingPlayerIds);
+        return true;
+    }
+
+    public bool TrySuspendForOtherPlayerCardTypeDecision(string playerId, string operation, string prompt,
+        int sourceCardInstanceId, string cardType, IEnumerable<int> candidateInstanceIds,
+        IEnumerable<string> remainingPlayerIds, GameEvent triggerEvent, string timing,
+        int listenerCardInstanceId, int abilityIndex, int effectIndex, out string error)
+    {
+        error = string.Empty;
+        List<int> candidates = candidateInstanceIds != null ? new List<int>(candidateInstanceIds) : new List<int>();
+        if (candidates.Count == 0) { error = "Opponent card-type decision has no candidates."; return false; }
+        if (string.IsNullOrWhiteSpace(cardType)) { error = "Opponent card-type decision is missing its card type filter."; return false; }
+        if (!PrepareDecision(playerId, operation, "hand", prompt, sourceCardInstanceId, 1, 1,
+                triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, out PendingDecisionSnapshot decision, out error))
+            return false;
+        decision.FilterCardType = cardType;
         decision.CandidateInstanceIds.AddRange(candidates);
         if (remainingPlayerIds != null) decision.RemainingPlayerIds.AddRange(remainingPlayerIds);
         return true;
@@ -276,6 +296,7 @@ public sealed class ResolutionQueue
             Operation = source.Operation, Zone = source.Zone, Prompt = source.Prompt,
             SourceCardInstanceId = source.SourceCardInstanceId, MinSelections = source.MinSelections,
             MaxSelections = source.MaxSelections, TargetHandSize = source.TargetHandSize,
+            FilterCardType = source.FilterCardType,
             TriggerEvent = source.TriggerEvent, Timing = source.Timing,
             ListenerCardInstanceId = source.ListenerCardInstanceId, AbilityIndex = source.AbilityIndex, EffectIndex = source.EffectIndex
         };
