@@ -12,7 +12,11 @@ public enum CardZone
     Hand,
     Discard,
     InPlay,
-    Inspected
+    Inspected,
+
+    // Compatibility alias for in-progress snapshots/effects created before the
+    // private inspected zone was named correctly. This does NOT imply public reveal.
+    Revealed = Inspected
 }
 
 /// <summary>
@@ -30,7 +34,9 @@ public static class CardZoneRules
         if (string.Equals(normalized, "hand", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.Hand; return true; }
         if (string.Equals(normalized, "discard", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.Discard; return true; }
         if (string.Equals(normalized, "inplay", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.InPlay; return true; }
-        if (string.Equals(normalized, "inspected", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.Inspected; return true; }
+        if (string.Equals(normalized, "inspected", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "revealed", StringComparison.OrdinalIgnoreCase))
+        { zone = CardZone.Inspected; return true; }
         return false;
     }
 
