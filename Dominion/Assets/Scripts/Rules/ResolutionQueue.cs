@@ -210,6 +210,17 @@ public sealed class ResolutionQueue
         return true;
     }
 
+    /// <summary>
+    /// Returns the latest submitted selection once and clears it. Follow-up effects such as
+    /// trash_selected therefore cannot accidentally reuse a selection from an earlier choice.
+    /// </summary>
+    public List<int> TakeSelectedInstanceIds()
+    {
+        List<int> selected = new List<int>(_snapshot.SelectedInstanceIds);
+        _snapshot.SelectedInstanceIds.Clear();
+        return selected;
+    }
+
     public void CompleteIfIdle()
     {
         if (Events.PendingCount > 0 || IsWaitingForDecision)
