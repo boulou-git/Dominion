@@ -29,7 +29,17 @@
         { "op": "trash_selected", "target": "self" }
       ] } ]
     },
-    { "id": "douves", "name": "Douves", "cost": 2, "types": ["Action", "Réaction"], "image": "douves.png", "text": "+2 Cartes\n\n———\n\nLorsqu’un autre joueur joue une carte Attaque, vous pouvez d’abord révéler cette carte de votre main pour ne pas être affecté par cette Attaque." },
+    {
+      "id": "douves", "name": "Douves", "cost": 2, "types": ["Action", "Réaction"], "image": "douves.png", "text": "+2 Cartes\n\n———\n\nLorsqu’un autre joueur joue une carte Attaque, vous pouvez d’abord révéler cette carte de votre main pour ne pas être affecté par cette Attaque.",
+      "abilities": [
+        { "when": "play", "effects": [
+          { "op": "draw", "target": "self", "amount": 2 }
+        ] },
+        { "when": "attack_reaction", "scope": "in_hand", "filter": { "eventPlayer": "other", "cardType": "Attaque" }, "effects": [
+          { "op": "block_attack", "target": "self" }
+        ] }
+      ]
+    },
     {
       "id": "messagere", "name": "Messagère", "cost": 3, "types": ["Action"], "image": "messagere.png", "text": "+1 Carte\n+1 Action\n\nRegardez dans votre défausse. Vous pouvez placer une carte de votre défausse sur votre pioche.",
       "abilities": [ { "when": "play", "effects": [
