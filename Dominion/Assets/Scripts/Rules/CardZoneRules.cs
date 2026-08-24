@@ -88,6 +88,36 @@ public static class CardZoneRules
         return true;
     }
 
+    /// <summary>
+    /// Removes and returns the current top card of the deck. If the deck is empty,
+    /// the discard pile is shuffled into it first. No destination is implied so callers
+    /// can reveal, discard, trash or otherwise process the card without temporarily
+    /// placing it in another gameplay zone.
+    /// </summary>
+    public static bool TryTakeTopCard(PlayerStateSnapshot player, System.Random random, out int instanceId, out string error)
+    {
+        instanceId = 0;
+        error = string.Empty;
+        if (player == null) { error = "Player is null."; return false; }
+        if (player.Deck == null || player.Discard == null)
+        { error = "Taking a top card requires deck and discard zones."; return false; }
+
+        if (player.Deck.Count == 0)
+        {
+            if (player.Discard.Count == 0)
+                return true;
+            if (random == null)
+            { error = "Taking a top card requires an injected random source when the discard pile must be shuffled."; return false; }
+            if (!MoveAll(player.Discard, player.Deck) || !Shuffle(player.Deck, random))
+            { error = "Could not reshuffle the discard pile into the deck."; return false; }
+        }
+
+        int topIndex = player.Deck.Count - 1;
+        instanceId = player.Deck[topIndex];
+        player.Deck.RemoveAt(topIndex);
+        return true;
+    }
+
     public static bool DrawCards(PlayerStateSnapshot player, int count, System.Random random, out string error)
     {
         error = string.Empty;
@@ -98,18 +128,10 @@ public static class CardZoneRules
 
         for (int i = 0; i < count; i++)
         {
-            if (player.Deck.Count == 0)
-            {
-                if (player.Discard.Count == 0) break;
-                if (random == null)
-                { error = "Draw requires an injected random source when the discard pile must be shuffled."; return false; }
-                if (!MoveAll(player.Discard, player.Deck) || !Shuffle(player.Deck, random))
-                { error = "Could not reshuffle the discard pile into the deck."; return false; }
-            }
-
-            int topIndex = player.Deck.Count - 1;
-            int instanceId = player.Deck[topIndex];
-            player.Deck.RemoveAt(topIndex);
+            if (!TryTakeTopCard(player, random, out int instanceId, out error))
+                return false;
+            if (instanceId <= 0)
+                break;
             player.Hand.Add(instanceId);
         }
         return true;
