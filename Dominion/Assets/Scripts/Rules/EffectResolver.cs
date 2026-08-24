@@ -116,6 +116,7 @@ public static class EffectResolver
         foreach (PlayerStateSnapshot player in context.State.Players)
         {
             if (player == null || string.Equals(player.PlayerId, context.Actor.PlayerId, StringComparison.Ordinal)) continue;
+            if (ShouldSkipAttackTarget(context, player)) continue;
             if (!CardZoneRules.DrawCards(player, effect.amount, context.Random, out string error))
                 return EffectResolutionResult.Rejected(error);
         }
@@ -297,6 +298,7 @@ public static class EffectResolver
         foreach (PlayerStateSnapshot player in context.State.Players)
         {
             if (player == null || string.Equals(player.PlayerId, context.Actor.PlayerId, StringComparison.Ordinal)) continue;
+            if (ShouldSkipAttackTarget(context, player)) continue;
             if (player.Hand != null && player.Hand.Count > effect.amount) targets.Add(player);
         }
         if (targets.Count == 0) return EffectResolutionResult.Applied();
@@ -356,7 +358,8 @@ public static class EffectResolver
         else if (context.State.Players != null)
         {
             foreach (PlayerStateSnapshot player in context.State.Players)
-                if (player != null && !string.Equals(player.PlayerId, context.Actor.PlayerId, StringComparison.Ordinal)) targets.Add(player);
+                if (player != null && !string.Equals(player.PlayerId, context.Actor.PlayerId, StringComparison.Ordinal) &&
+                    !ShouldSkipAttackTarget(context, player)) targets.Add(player);
         }
 
         foreach (PlayerStateSnapshot target in targets)
@@ -391,6 +394,16 @@ public static class EffectResolver
                     context.EventBus, out _, out string error))
                 return EffectResolutionResult.Rejected(error);
         return EffectResolutionResult.Applied();
+    }
+
+    private static bool ShouldSkipAttackTarget(EffectExecutionContext context, PlayerStateSnapshot target)
+    {
+        if (context == null || target == null || context.Resolution == null || !context.Resolution.IsAttackProtected(target.PlayerId))
+            return false;
+        CardInstance source = FindCardInstance(context.State, context.SourceCardInstanceId);
+        if (source == null) return false;
+        ExtensionCardData sourceDefinition = ResolveDefinition(source.DefinitionId);
+        return CardDefinitionRules.HasType(sourceDefinition, "Attaque");
     }
 
     private static bool HasDecisionCursor(EffectExecutionContext context)
