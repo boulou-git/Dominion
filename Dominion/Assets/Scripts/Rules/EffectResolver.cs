@@ -51,7 +51,8 @@ public static class EffectResolver
     {
         { "add_resource", ResolveAddResource }, { "add_resource_per_last_selection", ResolveAddResourcePerLastSelection },
         { "draw", ResolveDraw }, { "draw_last_selection_count", ResolveDrawLastSelectionCount },
-        { "choose_cards", ResolveChooseCards }, { "remember_selected_card_cost", ResolveRememberSelectedCardCost },
+        { "choose_cards", ResolveChooseCards }, { "choose_cards_per_empty_pile", ResolveChooseCardsPerEmptyPile },
+        { "remember_selected_card_cost", ResolveRememberSelectedCardCost },
         { "trash_selected", ResolveTrashSelected }, { "discard_selected", ResolveDiscardSelected },
         { "discard_others_down_to", ResolveDiscardOthersDownTo },
         { "move_selected", ResolveMoveSelected }, { "choose_supply", ResolveChooseSupply },
@@ -165,6 +166,29 @@ public static class EffectResolver
 
         if (!context.Resolution.TrySuspendForDecision(context.Actor.PlayerId, "choose_cards", effect.zone, effect.prompt,
                 context.SourceCardInstanceId, min, max, candidates, context.TriggerEvent, context.Timing,
+                context.ListenerCardInstanceId, context.AbilityIndex, context.EffectIndex, out string error))
+            return EffectResolutionResult.Rejected(error);
+        return EffectResolutionResult.WaitingForChoice();
+    }
+
+    private static EffectResolutionResult ResolveChooseCardsPerEmptyPile(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("choose_cards_per_empty_pile currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("choose_cards_per_empty_pile requires an active ResolutionQueue.");
+        if (!HasDecisionCursor(context)) return EffectResolutionResult.Rejected("choose_cards_per_empty_pile is missing its continuation cursor.");
+
+        int emptyPileCount = 0;
+        if (context.State.SupplyPiles != null)
+            foreach (SupplyPileSnapshot pile in context.State.SupplyPiles)
+                if (pile != null && pile.RemainingCount <= 0) emptyPileCount++;
+
+        int handCount = context.Actor.Hand != null ? context.Actor.Hand.Count : 0;
+        int required = Math.Min(emptyPileCount, handCount);
+        if (required <= 0) return EffectResolutionResult.Applied();
+
+        List<int> candidates = new List<int>(context.Actor.Hand);
+        if (!context.Resolution.TrySuspendForDecision(context.Actor.PlayerId, "choose_cards_per_empty_pile", "hand", effect.prompt,
+                context.SourceCardInstanceId, required, required, candidates, context.TriggerEvent, context.Timing,
                 context.ListenerCardInstanceId, context.AbilityIndex, context.EffectIndex, out string error))
             return EffectResolutionResult.Rejected(error);
         return EffectResolutionResult.WaitingForChoice();
