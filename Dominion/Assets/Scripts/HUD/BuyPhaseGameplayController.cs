@@ -493,6 +493,15 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         if (state == null || localPlayer == null || state.IsPaused || state.ActivePlayerId != localPlayer.PlayerId)
             return;
 
+        // The same existing button owns both transitions. Action -> Buy is immediate and
+        // does not touch the hand; Buy/Cleanup keeps the established cleanup animation.
+        if (string.Equals(state.Phase, NetworkGameState.ActionPhase, StringComparison.Ordinal))
+        {
+            if (PlayersTurnsHandler.Instance != null)
+                PlayersTurnsHandler.Instance.AdvancePhase();
+            return;
+        }
+
         if (!string.Equals(state.Phase, NetworkGameState.BuyPhase, StringComparison.Ordinal) &&
             !string.Equals(state.Phase, NetworkGameState.CleanupPhase, StringComparison.Ordinal))
             return;
