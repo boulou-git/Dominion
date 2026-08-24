@@ -9,21 +9,10 @@ public sealed class ExtensionPackageData
     public string id;
     public string name;
     public int version;
-
-    // Version of the card-data contract, independent from the extension's own content version.
-    // Schema v2 introduces declarative abilities/effects while remaining backward compatible
-    // with older cards that do not declare any abilities yet.
     public int schemaVersion = 1;
-
     public string artwork;
-
-    // Cards available to the Kingdom-card pre-game selection.
     public List<ExtensionCardData> cards = new List<ExtensionCardData>();
-
-    // Shared/base cards belonging to the extension but never entering the
-    // random Kingdom selection (Cuivre, Domaine, etc.).
     public List<ExtensionCardData> baseCards = new List<ExtensionCardData>();
-
     [NonSerialized] public string packageDirectory;
 }
 
@@ -35,26 +24,10 @@ public sealed class ExtensionCardData
     public int cost;
     public List<string> types = new List<string>();
     public string image;
-
-    // Human-readable French rules text. Gameplay never parses this field.
     public string text;
-
-    // Machine-readable rules. The runtime will progressively use these abilities as the
-    // source of truth; an empty list is valid during the migration from legacy cards.
     public List<CardAbilityData> abilities = new List<CardAbilityData>();
 }
 
-/// <summary>
-/// One capability exposed by a card at a well-defined timing point.
-///
-/// scope is optional and defaults to "subject", preserving existing cards:
-/// - subject: this card is itself the subject of the event (played/gained/etc.)
-/// - in_hand: this card listens while in its owner's hand
-/// - in_play: this card listens while in its owner's in-play zone
-///
-/// filter is optional and constrains the triggering event without embedding card-specific
-/// logic in C#.
-/// </summary>
 [Serializable]
 public sealed class CardAbilityData
 {
@@ -64,11 +37,6 @@ public sealed class CardAbilityData
     public List<CardEffectData> effects = new List<CardEffectData>();
 }
 
-/// <summary>
-/// Minimal declarative event filter. Empty fields mean "no restriction".
-/// eventPlayer accepts "self", "other" or "any".
-/// cardId and cardType apply to the card carried by the triggering event.
-/// </summary>
 [Serializable]
 public sealed class CardTriggerFilterData
 {
@@ -77,11 +45,6 @@ public sealed class CardTriggerFilterData
     public string cardType;
 }
 
-/// <summary>
-/// Declarative effect instruction consumed by the rules engine.
-/// Generic fields are shared by many operations; choice fields are intentionally data-only
-/// so extensions can request interaction without owning UI, networking or continuation code.
-/// </summary>
 [Serializable]
 public sealed class CardEffectData
 {
@@ -90,21 +53,19 @@ public sealed class CardEffectData
     public string resource;
     public int amount;
 
-    // Interactive operations such as choose_cards.
     public string zone;
     public int min;
     public int max;
     public string prompt;
 
-    // Generic selected-card movement.
     public string sourceZone;
     public string destinationZone;
+
+    // Supply-choice constraints. Negative maxCost means no cost ceiling.
+    public int maxCost = -1;
+    public string cardType;
 }
 
-/// <summary>
-/// Reads drop-in extension packages from StreamingAssets/Extensions/*/extension.json.
-/// Missing/empty artwork/image fields are valid and use visual fallbacks.
-/// </summary>
 public static class ExtensionCatalog
 {
     private const string ExtensionFileName = "extension.json";
@@ -139,11 +100,6 @@ public static class ExtensionCatalog
         return null;
     }
 
-    /// <summary>
-    /// Resolves either a Kingdom card or a non-Kingdom base/shared card inside an extension.
-    /// Selection code still reads extension.cards only, so baseCards never leak into the
-    /// random 10-card Kingdom pool.
-    /// </summary>
     public static ExtensionCardData FindCard(ExtensionPackageData extension, string cardId)
     {
         if (extension == null || string.IsNullOrEmpty(cardId))
@@ -214,7 +170,6 @@ public static class ExtensionCatalog
 
                 NormaliseCards(extension.cards);
                 NormaliseCards(extension.baseCards);
-
                 result.Add(extension);
             }
             catch (Exception exception)
