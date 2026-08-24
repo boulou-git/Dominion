@@ -158,8 +158,13 @@ public static class EffectResolver
     {
         if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("remember_selected_card_cost currently supports target 'self' only.");
         if (context.Resolution == null) return EffectResolutionResult.Rejected("remember_selected_card_cost requires an active ResolutionQueue.");
+        if (context.Resolution.SelectedInstanceIds.Count == 0)
+        {
+            context.Resolution.SetLastSelectedCardCost(-1);
+            return EffectResolutionResult.Applied();
+        }
         if (context.Resolution.SelectedInstanceIds.Count != 1)
-            return EffectResolutionResult.Rejected("remember_selected_card_cost requires exactly one selected card.");
+            return EffectResolutionResult.Rejected("remember_selected_card_cost requires at most one selected card.");
 
         CardInstance instance = FindCardInstance(context.State, context.Resolution.SelectedInstanceIds[0]);
         if (instance == null) return EffectResolutionResult.Rejected("Selected card instance could not be resolved.");
@@ -183,7 +188,9 @@ public static class EffectResolver
         if (effect.useLastSelectionCost)
         {
             if (context.Resolution.LastSelectedCardCost < 0)
-                return EffectResolutionResult.Rejected("choose_supply requires a remembered selected-card cost.");
+                return min == 0
+                    ? EffectResolutionResult.Applied()
+                    : EffectResolutionResult.Rejected("choose_supply requires a remembered selected-card cost.");
             int dynamicCeiling = context.Resolution.LastSelectedCardCost + effect.costOffset;
             costCeiling = costCeiling >= 0 ? Math.Min(costCeiling, dynamicCeiling) : dynamicCeiling;
         }
