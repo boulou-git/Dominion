@@ -47,9 +47,8 @@ public sealed class GameRuleResult
 /// Deterministic Dominion rules that know nothing about Photon, scenes or UI.
 /// The caller owns cloning/committing the GameStateSnapshot and injects card lookup/randomness.
 ///
-/// Every normal card play converges here. The rules infer how a card may be played from
-/// the current phase and the card's declared types; callers never choose an Action/Treasure
-/// code path themselves.
+/// Normal card play and buying converge here; NetworkGameState should only validate command
+/// freshness/identity, clone the state, call this layer and commit successful results.
 /// </summary>
 public static class GameRules
 {
@@ -103,7 +102,7 @@ public static class GameRules
         if (!string.IsNullOrEmpty(policyError))
             return GameRuleResult.Rejected(policyError);
 
-        if (!CardZoneRules.MoveCard(player.Hand, player.InPlay, instanceId))
+        if (!CardZoneRules.MoveCard(player, CardZone.Hand, CardZone.InPlay, instanceId))
             return GameRuleResult.Rejected("Could not move the card from hand to in-play.");
 
         if (consumesAction)
@@ -131,6 +130,66 @@ public static class GameRules
                 "Card has no resolvable declarative play effects yet: " + instance.DefinitionId,
                 events);
         }
+
+        return GameRuleResult.Applied(events);
+    }
+
+    /// <summary>
+    /// Pays one Buy and the card cost, then delegates the actual gain to GainRules.
+    /// Buying never creates CardInstance objects or mutates pile counts directly here.
+    /// </summary>
+    public static GameRuleResult TryBuyCard(
+        GameStateSnapshot state,
+        string playerId,
+        string definitionId,
+        Func<string, ExtensionCardData> resolveCardDefinition)
+    {
+        List<GameEvent> events = new List<GameEvent>();
+
+        if (state == null)
+            return GameRuleResult.Rejected("Game state is null.");
+        if (string.IsNullOrEmpty(playerId))
+            return GameRuleResult.Rejected("Player id is missing.");
+        if (string.IsNullOrEmpty(definitionId))
+            return GameRuleResult.Rejected("Card definition id is missing.");
+        if (resolveCardDefinition == null)
+            return GameRuleResult.Rejected("Card definition resolver is missing.");
+        if (!string.Equals(state.Phase, BuyPhase, StringComparison.Ordinal))
+            return GameRuleResult.Rejected("Cards can only be bought during the Buy phase.");
+
+        PlayerStateSnapshot player = FindPlayer(state, playerId);
+        if (player == null)
+            return GameRuleResult.Rejected("Player was not found.");
+        if (player.Buys <= 0)
+            return GameRuleResult.Rejected("No Buys remain.");
+
+        ExtensionCardData definition = resolveCardDefinition(definitionId);
+        if (definition == null)
+            return GameRuleResult.Rejected("Card definition could not be resolved: " + definitionId);
+        if (definition.cost < 0)
+            return GameRuleResult.Rejected("Card cost cannot be negative.");
+        if (definition.cost > player.Coins)
+            return GameRuleResult.Rejected("Not enough Coins to buy card: " + definitionId);
+
+        player.Coins -= definition.cost;
+        player.Buys--;
+
+        if (!GainRules.TryGainFromSupply(
+                state,
+                player,
+                definitionId,
+                CardZone.Discard,
+                0,
+                events,
+                out _,
+                out string gainError))
+            return GameRuleResult.Rejected(gainError, events);
+
+        // Keep Cleanup as a short visible/interactable stage so the UI can animate the
+        // hand and in-play cards before the authoritative cleanup/draw is committed.
+        if (player.Buys <= 0 ||
+            (player.Coins <= 0 && !HandContainsType(state, player, resolveCardDefinition, "Trésor")))
+            state.Phase = CleanupPhase;
 
         return GameRuleResult.Applied(events);
     }
@@ -163,6 +222,29 @@ public static class GameRules
         }
 
         return "Cards cannot be played during phase: " + (state.Phase ?? string.Empty);
+    }
+
+    private static bool HandContainsType(
+        GameStateSnapshot state,
+        PlayerStateSnapshot player,
+        Func<string, ExtensionCardData> resolveCardDefinition,
+        string type)
+    {
+        if (state == null || player == null || player.Hand == null || resolveCardDefinition == null)
+            return false;
+
+        foreach (int instanceId in player.Hand)
+        {
+            CardInstance instance = FindCardInstance(state, instanceId);
+            if (instance == null)
+                continue;
+
+            ExtensionCardData definition = resolveCardDefinition(instance.DefinitionId);
+            if (HasType(definition, type))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool HasType(ExtensionCardData definition, string type)
