@@ -43,8 +43,6 @@ public sealed class HandGameplayInteraction : MonoBehaviour, IBeginDragHandler, 
 
     private void OnPrimaryAction()
     {
-        // Unity may emit a PointerClick immediately after EndDrag. Suppress that click
-        // so dragging a card to reorder the hand can never accidentally play it.
         if ((!_playable && !CanPlayFromCurrentState()) ||
             _requestPending ||
             _dragging ||
@@ -76,25 +74,13 @@ public sealed class HandGameplayInteraction : MonoBehaviour, IBeginDragHandler, 
             PlayerStateSnapshot localPlayer = state.Players != null
                 ? state.Players.Find(player => player != null && player.PlayerId == NetworkGameState.LocalPlayerId)
                 : null;
-            return localPlayer != null && localPlayer.Actions > 0 && HasType(definition, "Action");
+            return localPlayer != null &&
+                   localPlayer.Actions > 0 &&
+                   CardDefinitionRules.HasType(definition, "Action");
         }
 
         return string.Equals(state.Phase, NetworkGameState.BuyPhase, StringComparison.Ordinal) &&
-               HasType(definition, "Trésor");
-    }
-
-    private static bool HasType(ExtensionCardData definition, string type)
-    {
-        if (definition == null || definition.types == null || string.IsNullOrEmpty(type))
-            return false;
-
-        foreach (string declaredType in definition.types)
-        {
-            if (string.Equals(declaredType, type, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-
-        return false;
+               CardDefinitionRules.HasType(definition, "Trésor");
     }
 
     public void OnBeginDrag(PointerEventData eventData)
