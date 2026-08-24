@@ -118,6 +118,14 @@
     },
     { "id": "soldat", "name": "Soldat", "cost": 5, "types": ["Action"], "image": "soldat.png", "text": "+1 Carte\n+1 Action\n\nRegardez les 2 premières cartes de votre pioche.\n\nÉcartez et/ou défaussez autant de ces cartes que vous le souhaitez. Replacez les autres sur votre pioche dans l’ordre de votre choix." },
     { "id": "sorciere", "name": "Sorcière", "cost": 5, "types": ["Action", "Attaque"], "image": "sorciere.png", "text": "+2 Cartes\n\nChaque autre joueur reçoit une Malédiction." },
-    { "id": "artisane", "name": "Artisane", "cost": 6, "types": ["Action"], "image": "artisane.png", "text": "Recevez dans votre main une carte coûtant jusqu’à 5 🪙.\n\nPlacez une carte de votre main sur votre pioche." }
+    {
+      "id": "artisane", "name": "Artisane", "cost": 6, "types": ["Action"], "image": "artisane.png", "text": "Recevez dans votre main une carte coûtant jusqu’à 5 🪙.\n\nPlacez une carte de votre main sur votre pioche.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "maxCost": 5, "prompt": "Recevez dans votre main une carte coûtant jusqu’à 5 🪙." },
+        { "op": "gain_selected_supply", "target": "self", "destinationZone": "hand" },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Placez une carte de votre main sur votre pioche." },
+        { "op": "move_selected", "target": "self", "sourceZone": "hand", "destinationZone": "deck" }
+      ] } ]
+    }
   ]
 }
