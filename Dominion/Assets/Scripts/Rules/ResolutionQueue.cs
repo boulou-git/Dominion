@@ -9,6 +9,7 @@ public sealed class ResolutionQueueSnapshot
     public List<GameEventSnapshot> PendingEvents = new List<GameEventSnapshot>();
     public PendingDecisionSnapshot PendingDecision = new PendingDecisionSnapshot();
     public List<int> SelectedInstanceIds = new List<int>();
+    public int LastSelectionCount;
 }
 
 [Serializable]
@@ -67,7 +68,6 @@ public sealed class PendingDecisionSnapshot
     public int MaxSelections;
     public List<int> CandidateInstanceIds = new List<int>();
 
-    // Exact continuation cursor.
     public GameEventSnapshot TriggerEvent;
     public string Timing;
     public int ListenerCardInstanceId;
@@ -100,6 +100,7 @@ public sealed class ResolutionQueue
     public GameEventBus Events { get; }
     public PendingDecisionSnapshot PendingDecision => _snapshot.PendingDecision;
     public IReadOnlyList<int> SelectedInstanceIds => _snapshot.SelectedInstanceIds;
+    public int LastSelectionCount => _snapshot.LastSelectionCount;
     public bool IsWaitingForDecision =>
         _snapshot.PendingDecision != null && _snapshot.PendingDecision.IsPending;
 
@@ -124,6 +125,7 @@ public sealed class ResolutionQueue
         state.Resolution.PendingEvents.Clear();
         state.Resolution.PendingDecision.Clear();
         state.Resolution.SelectedInstanceIds.Clear();
+        state.Resolution.LastSelectionCount = 0;
         queue = new ResolutionQueue(state.Resolution);
         return true;
     }
@@ -180,6 +182,7 @@ public sealed class ResolutionQueue
         decision.AbilityIndex = abilityIndex;
         decision.EffectIndex = effectIndex;
         _snapshot.SelectedInstanceIds.Clear();
+        _snapshot.LastSelectionCount = 0;
         return true;
     }
 
@@ -206,14 +209,11 @@ public sealed class ResolutionQueue
         continuation = CloneDecision(decision);
         _snapshot.SelectedInstanceIds.Clear();
         _snapshot.SelectedInstanceIds.AddRange(selected);
+        _snapshot.LastSelectionCount = selected.Count;
         decision.Clear();
         return true;
     }
 
-    /// <summary>
-    /// Returns the latest submitted selection once and clears it. Follow-up effects such as
-    /// trash_selected therefore cannot accidentally reuse a selection from an earlier choice.
-    /// </summary>
     public List<int> TakeSelectedInstanceIds()
     {
         List<int> selected = new List<int>(_snapshot.SelectedInstanceIds);
@@ -231,6 +231,7 @@ public sealed class ResolutionQueue
         _snapshot.PendingEvents.Clear();
         _snapshot.PendingDecision.Clear();
         _snapshot.SelectedInstanceIds.Clear();
+        _snapshot.LastSelectionCount = 0;
     }
 
     private static PendingDecisionSnapshot CloneDecision(PendingDecisionSnapshot source)
