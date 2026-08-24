@@ -47,8 +47,8 @@ public sealed class GameRuleResult
 /// Deterministic Dominion rules that know nothing about Photon, scenes or UI.
 /// The caller owns cloning/committing the GameStateSnapshot and injects card lookup/randomness.
 ///
-/// Normal card play and buying converge here; NetworkGameState should only validate command
-/// freshness/identity, clone the state, call this layer and commit successful results.
+/// Commands mutate a working copy, publish semantic GameEvents, then let TriggerResolver
+/// resolve declarative abilities from those events before a successful result is returned.
 /// </summary>
 public static class GameRules
 {
@@ -56,13 +56,6 @@ public static class GameRules
     public const string BuyPhase = "Buy";
     public const string CleanupPhase = "Cleanup";
 
-    /// <summary>
-    /// Plays one card from hand onto the board, pays its play cost, emits CardPlayed,
-    /// then resolves the card's declarative "play" abilities in order.
-    ///
-    /// IMPORTANT: this mutates the supplied working copy. A Rejected/Waiting result must
-    /// not be committed until the caller has the infrastructure required to resume it.
-    /// </summary>
     public static GameRuleResult TryPlayCard(
         GameStateSnapshot state,
         string playerId,
@@ -70,8 +63,6 @@ public static class GameRules
         Func<string, ExtensionCardData> resolveCardDefinition,
         System.Random random)
     {
-        List<GameEvent> events = new List<GameEvent>();
-
         if (state == null)
             return GameRuleResult.Rejected("Game state is null.");
         if (string.IsNullOrEmpty(playerId))
@@ -108,23 +99,29 @@ public static class GameRules
         if (consumesAction)
             player.Actions--;
 
-        events.Add(GameEvent.CardPlayed(playerId, instanceId, instance.DefinitionId));
+        GameEventBus eventBus = new GameEventBus();
+        eventBus.Publish(GameEvent.CardPlayed(playerId, instanceId, instance.DefinitionId));
 
-        AbilityResolutionResult abilityResult = AbilityResolver.ResolvePlay(
-            definition,
-            new EffectExecutionContext(state, player, instanceId, random));
+        TriggerResolutionResult triggerResult = TriggerResolver.ResolvePending(
+            eventBus,
+            state,
+            resolveCardDefinition,
+            random);
 
-        if (abilityResult.Status == EffectResolutionStatus.Rejected)
+        List<GameEvent> events = eventBus.SnapshotHistory();
+        if (triggerResult.Status == EffectResolutionStatus.Rejected)
         {
             return GameRuleResult.Rejected(
-                "Could not resolve play ability for " + instance.DefinitionId + ": " + abilityResult.Error,
+                "Could not resolve CardPlayed triggers for " + instance.DefinitionId + ": " + triggerResult.Error,
                 events);
         }
 
-        if (abilityResult.Status == EffectResolutionStatus.WaitingForChoice)
+        if (triggerResult.Status == EffectResolutionStatus.WaitingForChoice)
             return GameRuleResult.WaitingForChoice(events);
 
-        if (abilityResult.AbilitiesMatched == 0 || abilityResult.EffectsResolved == 0)
+        // During the current migration every playable card must still declare at least
+        // one concrete play effect. This keeps the pre-event behaviour unchanged.
+        if (triggerResult.AbilitiesMatched == 0 || triggerResult.EffectsResolved == 0)
         {
             return GameRuleResult.Rejected(
                 "Card has no resolvable declarative play effects yet: " + instance.DefinitionId,
@@ -135,17 +132,16 @@ public static class GameRules
     }
 
     /// <summary>
-    /// Pays one Buy and the card cost, then delegates the actual gain to GainRules.
-    /// Buying never creates CardInstance objects or mutates pile counts directly here.
+    /// Pays one Buy and the card cost, delegates the gain to GainRules, then resolves the
+    /// resulting CardGained/PileEmptied event chain before deciding whether cleanup starts.
     /// </summary>
     public static GameRuleResult TryBuyCard(
         GameStateSnapshot state,
         string playerId,
         string definitionId,
-        Func<string, ExtensionCardData> resolveCardDefinition)
+        Func<string, ExtensionCardData> resolveCardDefinition,
+        System.Random random)
     {
-        List<GameEvent> events = new List<GameEvent>();
-
         if (state == null)
             return GameRuleResult.Rejected("Game state is null.");
         if (string.IsNullOrEmpty(playerId))
@@ -174,16 +170,29 @@ public static class GameRules
         player.Coins -= definition.cost;
         player.Buys--;
 
+        GameEventBus eventBus = new GameEventBus();
         if (!GainRules.TryGainFromSupply(
                 state,
                 player,
                 definitionId,
                 CardZone.Discard,
                 0,
-                events,
+                eventBus,
                 out _,
                 out string gainError))
-            return GameRuleResult.Rejected(gainError, events);
+            return GameRuleResult.Rejected(gainError, eventBus.SnapshotHistory());
+
+        TriggerResolutionResult triggerResult = TriggerResolver.ResolvePending(
+            eventBus,
+            state,
+            resolveCardDefinition,
+            random);
+
+        List<GameEvent> events = eventBus.SnapshotHistory();
+        if (triggerResult.Status == EffectResolutionStatus.Rejected)
+            return GameRuleResult.Rejected(triggerResult.Error, events);
+        if (triggerResult.Status == EffectResolutionStatus.WaitingForChoice)
+            return GameRuleResult.WaitingForChoice(events);
 
         // Keep Cleanup as a short visible/interactable stage so the UI can animate the
         // hand and in-play cards before the authoritative cleanup/draw is committed.
