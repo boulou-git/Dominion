@@ -95,6 +95,10 @@ public sealed class CardEffectData
     public int min;
     public int max;
     public string prompt;
+
+    // Generic selected-card movement.
+    public string sourceZone;
+    public string destinationZone;
 }
 
 /// <summary>
