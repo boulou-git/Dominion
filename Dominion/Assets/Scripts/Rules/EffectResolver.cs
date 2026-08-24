@@ -88,6 +88,7 @@ public static class EffectResolver
         {
             { "add_resource", ResolveAddResource },
             { "draw", ResolveDraw },
+            { "draw_last_selection_count", ResolveDrawLastSelectionCount },
             { "choose_cards", ResolveChooseCards },
             { "trash_selected", ResolveTrashSelected },
             { "discard_selected", ResolveDiscardSelected }
@@ -139,6 +140,17 @@ public static class EffectResolver
         if (effect.amount < 0)
             return EffectResolutionResult.Rejected("draw amount cannot be negative.");
         if (!CardZoneRules.DrawCards(context.Actor, effect.amount, context.Random, out string error))
+            return EffectResolutionResult.Rejected(error);
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult ResolveDrawLastSelectionCount(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect))
+            return EffectResolutionResult.Rejected("draw_last_selection_count currently supports target 'self' only.");
+        if (context.Resolution == null)
+            return EffectResolutionResult.Rejected("draw_last_selection_count requires an active ResolutionQueue.");
+        if (!CardZoneRules.DrawCards(context.Actor, context.Resolution.LastSelectionCount, context.Random, out string error))
             return EffectResolutionResult.Rejected(error);
         return EffectResolutionResult.Applied();
     }
