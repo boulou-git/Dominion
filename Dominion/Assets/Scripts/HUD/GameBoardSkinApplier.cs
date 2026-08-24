@@ -298,7 +298,6 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             tileImage.type = Image.Type.Sliced;
             tileImage.color = new Color(0.80f, 0.72f, 0.58f, 0.96f);
             tileImage.raycastTarget = false;
-
             label.color = new Color(0.98f, 0.94f, 0.84f, 1f);
         }
     }
@@ -311,7 +310,7 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             if (label == null || !ShouldDecorateTitle(label.text))
                 continue;
 
-            NudgeTitleInward(label);
+            label.rectTransform.anchoredPosition += new Vector2(8f, -8f);
             EnsureCompactTitlePlateBehind(label);
             label.color = new Color(0.98f, 0.93f, 0.80f, 1f);
             label.fontStyle = FontStyle.Bold;
@@ -326,20 +325,6 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         string value = text.Trim().ToUpperInvariant();
         return value == "VOTRE MAIN" || value == "VOTRE TOUR" || value == "RÉSERVE" ||
                value.StartsWith("PLATEAU", StringComparison.Ordinal) || value == "JOURNAL";
-    }
-
-    /// <summary>
-    /// Existing title labels sit directly on the outer frame edge. Move them a few pixels
-    /// into the content area while preserving their anchors and controller references.
-    /// </summary>
-    private static void NudgeTitleInward(Text label)
-    {
-        RectTransform rect = label.rectTransform;
-        if (rect == null || rect.gameObject.GetComponent<TitleSkinAdjustedMarker>() != null)
-            return;
-
-        rect.anchoredPosition += new Vector2(8f, -8f);
-        rect.gameObject.AddComponent<TitleSkinAdjustedMarker>();
     }
 
     private void EnsureCompactTitlePlateBehind(Text label)
@@ -491,13 +476,5 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Marker only: prevents the runtime skin from nudging title labels more than once if
-    /// Apply is called manually after Start. It carries no state and no gameplay behaviour.
-    /// </summary>
-    private sealed class TitleSkinAdjustedMarker : MonoBehaviour
-    {
     }
 }
