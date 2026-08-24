@@ -103,8 +103,8 @@ public static class GameRules
         if (!string.IsNullOrEmpty(policyError))
             return GameRuleResult.Rejected(policyError);
 
-        player.Hand.Remove(instanceId);
-        player.InPlay.Add(instanceId);
+        if (!CardZoneRules.MoveCard(player.Hand, player.InPlay, instanceId))
+            return GameRuleResult.Rejected("Could not move the card from hand to in-play.");
 
         if (consumesAction)
             player.Actions--;
