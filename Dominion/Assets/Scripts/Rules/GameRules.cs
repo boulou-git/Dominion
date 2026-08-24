@@ -102,22 +102,56 @@ public static class GameRules
     public static GameRuleResult TrySubmitDecision(GameStateSnapshot state, string playerId, string decisionId,
         int[] selectedInstanceIds, Func<string, ExtensionCardData> resolveCardDefinition, System.Random random)
     {
-        if (state == null) return GameRuleResult.Rejected("Game state is null.");
-        if (string.IsNullOrEmpty(playerId)) return GameRuleResult.Rejected("Decision player id is missing.");
-        if (string.IsNullOrEmpty(decisionId)) return GameRuleResult.Rejected("Decision id is missing.");
-        if (resolveCardDefinition == null) return GameRuleResult.Rejected("Card definition resolver is missing.");
-        if (!ResolutionQueue.TryResume(state, out ResolutionQueue resolution, out string resumeError)) return GameRuleResult.Rejected(resumeError);
+        if (!PrepareDecisionResume(state, playerId, decisionId, resolveCardDefinition, out ResolutionQueue resolution, out GameRuleResult rejected))
+            return rejected;
         if (!resolution.TrySubmitDecision(playerId, decisionId, selectedInstanceIds, out PendingDecisionSnapshot continuation, out string decisionError))
             return GameRuleResult.Rejected(decisionError, resolution.Events.SnapshotHistory());
         PlayerStateSnapshot player = FindPlayer(state, playerId);
-        if (player == null) return GameRuleResult.Rejected("Decision player was not found.", resolution.Events.SnapshotHistory());
         if (!CardZoneRules.TryParseZone(continuation.Zone, out CardZone choiceZone))
             return GameRuleResult.Rejected("Decision source zone is invalid.", resolution.Events.SnapshotHistory());
         List<int> sourceZone = CardZoneRules.ResolveZone(player, choiceZone);
         if (sourceZone == null) return GameRuleResult.Rejected("Decision source zone is unavailable.", resolution.Events.SnapshotHistory());
         foreach (int instanceId in resolution.SelectedInstanceIds)
             if (!sourceZone.Contains(instanceId)) return GameRuleResult.Rejected("Selected card is no longer in the decision source zone.", resolution.Events.SnapshotHistory());
+        return ResumeDecision(state, resolution, continuation, resolveCardDefinition, random);
+    }
 
+    public static GameRuleResult TrySubmitSupplyDecision(GameStateSnapshot state, string playerId, string decisionId,
+        string[] selectedDefinitionIds, Func<string, ExtensionCardData> resolveCardDefinition, System.Random random)
+    {
+        if (!PrepareDecisionResume(state, playerId, decisionId, resolveCardDefinition, out ResolutionQueue resolution, out GameRuleResult rejected))
+            return rejected;
+        if (!resolution.TrySubmitSupplyDecision(playerId, decisionId, selectedDefinitionIds, out PendingDecisionSnapshot continuation, out string decisionError))
+            return GameRuleResult.Rejected(decisionError, resolution.Events.SnapshotHistory());
+
+        foreach (string definitionId in resolution.SelectedDefinitionIds)
+        {
+            SupplyPileSnapshot pile = state.SupplyPiles != null
+                ? state.SupplyPiles.Find(item => item != null && string.Equals(item.DefinitionId, definitionId, StringComparison.OrdinalIgnoreCase))
+                : null;
+            if (pile == null || pile.RemainingCount <= 0)
+                return GameRuleResult.Rejected("Selected supply pile is no longer available: " + definitionId, resolution.Events.SnapshotHistory());
+        }
+
+        return ResumeDecision(state, resolution, continuation, resolveCardDefinition, random);
+    }
+
+    private static bool PrepareDecisionResume(GameStateSnapshot state, string playerId, string decisionId,
+        Func<string, ExtensionCardData> resolveCardDefinition, out ResolutionQueue resolution, out GameRuleResult rejected)
+    {
+        resolution = null; rejected = null;
+        if (state == null) { rejected = GameRuleResult.Rejected("Game state is null."); return false; }
+        if (string.IsNullOrEmpty(playerId)) { rejected = GameRuleResult.Rejected("Decision player id is missing."); return false; }
+        if (string.IsNullOrEmpty(decisionId)) { rejected = GameRuleResult.Rejected("Decision id is missing."); return false; }
+        if (resolveCardDefinition == null) { rejected = GameRuleResult.Rejected("Card definition resolver is missing."); return false; }
+        if (!ResolutionQueue.TryResume(state, out resolution, out string resumeError)) { rejected = GameRuleResult.Rejected(resumeError); return false; }
+        if (FindPlayer(state, playerId) == null) { rejected = GameRuleResult.Rejected("Decision player was not found.", resolution.Events.SnapshotHistory()); return false; }
+        return true;
+    }
+
+    private static GameRuleResult ResumeDecision(GameStateSnapshot state, ResolutionQueue resolution,
+        PendingDecisionSnapshot continuation, Func<string, ExtensionCardData> resolveCardDefinition, System.Random random)
+    {
         TriggerResolutionResult triggerResult = TriggerResolver.ResumeSubjectDecision(resolution, continuation, state, resolveCardDefinition, random);
         List<GameEvent> events = resolution.Events.SnapshotHistory();
         if (triggerResult.Status == EffectResolutionStatus.Rejected) return GameRuleResult.Rejected(triggerResult.Error, events);
