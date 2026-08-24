@@ -100,7 +100,23 @@
       "cost": 2,
       "types": ["Action"],
       "image": "chapelle.png",
-      "text": "Écartez jusqu’à 4 cartes de votre main."
+      "text": "Écartez jusqu’à 4 cartes de votre main.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            {
+              "op": "choose_cards",
+              "target": "self",
+              "zone": "hand",
+              "min": 0,
+              "max": 4,
+              "prompt": "Écartez jusqu’à 4 cartes de votre main."
+            },
+            { "op": "trash_selected", "target": "self" }
+          ]
+        }
+      ]
     },
     {
       "id": "douves",
