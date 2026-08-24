@@ -105,10 +105,20 @@ public static class EffectResolver
 
     private static EffectResolutionResult ResolveDraw(CardEffectData effect, EffectExecutionContext context)
     {
-        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("draw currently supports target 'self' only.");
         if (effect.amount < 0) return EffectResolutionResult.Rejected("draw amount cannot be negative.");
-        return CardZoneRules.DrawCards(context.Actor, effect.amount, context.Random, out string error)
-            ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(error);
+        if (TargetsSelf(effect))
+            return CardZoneRules.DrawCards(context.Actor, effect.amount, context.Random, out string selfError)
+                ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(selfError);
+        if (!TargetsOthers(effect)) return EffectResolutionResult.Rejected("draw supports targets 'self' and 'others'.");
+        if (context.State.Players == null) return EffectResolutionResult.Applied();
+
+        foreach (PlayerStateSnapshot player in context.State.Players)
+        {
+            if (player == null || string.Equals(player.PlayerId, context.Actor.PlayerId, StringComparison.Ordinal)) continue;
+            if (!CardZoneRules.DrawCards(player, effect.amount, context.Random, out string error))
+                return EffectResolutionResult.Rejected(error);
+        }
+        return EffectResolutionResult.Applied();
     }
 
     private static EffectResolutionResult ResolveDrawLastSelectionCount(CardEffectData effect, EffectExecutionContext context)
