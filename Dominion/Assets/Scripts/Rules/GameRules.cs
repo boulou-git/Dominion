@@ -33,163 +33,99 @@ public static class GameRules
     public const string BuyPhase = "Buy";
     public const string CleanupPhase = "Cleanup";
 
-    public static GameRuleResult TryPlayCard(
-        GameStateSnapshot state,
-        string playerId,
-        int instanceId,
-        Func<string, ExtensionCardData> resolveCardDefinition,
-        System.Random random)
+    public static GameRuleResult TryPlayCard(GameStateSnapshot state, string playerId, int instanceId,
+        Func<string, ExtensionCardData> resolveCardDefinition, System.Random random)
     {
         if (state == null) return GameRuleResult.Rejected("Game state is null.");
         if (string.IsNullOrEmpty(playerId)) return GameRuleResult.Rejected("Player id is missing.");
         if (instanceId <= 0) return GameRuleResult.Rejected("Card instance id is invalid.");
         if (resolveCardDefinition == null) return GameRuleResult.Rejected("Card definition resolver is missing.");
-
         PlayerStateSnapshot player = FindPlayer(state, playerId);
         if (player == null) return GameRuleResult.Rejected("Player was not found.");
-        if (player.Hand == null || player.InPlay == null || !player.Hand.Contains(instanceId))
-            return GameRuleResult.Rejected("Card is not in the player's hand.");
-
+        if (player.Hand == null || player.InPlay == null || !player.Hand.Contains(instanceId)) return GameRuleResult.Rejected("Card is not in the player's hand.");
         CardInstance instance = FindCardInstance(state, instanceId);
         if (instance == null) return GameRuleResult.Rejected("Card instance was not found.");
-        if (!string.Equals(instance.OwnerPlayerId, playerId, StringComparison.Ordinal))
-            return GameRuleResult.Rejected("Card does not belong to the requesting player.");
-
+        if (!string.Equals(instance.OwnerPlayerId, playerId, StringComparison.Ordinal)) return GameRuleResult.Rejected("Card does not belong to the requesting player.");
         ExtensionCardData definition = resolveCardDefinition(instance.DefinitionId);
         if (definition == null) return GameRuleResult.Rejected("Card definition could not be resolved: " + instance.DefinitionId);
-
-        bool consumesAction;
-        string policyError = ValidatePlayPolicy(state, player, definition, out consumesAction);
+        string policyError = ValidatePlayPolicy(state, player, definition, out bool consumesAction);
         if (!string.IsNullOrEmpty(policyError)) return GameRuleResult.Rejected(policyError);
-
-        if (!ResolutionQueue.TryBegin(state, playerId, out ResolutionQueue resolution, out string resolutionError))
-            return GameRuleResult.Rejected(resolutionError);
-
-        if (!CardZoneRules.MoveCard(player, CardZone.Hand, CardZone.InPlay, instanceId))
-            return GameRuleResult.Rejected("Could not move the card from hand to in-play.");
+        if (!ResolutionQueue.TryBegin(state, playerId, out ResolutionQueue resolution, out string resolutionError)) return GameRuleResult.Rejected(resolutionError);
+        if (!CardZoneRules.MoveCard(player, CardZone.Hand, CardZone.InPlay, instanceId)) return GameRuleResult.Rejected("Could not move the card from hand to in-play.");
         if (consumesAction) player.Actions--;
-
         resolution.Events.Publish(GameEvent.CardPlayed(playerId, instanceId, instance.DefinitionId));
         TriggerResolutionResult triggerResult = TriggerResolver.ResolvePending(resolution, state, resolveCardDefinition, random);
         List<GameEvent> events = resolution.Events.SnapshotHistory();
-
-        if (triggerResult.Status == EffectResolutionStatus.Rejected)
-            return GameRuleResult.Rejected("Could not resolve CardPlayed triggers for " + instance.DefinitionId + ": " + triggerResult.Error, events);
+        if (triggerResult.Status == EffectResolutionStatus.Rejected) return GameRuleResult.Rejected("Could not resolve CardPlayed triggers for " + instance.DefinitionId + ": " + triggerResult.Error, events);
         if (triggerResult.Status == EffectResolutionStatus.WaitingForChoice)
         {
-            if (!resolution.IsWaitingForDecision)
-                return GameRuleResult.Rejected("A trigger reported WaitingForChoice without creating a durable PendingDecision.", events);
+            if (!resolution.IsWaitingForDecision) return GameRuleResult.Rejected("A trigger reported WaitingForChoice without creating a durable PendingDecision.", events);
             return GameRuleResult.WaitingForChoice(events);
         }
-        if (triggerResult.AbilitiesMatched == 0 || triggerResult.EffectsResolved == 0)
-            return GameRuleResult.Rejected("Card has no resolvable declarative play effects yet: " + instance.DefinitionId, events);
-
+        if (triggerResult.AbilitiesMatched == 0 || triggerResult.EffectsResolved == 0) return GameRuleResult.Rejected("Card has no resolvable declarative play effects yet: " + instance.DefinitionId, events);
         resolution.CompleteIfIdle();
         return GameRuleResult.Applied(events);
     }
 
-    public static GameRuleResult TryBuyCard(
-        GameStateSnapshot state,
-        string playerId,
-        string definitionId,
-        Func<string, ExtensionCardData> resolveCardDefinition,
-        System.Random random = null)
+    public static GameRuleResult TryBuyCard(GameStateSnapshot state, string playerId, string definitionId,
+        Func<string, ExtensionCardData> resolveCardDefinition, System.Random random = null)
     {
         if (state == null) return GameRuleResult.Rejected("Game state is null.");
         if (string.IsNullOrEmpty(playerId)) return GameRuleResult.Rejected("Player id is missing.");
         if (string.IsNullOrEmpty(definitionId)) return GameRuleResult.Rejected("Card definition id is missing.");
         if (resolveCardDefinition == null) return GameRuleResult.Rejected("Card definition resolver is missing.");
-        if (!string.Equals(state.Phase, BuyPhase, StringComparison.Ordinal))
-            return GameRuleResult.Rejected("Cards can only be bought during the Buy phase.");
-
+        if (!string.Equals(state.Phase, BuyPhase, StringComparison.Ordinal)) return GameRuleResult.Rejected("Cards can only be bought during the Buy phase.");
         PlayerStateSnapshot player = FindPlayer(state, playerId);
         if (player == null) return GameRuleResult.Rejected("Player was not found.");
         if (player.Buys <= 0) return GameRuleResult.Rejected("No Buys remain.");
-
         ExtensionCardData definition = resolveCardDefinition(definitionId);
         if (definition == null) return GameRuleResult.Rejected("Card definition could not be resolved: " + definitionId);
         if (definition.cost < 0) return GameRuleResult.Rejected("Card cost cannot be negative.");
         if (definition.cost > player.Coins) return GameRuleResult.Rejected("Not enough Coins to buy card: " + definitionId);
-
-        if (!ResolutionQueue.TryBegin(state, playerId, out ResolutionQueue resolution, out string resolutionError))
-            return GameRuleResult.Rejected(resolutionError);
-
-        player.Coins -= definition.cost;
-        player.Buys--;
-
-        if (!GainRules.TryGainFromSupply(
-                state, player, definitionId, CardZone.Discard, 0, resolution.Events,
-                out _, out string gainError))
+        if (!ResolutionQueue.TryBegin(state, playerId, out ResolutionQueue resolution, out string resolutionError)) return GameRuleResult.Rejected(resolutionError);
+        player.Coins -= definition.cost; player.Buys--;
+        if (!GainRules.TryGainFromSupply(state, player, definitionId, CardZone.Discard, 0, resolution.Events, out _, out string gainError))
             return GameRuleResult.Rejected(gainError, resolution.Events.SnapshotHistory());
-
         TriggerResolutionResult triggerResult = TriggerResolver.ResolvePending(resolution, state, resolveCardDefinition, random);
         List<GameEvent> events = resolution.Events.SnapshotHistory();
-        if (triggerResult.Status == EffectResolutionStatus.Rejected)
-            return GameRuleResult.Rejected(triggerResult.Error, events);
+        if (triggerResult.Status == EffectResolutionStatus.Rejected) return GameRuleResult.Rejected(triggerResult.Error, events);
         if (triggerResult.Status == EffectResolutionStatus.WaitingForChoice)
         {
-            if (!resolution.IsWaitingForDecision)
-                return GameRuleResult.Rejected("A trigger reported WaitingForChoice without creating a durable PendingDecision.", events);
+            if (!resolution.IsWaitingForDecision) return GameRuleResult.Rejected("A trigger reported WaitingForChoice without creating a durable PendingDecision.", events);
             return GameRuleResult.WaitingForChoice(events);
         }
-
-        if (player.Buys <= 0 || (player.Coins <= 0 && !HandContainsType(state, player, resolveCardDefinition, "Trésor")))
-            state.Phase = CleanupPhase;
-
+        if (player.Buys <= 0 || (player.Coins <= 0 && !HandContainsType(state, player, resolveCardDefinition, "Trésor"))) state.Phase = CleanupPhase;
         resolution.CompleteIfIdle();
         return GameRuleResult.Applied(events);
     }
 
-    public static GameRuleResult TrySubmitDecision(
-        GameStateSnapshot state,
-        string playerId,
-        string decisionId,
-        int[] selectedInstanceIds,
-        Func<string, ExtensionCardData> resolveCardDefinition,
-        System.Random random)
+    public static GameRuleResult TrySubmitDecision(GameStateSnapshot state, string playerId, string decisionId,
+        int[] selectedInstanceIds, Func<string, ExtensionCardData> resolveCardDefinition, System.Random random)
     {
         if (state == null) return GameRuleResult.Rejected("Game state is null.");
         if (string.IsNullOrEmpty(playerId)) return GameRuleResult.Rejected("Decision player id is missing.");
         if (string.IsNullOrEmpty(decisionId)) return GameRuleResult.Rejected("Decision id is missing.");
         if (resolveCardDefinition == null) return GameRuleResult.Rejected("Card definition resolver is missing.");
-
-        if (!ResolutionQueue.TryResume(state, out ResolutionQueue resolution, out string resumeError))
-            return GameRuleResult.Rejected(resumeError);
-        if (!resolution.TrySubmitDecision(
-                playerId,
-                decisionId,
-                selectedInstanceIds,
-                out PendingDecisionSnapshot continuation,
-                out string decisionError))
+        if (!ResolutionQueue.TryResume(state, out ResolutionQueue resolution, out string resumeError)) return GameRuleResult.Rejected(resumeError);
+        if (!resolution.TrySubmitDecision(playerId, decisionId, selectedInstanceIds, out PendingDecisionSnapshot continuation, out string decisionError))
             return GameRuleResult.Rejected(decisionError, resolution.Events.SnapshotHistory());
-
         PlayerStateSnapshot player = FindPlayer(state, playerId);
-        if (player == null)
-            return GameRuleResult.Rejected("Decision player was not found.", resolution.Events.SnapshotHistory());
-
+        if (player == null) return GameRuleResult.Rejected("Decision player was not found.", resolution.Events.SnapshotHistory());
+        if (!CardZoneRules.TryParseZone(continuation.Zone, out CardZone choiceZone))
+            return GameRuleResult.Rejected("Decision source zone is invalid.", resolution.Events.SnapshotHistory());
+        List<int> sourceZone = CardZoneRules.ResolveZone(player, choiceZone);
+        if (sourceZone == null) return GameRuleResult.Rejected("Decision source zone is unavailable.", resolution.Events.SnapshotHistory());
         foreach (int instanceId in resolution.SelectedInstanceIds)
-        {
-            if (player.Hand == null || !player.Hand.Contains(instanceId))
-                return GameRuleResult.Rejected("Selected card is no longer in the decision player's hand.", resolution.Events.SnapshotHistory());
-        }
+            if (!sourceZone.Contains(instanceId)) return GameRuleResult.Rejected("Selected card is no longer in the decision source zone.", resolution.Events.SnapshotHistory());
 
-        TriggerResolutionResult triggerResult = TriggerResolver.ResumeSubjectDecision(
-            resolution,
-            continuation,
-            state,
-            resolveCardDefinition,
-            random);
-
+        TriggerResolutionResult triggerResult = TriggerResolver.ResumeSubjectDecision(resolution, continuation, state, resolveCardDefinition, random);
         List<GameEvent> events = resolution.Events.SnapshotHistory();
-        if (triggerResult.Status == EffectResolutionStatus.Rejected)
-            return GameRuleResult.Rejected(triggerResult.Error, events);
+        if (triggerResult.Status == EffectResolutionStatus.Rejected) return GameRuleResult.Rejected(triggerResult.Error, events);
         if (triggerResult.Status == EffectResolutionStatus.WaitingForChoice)
         {
-            if (!resolution.IsWaitingForDecision)
-                return GameRuleResult.Rejected("Resumed trigger reported WaitingForChoice without a durable PendingDecision.", events);
+            if (!resolution.IsWaitingForDecision) return GameRuleResult.Rejected("Resumed trigger reported WaitingForChoice without a durable PendingDecision.", events);
             return GameRuleResult.WaitingForChoice(events);
         }
-
         resolution.CompleteIfIdle();
         return GameRuleResult.Applied(events);
     }
@@ -201,8 +137,7 @@ public static class GameRules
         {
             if (!CardDefinitionRules.HasType(definition, "Action")) return "Only Action cards can be played during the Action phase.";
             if (player.Actions <= 0) return "No Actions remain.";
-            consumesAction = true;
-            return string.Empty;
+            consumesAction = true; return string.Empty;
         }
         if (string.Equals(state.Phase, BuyPhase, StringComparison.Ordinal))
         {
@@ -218,8 +153,7 @@ public static class GameRules
         foreach (int instanceId in player.Hand)
         {
             CardInstance instance = FindCardInstance(state, instanceId);
-            if (instance == null) continue;
-            if (CardDefinitionRules.HasType(resolveCardDefinition(instance.DefinitionId), type)) return true;
+            if (instance != null && CardDefinitionRules.HasType(resolveCardDefinition(instance.DefinitionId), type)) return true;
         }
         return false;
     }
