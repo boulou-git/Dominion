@@ -15,6 +15,18 @@ public static class TrashRules
         GameEventBus eventBus,
         out string error)
     {
+        return TryTrashFromZone(state, owner, CardZone.Hand, instanceId, sourceCardInstanceId, eventBus, out error);
+    }
+
+    public static bool TryTrashFromZone(
+        GameStateSnapshot state,
+        PlayerStateSnapshot owner,
+        CardZone sourceZone,
+        int instanceId,
+        int sourceCardInstanceId,
+        GameEventBus eventBus,
+        out string error)
+    {
         error = string.Empty;
 
         if (state == null)
@@ -29,15 +41,22 @@ public static class TrashRules
             return false;
         }
 
+        if (sourceZone == CardZone.None)
+        {
+            error = "Trash source zone is invalid.";
+            return false;
+        }
+
         if (instanceId <= 0)
         {
             error = "Trash card instance id is invalid.";
             return false;
         }
 
-        if (owner.Hand == null || !owner.Hand.Contains(instanceId))
+        List<int> source = CardZoneRules.ResolveZone(owner, sourceZone);
+        if (source == null || !source.Contains(instanceId))
         {
-            error = "Card is not in the owner's hand.";
+            error = "Card is not in the expected trash source zone.";
             return false;
         }
 
@@ -57,9 +76,9 @@ public static class TrashRules
         if (state.TrashedCards == null)
             state.TrashedCards = new List<int>();
 
-        if (!CardZoneRules.MoveCard(owner.Hand, state.TrashedCards, instanceId))
+        if (!CardZoneRules.MoveCard(source, state.TrashedCards, instanceId))
         {
-            error = "Could not move card from hand to trash.";
+            error = "Could not move card to trash.";
             return false;
         }
 
