@@ -92,7 +92,25 @@
       "cost": 2,
       "types": ["Action"],
       "image": "cave.png",
-      "text": "+1 Action\n\nDéfaussez autant de cartes que vous le souhaitez, puis piochez autant de cartes."
+      "text": "+1 Action\n\nDéfaussez autant de cartes que vous le souhaitez, puis piochez autant de cartes.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+            {
+              "op": "choose_cards",
+              "target": "self",
+              "zone": "hand",
+              "min": 0,
+              "max": 99,
+              "prompt": "Défaussez autant de cartes que vous le souhaitez."
+            },
+            { "op": "discard_selected", "target": "self" },
+            { "op": "draw_last_selection_count", "target": "self" }
+          ]
+        }
+      ]
     },
     {
       "id": "chapelle",
