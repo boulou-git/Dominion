@@ -9,6 +9,7 @@ public sealed class ResolutionQueueSnapshot
     public List<GameEventSnapshot> PendingEvents = new List<GameEventSnapshot>();
     public PendingDecisionSnapshot PendingDecision = new PendingDecisionSnapshot();
     public List<int> SelectedInstanceIds = new List<int>();
+    public List<string> SelectedDefinitionIds = new List<string>();
     public int LastSelectionCount;
 }
 
@@ -55,6 +56,7 @@ public sealed class PendingDecisionSnapshot
     public int MinSelections;
     public int MaxSelections;
     public List<int> CandidateInstanceIds = new List<int>();
+    public List<string> CandidateDefinitionIds = new List<string>();
     public GameEventSnapshot TriggerEvent;
     public string Timing;
     public int ListenerCardInstanceId;
@@ -65,8 +67,8 @@ public sealed class PendingDecisionSnapshot
     {
         IsPending = false; DecisionId = string.Empty; PlayerId = string.Empty; Operation = string.Empty;
         Zone = string.Empty; Prompt = string.Empty; SourceCardInstanceId = 0; MinSelections = 0; MaxSelections = 0;
-        CandidateInstanceIds.Clear(); TriggerEvent = null; Timing = string.Empty; ListenerCardInstanceId = 0;
-        AbilityIndex = -1; EffectIndex = -1;
+        CandidateInstanceIds.Clear(); CandidateDefinitionIds.Clear(); TriggerEvent = null; Timing = string.Empty;
+        ListenerCardInstanceId = 0; AbilityIndex = -1; EffectIndex = -1;
     }
 }
 
@@ -76,6 +78,7 @@ public sealed class ResolutionQueue
     public GameEventBus Events { get; }
     public PendingDecisionSnapshot PendingDecision => _snapshot.PendingDecision;
     public IReadOnlyList<int> SelectedInstanceIds => _snapshot.SelectedInstanceIds;
+    public IReadOnlyList<string> SelectedDefinitionIds => _snapshot.SelectedDefinitionIds;
     public int LastSelectionCount => _snapshot.LastSelectionCount;
     public bool IsWaitingForDecision => _snapshot.PendingDecision != null && _snapshot.PendingDecision.IsPending;
 
@@ -90,7 +93,7 @@ public sealed class ResolutionQueue
         if (state.Resolution.IsActive) { error = "Another rules resolution is already active."; return false; }
         state.Resolution.IsActive = true; state.Resolution.OwnerPlayerId = ownerPlayerId;
         state.Resolution.PendingEvents.Clear(); state.Resolution.PendingDecision.Clear();
-        state.Resolution.SelectedInstanceIds.Clear(); state.Resolution.LastSelectionCount = 0;
+        state.Resolution.SelectedInstanceIds.Clear(); state.Resolution.SelectedDefinitionIds.Clear(); state.Resolution.LastSelectionCount = 0;
         queue = new ResolutionQueue(state.Resolution); return true;
     }
 
@@ -108,34 +111,85 @@ public sealed class ResolutionQueue
         int listenerCardInstanceId, int abilityIndex, int effectIndex, out string error)
     {
         error = string.Empty;
+        if (!PrepareDecision(playerId, operation, zone, prompt, sourceCardInstanceId, minSelections, maxSelections,
+                triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, out PendingDecisionSnapshot decision, out error))
+            return false;
+        if (candidateInstanceIds != null) decision.CandidateInstanceIds.AddRange(candidateInstanceIds);
+        return true;
+    }
+
+    public bool TrySuspendForSupplyDecision(string playerId, string operation, string prompt, int sourceCardInstanceId,
+        int minSelections, int maxSelections, IEnumerable<string> candidateDefinitionIds, GameEvent triggerEvent, string timing,
+        int listenerCardInstanceId, int abilityIndex, int effectIndex, out string error)
+    {
+        error = string.Empty;
+        if (!PrepareDecision(playerId, operation, "supply", prompt, sourceCardInstanceId, minSelections, maxSelections,
+                triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, out PendingDecisionSnapshot decision, out error))
+            return false;
+        if (candidateDefinitionIds != null) decision.CandidateDefinitionIds.AddRange(candidateDefinitionIds);
+        return true;
+    }
+
+    private bool PrepareDecision(string playerId, string operation, string zone, string prompt, int sourceCardInstanceId,
+        int minSelections, int maxSelections, GameEvent triggerEvent, string timing, int listenerCardInstanceId,
+        int abilityIndex, int effectIndex, out PendingDecisionSnapshot decision, out string error)
+    {
+        decision = null; error = string.Empty;
         if (IsWaitingForDecision) { error = "A decision is already pending for this resolution."; return false; }
         if (string.IsNullOrEmpty(playerId)) { error = "Decision player is missing."; return false; }
         if (string.IsNullOrWhiteSpace(operation)) { error = "Decision operation is missing."; return false; }
         if (minSelections < 0 || maxSelections < minSelections) { error = "Decision selection bounds are invalid."; return false; }
-        PendingDecisionSnapshot decision = _snapshot.PendingDecision;
+        decision = _snapshot.PendingDecision;
         decision.Clear(); decision.IsPending = true; decision.DecisionId = Guid.NewGuid().ToString("N");
         decision.PlayerId = playerId; decision.Operation = operation; decision.Zone = zone ?? string.Empty;
         decision.Prompt = prompt ?? string.Empty; decision.SourceCardInstanceId = sourceCardInstanceId;
         decision.MinSelections = minSelections; decision.MaxSelections = maxSelections;
-        if (candidateInstanceIds != null) decision.CandidateInstanceIds.AddRange(candidateInstanceIds);
         decision.TriggerEvent = GameEventSnapshot.FromRuntime(triggerEvent); decision.Timing = timing ?? string.Empty;
         decision.ListenerCardInstanceId = listenerCardInstanceId; decision.AbilityIndex = abilityIndex; decision.EffectIndex = effectIndex;
-        _snapshot.SelectedInstanceIds.Clear(); _snapshot.LastSelectionCount = 0; return true;
+        _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedDefinitionIds.Clear(); _snapshot.LastSelectionCount = 0;
+        return true;
     }
 
     public bool TrySubmitDecision(string playerId, string decisionId, IEnumerable<int> selectedIds, out PendingDecisionSnapshot continuation, out string error)
     {
         continuation = null; error = string.Empty;
-        if (!IsWaitingForDecision) { error = "There is no pending decision."; return false; }
-        PendingDecisionSnapshot decision = _snapshot.PendingDecision;
-        if (!string.Equals(decision.PlayerId, playerId, StringComparison.Ordinal)) { error = "Decision belongs to another player."; return false; }
-        if (!string.Equals(decision.DecisionId, decisionId, StringComparison.Ordinal)) { error = "Decision id is stale or invalid."; return false; }
+        if (!ValidateDecisionIdentity(playerId, decisionId, out PendingDecisionSnapshot decision, out error)) return false;
         List<int> selected = selectedIds != null ? new List<int>(selectedIds) : new List<int>();
-        if (selected.Count < decision.MinSelections || selected.Count > decision.MaxSelections) { error = "Selection count is outside the allowed bounds."; return false; }
+        if (!ValidateSelectionCount(selected.Count, decision, out error)) return false;
         HashSet<int> candidates = new HashSet<int>(decision.CandidateInstanceIds); HashSet<int> unique = new HashSet<int>();
         foreach (int id in selected) if (!candidates.Contains(id) || !unique.Add(id)) { error = "Selection contains an invalid or duplicate card."; return false; }
         continuation = CloneDecision(decision); _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedInstanceIds.AddRange(selected);
-        _snapshot.LastSelectionCount = selected.Count; decision.Clear(); return true;
+        _snapshot.SelectedDefinitionIds.Clear(); _snapshot.LastSelectionCount = selected.Count; decision.Clear(); return true;
+    }
+
+    public bool TrySubmitSupplyDecision(string playerId, string decisionId, IEnumerable<string> selectedIds, out PendingDecisionSnapshot continuation, out string error)
+    {
+        continuation = null; error = string.Empty;
+        if (!ValidateDecisionIdentity(playerId, decisionId, out PendingDecisionSnapshot decision, out error)) return false;
+        List<string> selected = selectedIds != null ? new List<string>(selectedIds) : new List<string>();
+        if (!ValidateSelectionCount(selected.Count, decision, out error)) return false;
+        HashSet<string> candidates = new HashSet<string>(decision.CandidateDefinitionIds, StringComparer.OrdinalIgnoreCase);
+        HashSet<string> unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string id in selected)
+            if (string.IsNullOrEmpty(id) || !candidates.Contains(id) || !unique.Add(id)) { error = "Selection contains an invalid or duplicate supply pile."; return false; }
+        continuation = CloneDecision(decision); _snapshot.SelectedDefinitionIds.Clear(); _snapshot.SelectedDefinitionIds.AddRange(selected);
+        _snapshot.SelectedInstanceIds.Clear(); _snapshot.LastSelectionCount = selected.Count; decision.Clear(); return true;
+    }
+
+    private bool ValidateDecisionIdentity(string playerId, string decisionId, out PendingDecisionSnapshot decision, out string error)
+    {
+        decision = _snapshot.PendingDecision; error = string.Empty;
+        if (!IsWaitingForDecision) { error = "There is no pending decision."; return false; }
+        if (!string.Equals(decision.PlayerId, playerId, StringComparison.Ordinal)) { error = "Decision belongs to another player."; return false; }
+        if (!string.Equals(decision.DecisionId, decisionId, StringComparison.Ordinal)) { error = "Decision id is stale or invalid."; return false; }
+        return true;
+    }
+
+    private static bool ValidateSelectionCount(int count, PendingDecisionSnapshot decision, out string error)
+    {
+        error = string.Empty;
+        if (count < decision.MinSelections || count > decision.MaxSelections) { error = "Selection count is outside the allowed bounds."; return false; }
+        return true;
     }
 
     public List<int> TakeSelectedInstanceIds()
@@ -143,11 +197,16 @@ public sealed class ResolutionQueue
         List<int> selected = new List<int>(_snapshot.SelectedInstanceIds); _snapshot.SelectedInstanceIds.Clear(); return selected;
     }
 
+    public List<string> TakeSelectedDefinitionIds()
+    {
+        List<string> selected = new List<string>(_snapshot.SelectedDefinitionIds); _snapshot.SelectedDefinitionIds.Clear(); return selected;
+    }
+
     public void CompleteIfIdle()
     {
         if (Events.PendingCount > 0 || IsWaitingForDecision) return;
         _snapshot.IsActive = false; _snapshot.OwnerPlayerId = string.Empty; _snapshot.PendingEvents.Clear();
-        _snapshot.PendingDecision.Clear(); _snapshot.SelectedInstanceIds.Clear(); _snapshot.LastSelectionCount = 0;
+        _snapshot.PendingDecision.Clear(); _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedDefinitionIds.Clear(); _snapshot.LastSelectionCount = 0;
     }
 
     private static PendingDecisionSnapshot CloneDecision(PendingDecisionSnapshot source)
@@ -160,7 +219,9 @@ public sealed class ResolutionQueue
             MaxSelections = source.MaxSelections, TriggerEvent = source.TriggerEvent, Timing = source.Timing,
             ListenerCardInstanceId = source.ListenerCardInstanceId, AbilityIndex = source.AbilityIndex, EffectIndex = source.EffectIndex
         };
-        clone.CandidateInstanceIds.AddRange(source.CandidateInstanceIds); return clone;
+        clone.CandidateInstanceIds.AddRange(source.CandidateInstanceIds);
+        clone.CandidateDefinitionIds.AddRange(source.CandidateDefinitionIds);
+        return clone;
     }
 
     public static void EnsureSnapshot(GameStateSnapshot state)
@@ -170,6 +231,8 @@ public sealed class ResolutionQueue
         if (state.Resolution.PendingEvents == null) state.Resolution.PendingEvents = new List<GameEventSnapshot>();
         if (state.Resolution.PendingDecision == null) state.Resolution.PendingDecision = new PendingDecisionSnapshot();
         if (state.Resolution.PendingDecision.CandidateInstanceIds == null) state.Resolution.PendingDecision.CandidateInstanceIds = new List<int>();
+        if (state.Resolution.PendingDecision.CandidateDefinitionIds == null) state.Resolution.PendingDecision.CandidateDefinitionIds = new List<string>();
         if (state.Resolution.SelectedInstanceIds == null) state.Resolution.SelectedInstanceIds = new List<int>();
+        if (state.Resolution.SelectedDefinitionIds == null) state.Resolution.SelectedDefinitionIds = new List<string>();
     }
 }
