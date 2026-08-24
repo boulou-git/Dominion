@@ -151,15 +151,15 @@ public static class EffectResolver
             return EffectResolutionResult.Rejected("choose_cards currently supports zone 'hand' only.");
         if (context.AbilityIndex < 0 || context.EffectIndex < 0 || context.ListenerCardInstanceId <= 0)
             return EffectResolutionResult.Rejected("choose_cards is missing its continuation cursor.");
+        if (context.TriggerEvent == null || context.TriggerEvent.CardInstanceId != context.ListenerCardInstanceId)
+            return EffectResolutionResult.Rejected("choose_cards currently supports subject abilities only.");
 
         int min = Math.Max(0, effect.min);
         int max = effect.max > 0 ? effect.max : min;
         if (max < min)
             return EffectResolutionResult.Rejected("choose_cards max cannot be lower than min.");
 
-        List<int> candidates = context.Actor.Hand != null
-            ? new List<int>(context.Actor.Hand)
-            : new List<int>();
+        List<int> candidates = context.Actor.Hand != null ? new List<int>(context.Actor.Hand) : new List<int>();
         max = Math.Min(max, candidates.Count);
         if (min > candidates.Count)
             return EffectResolutionResult.Rejected("choose_cards does not have enough eligible cards for its minimum.");
