@@ -163,11 +163,19 @@ public sealed class ResolutionQueue
     public bool TrySuspendForAttackReaction(string playerId, string prompt, int attackCardInstanceId,
         IEnumerable<int> candidateInstanceIds, IEnumerable<string> remainingPlayerIds, out string error)
     {
+        return TrySuspendForAttackReaction(playerId, prompt, attackCardInstanceId, candidateInstanceIds, remainingPlayerIds,
+            null, string.Empty, attackCardInstanceId, -1, -1, out error);
+    }
+
+    public bool TrySuspendForAttackReaction(string playerId, string prompt, int attackCardInstanceId,
+        IEnumerable<int> candidateInstanceIds, IEnumerable<string> remainingPlayerIds, GameEvent triggerEvent, string timing,
+        int listenerCardInstanceId, int abilityIndex, int effectIndex, out string error)
+    {
         error = string.Empty;
         List<int> candidates = candidateInstanceIds != null ? new List<int>(candidateInstanceIds) : new List<int>();
         if (candidates.Count == 0) { error = "Attack reaction decision has no candidates."; return false; }
         if (!PrepareDecision(playerId, "block_attack_reaction", "hand", prompt, attackCardInstanceId, 0, 1,
-                null, string.Empty, attackCardInstanceId, -1, -1, out PendingDecisionSnapshot decision, out error))
+                triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, out PendingDecisionSnapshot decision, out error))
             return false;
         decision.CandidateInstanceIds.AddRange(candidates);
         if (remainingPlayerIds != null) decision.RemainingPlayerIds.AddRange(remainingPlayerIds);
