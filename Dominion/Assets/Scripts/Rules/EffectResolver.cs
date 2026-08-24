@@ -89,7 +89,8 @@ public static class EffectResolver
             { "add_resource", ResolveAddResource },
             { "draw", ResolveDraw },
             { "choose_cards", ResolveChooseCards },
-            { "trash_selected", ResolveTrashSelected }
+            { "trash_selected", ResolveTrashSelected },
+            { "discard_selected", ResolveDiscardSelected }
         };
 
     public static bool IsSupported(string operation)
@@ -203,6 +204,26 @@ public static class EffectResolver
                     out string error))
                 return EffectResolutionResult.Rejected(error);
         }
+
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult ResolveDiscardSelected(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect))
+            return EffectResolutionResult.Rejected("discard_selected currently supports target 'self' only.");
+        if (context.Resolution == null)
+            return EffectResolutionResult.Rejected("discard_selected requires an active ResolutionQueue.");
+
+        List<int> selected = context.Resolution.TakeSelectedInstanceIds();
+        if (!DiscardRules.TryDiscardSelectedFromHand(
+                context.State,
+                context.Actor,
+                selected,
+                context.SourceCardInstanceId,
+                context.EventBus,
+                out string error))
+            return EffectResolutionResult.Rejected(error);
 
         return EffectResolutionResult.Applied();
     }
