@@ -53,18 +53,14 @@ public static class GameRules
         if (!ResolutionQueue.TryBegin(state, playerId, out ResolutionQueue resolution, out string resolutionError)) return GameRuleResult.Rejected(resolutionError);
         if (!CardZoneRules.MoveCard(player, CardZone.Hand, CardZone.InPlay, instanceId)) return GameRuleResult.Rejected("Could not move the card from hand to in-play.");
         if (consumesAction) player.Actions--;
-        resolution.Events.Publish(GameEvent.CardPlayed(playerId, instanceId, instance.DefinitionId));
-        TriggerResolutionResult triggerResult = TriggerResolver.ResolvePending(resolution, state, resolveCardDefinition, random);
-        List<GameEvent> events = resolution.Events.SnapshotHistory();
-        if (triggerResult.Status == EffectResolutionStatus.Rejected) return GameRuleResult.Rejected("Could not resolve CardPlayed triggers for " + instance.DefinitionId + ": " + triggerResult.Error, events);
-        if (triggerResult.Status == EffectResolutionStatus.WaitingForChoice)
+
+        if (CardDefinitionRules.HasType(definition, "Attaque"))
         {
-            if (!resolution.IsWaitingForDecision) return GameRuleResult.Rejected("A trigger reported WaitingForChoice without creating a durable PendingDecision.", events);
-            return GameRuleResult.WaitingForChoice(events);
+            GameRuleResult reactionResult = TryStartAttackReactions(state, player, instance, definition, resolution, resolveCardDefinition);
+            if (reactionResult != null) return reactionResult;
         }
-        if (triggerResult.AbilitiesMatched == 0 || triggerResult.EffectsResolved == 0) return GameRuleResult.Rejected("Card has no resolvable declarative play effects yet: " + instance.DefinitionId, events);
-        resolution.CompleteIfIdle();
-        return GameRuleResult.Applied(events);
+
+        return ResolvePlayedCard(state, player, instance, resolution, resolveCardDefinition, random);
     }
 
     public static GameRuleResult TryBuyCard(GameStateSnapshot state, string playerId, string definitionId,
@@ -114,6 +110,8 @@ public static class GameRules
         foreach (int instanceId in resolution.SelectedInstanceIds)
             if (!sourceZone.Contains(instanceId)) return GameRuleResult.Rejected("Selected card is no longer in the decision source zone.", resolution.Events.SnapshotHistory());
 
+        if (string.Equals(continuation.Operation, "block_attack_reaction", StringComparison.OrdinalIgnoreCase))
+            return ResolveAttackReactionDecision(state, player, resolution, continuation, resolveCardDefinition, random);
         if (string.Equals(continuation.Operation, "discard_down_to", StringComparison.OrdinalIgnoreCase))
             return ResolveDiscardDownDecision(state, player, resolution, continuation, resolveCardDefinition, random);
 
@@ -138,6 +136,101 @@ public static class GameRules
         }
 
         return ResumeDecision(state, resolution, continuation, resolveCardDefinition, random);
+    }
+
+    private static GameRuleResult TryStartAttackReactions(GameStateSnapshot state, PlayerStateSnapshot attacker,
+        CardInstance attackInstance, ExtensionCardData attackDefinition, ResolutionQueue resolution,
+        Func<string, ExtensionCardData> resolveCardDefinition)
+    {
+        if (state.Players == null || state.Players.Count <= 1) return null;
+
+        List<PlayerStateSnapshot> eligible = new List<PlayerStateSnapshot>();
+        List<List<int>> candidatesByPlayer = new List<List<int>>();
+        foreach (PlayerStateSnapshot player in state.Players)
+        {
+            if (player == null || string.Equals(player.PlayerId, attacker.PlayerId, StringComparison.Ordinal)) continue;
+            List<int> candidates = ReactionRules.FindBlockAttackCandidates(state, player, attackDefinition, resolveCardDefinition);
+            if (candidates.Count == 0) continue;
+            eligible.Add(player);
+            candidatesByPlayer.Add(candidates);
+        }
+        if (eligible.Count == 0) return null;
+
+        List<string> remaining = new List<string>();
+        for (int i = 1; i < eligible.Count; i++) remaining.Add(eligible[i].PlayerId);
+        if (!resolution.TrySuspendForAttackReaction(
+                eligible[0].PlayerId,
+                "Vous pouvez révéler une Réaction pour ne pas être affecté par cette Attaque.",
+                attackInstance.InstanceId,
+                candidatesByPlayer[0],
+                remaining,
+                out string error))
+            return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
+
+        return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+    }
+
+    private static GameRuleResult ResolveAttackReactionDecision(GameStateSnapshot state, PlayerStateSnapshot responder,
+        ResolutionQueue resolution, PendingDecisionSnapshot continuation,
+        Func<string, ExtensionCardData> resolveCardDefinition, System.Random random)
+    {
+        List<int> selected = resolution.TakeSelectedInstanceIds();
+        if (selected.Count > 0) resolution.MarkAttackProtected(responder.PlayerId);
+
+        CardInstance attackInstance = FindCardInstance(state, continuation.SourceCardInstanceId);
+        if (attackInstance == null)
+            return GameRuleResult.Rejected("Attack card instance was not found while resuming reactions.", resolution.Events.SnapshotHistory());
+        PlayerStateSnapshot attacker = FindPlayer(state, attackInstance.OwnerPlayerId);
+        if (attacker == null)
+            return GameRuleResult.Rejected("Attack owner was not found while resuming reactions.", resolution.Events.SnapshotHistory());
+        ExtensionCardData attackDefinition = resolveCardDefinition(attackInstance.DefinitionId);
+        if (attackDefinition == null || !CardDefinitionRules.HasType(attackDefinition, "Attaque"))
+            return GameRuleResult.Rejected("Reaction continuation no longer references a valid Attack card.", resolution.Events.SnapshotHistory());
+
+        List<string> remaining = continuation.RemainingPlayerIds != null
+            ? new List<string>(continuation.RemainingPlayerIds)
+            : new List<string>();
+        while (remaining.Count > 0)
+        {
+            string nextPlayerId = remaining[0];
+            remaining.RemoveAt(0);
+            PlayerStateSnapshot nextPlayer = FindPlayer(state, nextPlayerId);
+            if (nextPlayer == null) continue;
+            List<int> candidates = ReactionRules.FindBlockAttackCandidates(state, nextPlayer, attackDefinition, resolveCardDefinition);
+            if (candidates.Count == 0) continue;
+
+            if (!resolution.TrySuspendForAttackReaction(
+                    nextPlayer.PlayerId,
+                    continuation.Prompt,
+                    attackInstance.InstanceId,
+                    candidates,
+                    remaining,
+                    out string suspendError))
+                return GameRuleResult.Rejected(suspendError, resolution.Events.SnapshotHistory());
+            return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+        }
+
+        return ResolvePlayedCard(state, attacker, attackInstance, resolution, resolveCardDefinition, random);
+    }
+
+    private static GameRuleResult ResolvePlayedCard(GameStateSnapshot state, PlayerStateSnapshot player, CardInstance instance,
+        ResolutionQueue resolution, Func<string, ExtensionCardData> resolveCardDefinition, System.Random random)
+    {
+        resolution.Events.Publish(GameEvent.CardPlayed(player.PlayerId, instance.InstanceId, instance.DefinitionId));
+        TriggerResolutionResult triggerResult = TriggerResolver.ResolvePending(resolution, state, resolveCardDefinition, random);
+        List<GameEvent> events = resolution.Events.SnapshotHistory();
+        if (triggerResult.Status == EffectResolutionStatus.Rejected)
+            return GameRuleResult.Rejected("Could not resolve CardPlayed triggers for " + instance.DefinitionId + ": " + triggerResult.Error, events);
+        if (triggerResult.Status == EffectResolutionStatus.WaitingForChoice)
+        {
+            if (!resolution.IsWaitingForDecision)
+                return GameRuleResult.Rejected("A trigger reported WaitingForChoice without creating a durable PendingDecision.", events);
+            return GameRuleResult.WaitingForChoice(events);
+        }
+        if (triggerResult.AbilitiesMatched == 0 || triggerResult.EffectsResolved == 0)
+            return GameRuleResult.Rejected("Card has no resolvable declarative play effects yet: " + instance.DefinitionId, events);
+        resolution.CompleteIfIdle();
+        return GameRuleResult.Applied(events);
     }
 
     private static GameRuleResult ResolveDiscardDownDecision(GameStateSnapshot state, PlayerStateSnapshot responder,
