@@ -4,8 +4,9 @@ using UnityEngine.EventSystems;
 
 /// <summary>
 /// Adds gameplay meaning to an existing hand-card visual without owning the hand layout.
-/// Short left click plays an allowed card. Left-drag is reserved exclusively for
-/// reordering the local hand and never plays the card.
+/// Short left click requests the single PlayCard command when the current phase/type allows it.
+/// Left-drag is reserved exclusively for reordering the local hand and never plays the card.
+/// The Master remains authoritative; this local check is only an interaction affordance.
 /// </summary>
 public sealed class HandGameplayInteraction : MonoBehaviour, IBeginDragHandler, IEndDragHandler
 {
@@ -43,11 +44,57 @@ public sealed class HandGameplayInteraction : MonoBehaviour, IBeginDragHandler, 
     private void OnPrimaryAction()
     {
         // Unity may emit a PointerClick immediately after EndDrag. Suppress that click
-        // so dragging a Treasure to reorder the hand can never accidentally play it.
-        if (!_playable || _requestPending || _dragging || Time.frameCount <= _suppressPrimaryUntilFrame)
+        // so dragging a card to reorder the hand can never accidentally play it.
+        if ((!_playable && !CanPlayFromCurrentState()) ||
+            _requestPending ||
+            _dragging ||
+            Time.frameCount <= _suppressPrimaryUntilFrame)
             return;
 
         StartPlayAnimation();
+    }
+
+    private bool CanPlayFromCurrentState()
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (state == null || !state.IsStarted || state.IsPaused ||
+            state.ActivePlayerId != NetworkGameState.LocalPlayerId ||
+            (state.Resolution != null && state.Resolution.IsActive))
+            return false;
+
+        CardInstance instance = NetworkGameState.FindCardInstance(state, _instanceId);
+        if (instance == null)
+            return false;
+
+        ExtensionPackageData extension;
+        ExtensionCardData definition;
+        if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition))
+            return false;
+
+        if (string.Equals(state.Phase, NetworkGameState.ActionPhase, StringComparison.Ordinal))
+        {
+            PlayerStateSnapshot localPlayer = state.Players != null
+                ? state.Players.Find(player => player != null && player.PlayerId == NetworkGameState.LocalPlayerId)
+                : null;
+            return localPlayer != null && localPlayer.Actions > 0 && HasType(definition, "Action");
+        }
+
+        return string.Equals(state.Phase, NetworkGameState.BuyPhase, StringComparison.Ordinal) &&
+               HasType(definition, "Trésor");
+    }
+
+    private static bool HasType(ExtensionCardData definition, string type)
+    {
+        if (definition == null || definition.types == null || string.IsNullOrEmpty(type))
+            return false;
+
+        foreach (string declaredType in definition.types)
+        {
+            if (string.Equals(declaredType, type, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     public void OnBeginDrag(PointerEventData eventData)
