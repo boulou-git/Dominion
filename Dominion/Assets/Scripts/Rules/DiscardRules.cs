@@ -14,15 +14,29 @@ public static class DiscardRules
         GameEventBus eventBus,
         out string error)
     {
+        return TryDiscardSelected(state, player, CardZone.Hand, selectedInstanceIds, sourceCardInstanceId, eventBus, out error);
+    }
+
+    public static bool TryDiscardSelected(
+        GameStateSnapshot state,
+        PlayerStateSnapshot player,
+        CardZone sourceZone,
+        IEnumerable<int> selectedInstanceIds,
+        int sourceCardInstanceId,
+        GameEventBus eventBus,
+        out string error)
+    {
         error = string.Empty;
         if (state == null || player == null)
         {
             error = "Discard requires a game state and player.";
             return false;
         }
-        if (player.Hand == null || player.Discard == null)
+
+        List<int> source = CardZoneRules.ResolveZone(player, sourceZone);
+        if (source == null || player.Discard == null)
         {
-            error = "Discard requires hand and discard zones.";
+            error = "Discard requires valid source and discard zones.";
             return false;
         }
         if (eventBus == null)
@@ -45,9 +59,9 @@ public static class DiscardRules
                 error = "Selected discard card instance was not found: " + instanceId;
                 return false;
             }
-            if (instance.OwnerPlayerId != player.PlayerId || !player.Hand.Contains(instanceId))
+            if (instance.OwnerPlayerId != player.PlayerId || !source.Contains(instanceId))
             {
-                error = "Selected discard card is not in the player's hand: " + instanceId;
+                error = "Selected discard card is not in the expected source zone: " + instanceId;
                 return false;
             }
         }
@@ -55,7 +69,7 @@ public static class DiscardRules
         foreach (int instanceId in selected)
         {
             CardInstance instance = state.CardInstances.Find(card => card != null && card.InstanceId == instanceId);
-            if (!CardZoneRules.MoveCard(player, CardZone.Hand, CardZone.Discard, instanceId))
+            if (!CardZoneRules.MoveCard(player, sourceZone, CardZone.Discard, instanceId))
             {
                 error = "Could not move selected card to discard: " + instanceId;
                 return false;
