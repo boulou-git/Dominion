@@ -1,12 +1,6 @@
 using System;
 using System.Collections.Generic;
 
-public enum CardPlayKind
-{
-    Action,
-    Treasure
-}
-
 public enum GameRuleStatus
 {
     Applied,
@@ -53,8 +47,9 @@ public sealed class GameRuleResult
 /// Deterministic Dominion rules that know nothing about Photon, scenes or UI.
 /// The caller owns cloning/committing the GameStateSnapshot and injects card lookup/randomness.
 ///
-/// All ways of playing a card should converge here. Card-type-specific rules are policy
-/// checks inside this one pipeline, not separate copies of the same play implementation.
+/// Every normal card play converges here. The rules infer how a card may be played from
+/// the current phase and the card's declared types; callers never choose an Action/Treasure
+/// code path themselves.
 /// </summary>
 public static class GameRules
 {
@@ -73,7 +68,6 @@ public static class GameRules
         GameStateSnapshot state,
         string playerId,
         int instanceId,
-        CardPlayKind playKind,
         Func<string, ExtensionCardData> resolveCardDefinition,
         System.Random random)
     {
@@ -104,14 +98,15 @@ public static class GameRules
         if (definition == null)
             return GameRuleResult.Rejected("Card definition could not be resolved: " + instance.DefinitionId);
 
-        string policyError = ValidatePlayPolicy(state, player, definition, playKind);
+        bool consumesAction;
+        string policyError = ValidatePlayPolicy(state, player, definition, out consumesAction);
         if (!string.IsNullOrEmpty(policyError))
             return GameRuleResult.Rejected(policyError);
 
         player.Hand.Remove(instanceId);
         player.InPlay.Add(instanceId);
 
-        if (playKind == CardPlayKind.Action)
+        if (consumesAction)
             player.Actions--;
 
         events.Add(GameEvent.CardPlayed(playerId, instanceId, instance.DefinitionId));
@@ -144,29 +139,30 @@ public static class GameRules
         GameStateSnapshot state,
         PlayerStateSnapshot player,
         ExtensionCardData definition,
-        CardPlayKind playKind)
+        out bool consumesAction)
     {
-        switch (playKind)
+        consumesAction = false;
+
+        if (string.Equals(state.Phase, ActionPhase, StringComparison.Ordinal))
         {
-            case CardPlayKind.Action:
-                if (!string.Equals(state.Phase, ActionPhase, StringComparison.Ordinal))
-                    return "Action cards can only be played during the Action phase.";
-                if (player.Actions <= 0)
-                    return "No Actions remain.";
-                if (!HasType(definition, "Action"))
-                    return "Card is not an Action.";
-                return string.Empty;
+            if (!HasType(definition, "Action"))
+                return "Only Action cards can be played during the Action phase.";
+            if (player.Actions <= 0)
+                return "No Actions remain.";
 
-            case CardPlayKind.Treasure:
-                if (!string.Equals(state.Phase, BuyPhase, StringComparison.Ordinal))
-                    return "Treasure cards can only be played during the Buy phase.";
-                if (!HasType(definition, "Trésor"))
-                    return "Card is not a Treasure.";
-                return string.Empty;
-
-            default:
-                return "Unsupported card play kind: " + playKind;
+            consumesAction = true;
+            return string.Empty;
         }
+
+        if (string.Equals(state.Phase, BuyPhase, StringComparison.Ordinal))
+        {
+            if (!HasType(definition, "Trésor"))
+                return "Only Treasure cards can be played during the Buy phase.";
+
+            return string.Empty;
+        }
+
+        return "Cards cannot be played during phase: " + (state.Phase ?? string.Empty);
     }
 
     private static bool HasType(ExtensionCardData definition, string type)
