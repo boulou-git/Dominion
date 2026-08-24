@@ -4,12 +4,13 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Generic presentation for durable card-selection decisions.
-/// Hand choices bind existing hand visuals; other owned zones render a temporary choice grid.
+/// Generic presentation for durable decisions. Owned-card choices reuse the hand or a temporary
+/// zone grid; supply choices reuse the existing Reserve piles directly.
 /// </summary>
 public sealed class PendingDecisionController : MonoBehaviour
 {
     private readonly HashSet<int> _selected = new HashSet<int>();
+    private readonly HashSet<string> _selectedSupply = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<CardPointerInteraction, Action> _selectionHandlers = new Dictionary<CardPointerInteraction, Action>();
     private readonly Dictionary<Image, Color> _originalImageColors = new Dictionary<Image, Color>();
     private readonly List<Outline> _selectionOutlines = new List<Outline>();
@@ -36,6 +37,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         NetworkGameState.StateChanged -= Refresh;
         ClearCardBindings();
         ClearExternalCards();
+        ClearSupplyDecisionVisuals();
     }
 
     private void Refresh(GameStateSnapshot state)
@@ -49,17 +51,26 @@ public sealed class PendingDecisionController : MonoBehaviour
         {
             ClearCardBindings();
             ClearExternalCards();
+            ClearSupplyDecisionVisuals();
             _selected.Clear();
+            _selectedSupply.Clear();
             _submitPending = false;
             _boundDecisionId = decision.DecisionId;
         }
 
         if (_panel != null) _panel.gameObject.SetActive(true);
-        if (_promptText != null) _promptText.text = string.IsNullOrWhiteSpace(decision.Prompt) ? "Choisissez des cartes." : decision.Prompt;
+        if (_promptText != null) _promptText.text = string.IsNullOrWhiteSpace(decision.Prompt) ? "Faites un choix." : decision.Prompt;
 
+        bool supplyChoice = IsSupplyDecision(decision);
         CardZone choiceZone = ResolveDecisionZone(decision);
-        ConfigurePanelForZone(choiceZone);
-        if (choiceZone == CardZone.Hand)
+        ConfigurePanel(choiceZone, supplyChoice);
+
+        if (supplyChoice)
+        {
+            if (_externalCardsRoot != null) _externalCardsRoot.gameObject.SetActive(false);
+            BindSupplyPiles(decision);
+        }
+        else if (choiceZone == CardZone.Hand)
         {
             if (_externalCardsRoot != null) _externalCardsRoot.gameObject.SetActive(false);
             BindHandCards(decision);
@@ -72,9 +83,12 @@ public sealed class PendingDecisionController : MonoBehaviour
         RefreshSelectionUi(decision);
     }
 
+    private static bool IsSupplyDecision(PendingDecisionSnapshot decision) =>
+        decision != null && string.Equals(decision.Zone, "supply", StringComparison.OrdinalIgnoreCase);
+
     private static CardZone ResolveDecisionZone(PendingDecisionSnapshot decision)
     {
-        if (decision == null || string.IsNullOrWhiteSpace(decision.Zone)) return CardZone.Hand;
+        if (decision == null || string.IsNullOrWhiteSpace(decision.Zone) || IsSupplyDecision(decision)) return CardZone.Hand;
         return CardZoneRules.TryParseZone(decision.Zone, out CardZone zone) ? zone : CardZone.Hand;
     }
 
@@ -84,6 +98,37 @@ public sealed class PendingDecisionController : MonoBehaviour
         PendingDecisionSnapshot decision = state.Resolution.PendingDecision;
         if (decision == null || !decision.IsPending || !string.Equals(decision.PlayerId, NetworkGameState.LocalPlayerId, StringComparison.Ordinal)) return null;
         return decision;
+    }
+
+    private void BindSupplyPiles(PendingDecisionSnapshot decision)
+    {
+        HashSet<string> candidates = new HashSet<string>(decision.CandidateDefinitionIds ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+        SupplyPileInteractionBinding[] bindings = GetComponentsInChildren<SupplyPileInteractionBinding>(true);
+        foreach (SupplyPileInteractionBinding binding in bindings)
+        {
+            if (binding == null || string.IsNullOrEmpty(binding.DefinitionId)) continue;
+            bool candidate = candidates.Contains(binding.DefinitionId);
+            bool selected = _selectedSupply.Contains(binding.DefinitionId);
+            binding.SetDecisionChoice(true, candidate, selected, ToggleSupplySelection);
+        }
+    }
+
+    private void ToggleSupplySelection(string definitionId)
+    {
+        PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
+        if (decision == null || _submitPending || !IsSupplyDecision(decision) ||
+            decision.CandidateDefinitionIds == null || !decision.CandidateDefinitionIds.Contains(definitionId)) return;
+
+        if (_selectedSupply.Contains(definitionId)) _selectedSupply.Remove(definitionId);
+        else
+        {
+            int max = Math.Max(decision.MinSelections, decision.MaxSelections);
+            if (_selectedSupply.Count >= max) return;
+            _selectedSupply.Add(definitionId);
+        }
+
+        BindSupplyPiles(decision);
+        RefreshSelectionUi(decision);
     }
 
     private void BindHandCards(PendingDecisionSnapshot decision)
@@ -125,31 +170,21 @@ public sealed class PendingDecisionController : MonoBehaviour
         {
             CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
             if (instance == null) continue;
-            ExtensionPackageData extension;
-            ExtensionCardData definition;
+            ExtensionPackageData extension; ExtensionCardData definition;
             if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition)) continue;
 
             GameObject card = new GameObject("DecisionCard_" + instanceId, typeof(RectTransform), typeof(Image), typeof(LayoutElement), typeof(CardPointerInteraction));
             card.transform.SetParent(_externalCardsRoot, false);
-            RectTransform rect = card.GetComponent<RectTransform>();
-            rect.sizeDelta = new Vector2(82f, 127f);
+            RectTransform rect = card.GetComponent<RectTransform>(); rect.sizeDelta = new Vector2(82f, 127f);
             Image image = card.GetComponent<Image>();
             image.sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition);
-            image.preserveAspect = true;
-            image.color = image.sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);
-            image.raycastTarget = true;
-            LayoutElement layout = card.GetComponent<LayoutElement>();
-            layout.preferredWidth = 82f; layout.preferredHeight = 127f;
+            image.preserveAspect = true; image.color = image.sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f); image.raycastTarget = true;
+            LayoutElement layout = card.GetComponent<LayoutElement>(); layout.preferredWidth = 82f; layout.preferredHeight = 127f;
 
-            CardPointerInteraction pointer = card.GetComponent<CardPointerInteraction>();
-            pointer.InspectOnLongPress = false;
-            int capturedId = instanceId;
-            Action handler = () => ToggleSelection(capturedId);
-            pointer.PrimaryActionRequested += handler;
-            _selectionHandlers.Add(pointer, handler);
-            _externalCards.Add(card);
+            CardPointerInteraction pointer = card.GetComponent<CardPointerInteraction>(); pointer.InspectOnLongPress = false;
+            int capturedId = instanceId; Action handler = () => ToggleSelection(capturedId);
+            pointer.PrimaryActionRequested += handler; _selectionHandlers.Add(pointer, handler); _externalCards.Add(card);
         }
-
         LayoutRebuilder.ForceRebuildLayoutImmediate(_externalCardsRoot);
     }
 
@@ -170,13 +205,14 @@ public sealed class PendingDecisionController : MonoBehaviour
     private void RefreshSelectionUi(PendingDecisionSnapshot decision)
     {
         if (decision == null) return;
+        int selectedCount = IsSupplyDecision(decision) ? _selectedSupply.Count : _selected.Count;
         if (_countText != null)
             _countText.text = decision.MinSelections == decision.MaxSelections
-                ? _selected.Count + " / " + decision.MaxSelections
-                : _selected.Count + " sélectionnée(s) — " + decision.MinSelections + " à " + decision.MaxSelections;
+                ? selectedCount + " / " + decision.MaxSelections
+                : selectedCount + " sélectionnée(s) — " + decision.MinSelections + " à " + decision.MaxSelections;
         if (_confirmButton != null)
-            _confirmButton.interactable = _selected.Count >= decision.MinSelections && _selected.Count <= decision.MaxSelections && !_submitPending;
-        RefreshSelectionMarkers();
+            _confirmButton.interactable = selectedCount >= decision.MinSelections && selectedCount <= decision.MaxSelections && !_submitPending;
+        if (!IsSupplyDecision(decision)) RefreshSelectionMarkers();
     }
 
     private void RefreshSelectionMarkers()
@@ -220,19 +256,39 @@ public sealed class PendingDecisionController : MonoBehaviour
     private void Submit()
     {
         PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
-        if (decision == null || _submitPending || _selected.Count < decision.MinSelections || _selected.Count > decision.MaxSelections) return;
+        if (decision == null || _submitPending) return;
+        int selectedCount = IsSupplyDecision(decision) ? _selectedSupply.Count : _selected.Count;
+        if (selectedCount < decision.MinSelections || selectedCount > decision.MaxSelections) return;
+
         PlayersTurnsHandler handler = PlayersTurnsHandler.Instance;
         if (handler == null) return;
         _submitPending = true;
         if (_confirmButton != null) _confirmButton.interactable = false;
-        int[] selected = new int[_selected.Count]; _selected.CopyTo(selected);
-        handler.SubmitDecision(decision.DecisionId, selected);
+
+        if (IsSupplyDecision(decision))
+        {
+            string[] selected = new string[_selectedSupply.Count]; _selectedSupply.CopyTo(selected);
+            handler.SubmitSupplyDecision(decision.DecisionId, selected);
+        }
+        else
+        {
+            int[] selected = new int[_selected.Count]; _selected.CopyTo(selected);
+            handler.SubmitDecision(decision.DecisionId, selected);
+        }
     }
 
     private void HideDecision()
     {
-        ClearCardBindings(); ClearExternalCards(); _selected.Clear(); _boundDecisionId = string.Empty; _submitPending = false;
+        ClearCardBindings(); ClearExternalCards(); ClearSupplyDecisionVisuals();
+        _selected.Clear(); _selectedSupply.Clear(); _boundDecisionId = string.Empty; _submitPending = false;
         if (_panel != null) _panel.gameObject.SetActive(false);
+    }
+
+    private void ClearSupplyDecisionVisuals()
+    {
+        SupplyPileInteractionBinding[] bindings = GetComponentsInChildren<SupplyPileInteractionBinding>(true);
+        foreach (SupplyPileInteractionBinding binding in bindings)
+            if (binding != null) binding.SetDecisionChoice(false, false, false, null);
     }
 
     private void ClearCardBindings()
@@ -277,24 +333,23 @@ public sealed class PendingDecisionController : MonoBehaviour
         GameObject buttonTextObject = new GameObject("Label", typeof(RectTransform), typeof(Text));
         buttonTextObject.transform.SetParent(buttonObject.transform, false); _confirmText = buttonTextObject.GetComponent<Text>();
         ConfigureText(_confirmText, 16, TextAnchor.MiddleCenter); _confirmText.fontStyle = FontStyle.Bold; _confirmText.text = "VALIDER"; _confirmText.raycastTarget = false;
-
         SetAnchors(buttonTextObject.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
         _panel.gameObject.SetActive(false);
-        ConfigurePanelForZone(CardZone.Hand);
+        ConfigurePanel(CardZone.Hand, false);
     }
 
-    private void ConfigurePanelForZone(CardZone zone)
+    private void ConfigurePanel(CardZone zone, bool supplyChoice)
     {
         if (_panel == null) return;
-        bool hand = zone == CardZone.Hand;
-        SetAnchors(_panel, hand ? new Vector2(0.30f, 0.245f) : new Vector2(0.12f, 0.20f), hand ? new Vector2(0.70f, 0.34f) : new Vector2(0.88f, 0.66f));
-        SetAnchors(_promptText.rectTransform, hand ? new Vector2(0.03f, 0.40f) : new Vector2(0.03f, 0.82f), hand ? new Vector2(0.70f, 0.94f) : new Vector2(0.78f, 0.97f));
-        SetAnchors(_countText.rectTransform, new Vector2(0.03f, 0.06f), hand ? new Vector2(0.70f, 0.42f) : new Vector2(0.62f, 0.16f));
-        SetAnchors(_confirmButton.GetComponent<RectTransform>(), hand ? new Vector2(0.73f, 0.15f) : new Vector2(0.80f, 0.82f), hand ? new Vector2(0.97f, 0.85f) : new Vector2(0.97f, 0.96f));
+        bool compact = zone == CardZone.Hand || supplyChoice;
+        SetAnchors(_panel, compact ? new Vector2(0.30f, 0.245f) : new Vector2(0.12f, 0.20f), compact ? new Vector2(0.70f, 0.34f) : new Vector2(0.88f, 0.66f));
+        SetAnchors(_promptText.rectTransform, compact ? new Vector2(0.03f, 0.40f) : new Vector2(0.03f, 0.82f), compact ? new Vector2(0.70f, 0.94f) : new Vector2(0.78f, 0.97f));
+        SetAnchors(_countText.rectTransform, new Vector2(0.03f, 0.06f), compact ? new Vector2(0.70f, 0.42f) : new Vector2(0.62f, 0.16f));
+        SetAnchors(_confirmButton.GetComponent<RectTransform>(), compact ? new Vector2(0.73f, 0.15f) : new Vector2(0.80f, 0.82f), compact ? new Vector2(0.97f, 0.85f) : new Vector2(0.97f, 0.96f));
         if (_externalCardsRoot != null)
         {
             SetAnchors(_externalCardsRoot, new Vector2(0.03f, 0.18f), new Vector2(0.97f, 0.79f));
-            _externalCardsRoot.gameObject.SetActive(!hand);
+            _externalCardsRoot.gameObject.SetActive(!compact);
         }
     }
 
