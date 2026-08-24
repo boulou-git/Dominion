@@ -51,9 +51,10 @@ public static class EffectResolver
     {
         { "add_resource", ResolveAddResource }, { "add_resource_per_last_selection", ResolveAddResourcePerLastSelection },
         { "draw", ResolveDraw }, { "draw_last_selection_count", ResolveDrawLastSelectionCount },
-        { "choose_cards", ResolveChooseCards }, { "trash_selected", ResolveTrashSelected },
-        { "discard_selected", ResolveDiscardSelected }, { "move_selected", ResolveMoveSelected },
-        { "choose_supply", ResolveChooseSupply }, { "gain_selected_supply", ResolveGainSelectedSupply }
+        { "choose_cards", ResolveChooseCards }, { "remember_selected_card_cost", ResolveRememberSelectedCardCost },
+        { "trash_selected", ResolveTrashSelected }, { "discard_selected", ResolveDiscardSelected },
+        { "move_selected", ResolveMoveSelected }, { "choose_supply", ResolveChooseSupply },
+        { "gain_selected_supply", ResolveGainSelectedSupply }
     };
 
     public static bool IsSupported(string operation) => !string.IsNullOrWhiteSpace(operation) && Handlers.ContainsKey(operation);
@@ -153,6 +154,23 @@ public static class EffectResolver
         return EffectResolutionResult.WaitingForChoice();
     }
 
+    private static EffectResolutionResult ResolveRememberSelectedCardCost(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("remember_selected_card_cost currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("remember_selected_card_cost requires an active ResolutionQueue.");
+        if (context.Resolution.SelectedInstanceIds.Count != 1)
+            return EffectResolutionResult.Rejected("remember_selected_card_cost requires exactly one selected card.");
+
+        CardInstance instance = FindCardInstance(context.State, context.Resolution.SelectedInstanceIds[0]);
+        if (instance == null) return EffectResolutionResult.Rejected("Selected card instance could not be resolved.");
+        ExtensionCardData definition = ResolveDefinition(instance.DefinitionId);
+        if (definition == null) return EffectResolutionResult.Rejected("Selected card definition could not be resolved: " + instance.DefinitionId);
+        if (definition.cost < 0) return EffectResolutionResult.Rejected("Selected card has an invalid negative cost.");
+
+        context.Resolution.SetLastSelectedCardCost(definition.cost);
+        return EffectResolutionResult.Applied();
+    }
+
     private static EffectResolutionResult ResolveChooseSupply(CardEffectData effect, EffectExecutionContext context)
     {
         if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("choose_supply currently supports target 'self' only.");
@@ -161,6 +179,15 @@ public static class EffectResolver
 
         int min = Math.Max(0, effect.min);
         int max = effect.max > 0 ? effect.max : Math.Max(1, min);
+        int costCeiling = effect.maxCost;
+        if (effect.useLastSelectionCost)
+        {
+            if (context.Resolution.LastSelectedCardCost < 0)
+                return EffectResolutionResult.Rejected("choose_supply requires a remembered selected-card cost.");
+            int dynamicCeiling = context.Resolution.LastSelectedCardCost + effect.costOffset;
+            costCeiling = costCeiling >= 0 ? Math.Min(costCeiling, dynamicCeiling) : dynamicCeiling;
+        }
+
         List<string> candidates = new List<string>();
         if (context.State.SupplyPiles != null)
         {
@@ -169,7 +196,7 @@ public static class EffectResolver
                 if (pile == null || pile.RemainingCount <= 0 || string.IsNullOrEmpty(pile.DefinitionId)) continue;
                 ExtensionCardData definition = ResolveDefinition(pile.DefinitionId);
                 if (definition == null) continue;
-                if (effect.maxCost >= 0 && definition.cost > effect.maxCost) continue;
+                if (costCeiling >= 0 && definition.cost > costCeiling) continue;
                 if (!string.IsNullOrWhiteSpace(effect.cardId) &&
                     !string.Equals(pile.DefinitionId, effect.cardId, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!string.IsNullOrWhiteSpace(effect.cardType) && !CardDefinitionRules.HasType(definition, effect.cardType)) continue;
