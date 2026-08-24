@@ -11,6 +11,7 @@ public sealed class ResolutionQueueSnapshot
     public List<int> SelectedInstanceIds = new List<int>();
     public List<string> SelectedDefinitionIds = new List<string>();
     public int LastSelectionCount;
+    public int LastSelectedCardCost = -1;
 }
 
 [Serializable]
@@ -80,6 +81,7 @@ public sealed class ResolutionQueue
     public IReadOnlyList<int> SelectedInstanceIds => _snapshot.SelectedInstanceIds;
     public IReadOnlyList<string> SelectedDefinitionIds => _snapshot.SelectedDefinitionIds;
     public int LastSelectionCount => _snapshot.LastSelectionCount;
+    public int LastSelectedCardCost => _snapshot.LastSelectedCardCost;
     public bool IsWaitingForDecision => _snapshot.PendingDecision != null && _snapshot.PendingDecision.IsPending;
 
     private ResolutionQueue(ResolutionQueueSnapshot snapshot) { _snapshot = snapshot; Events = new GameEventBus(snapshot); }
@@ -93,7 +95,8 @@ public sealed class ResolutionQueue
         if (state.Resolution.IsActive) { error = "Another rules resolution is already active."; return false; }
         state.Resolution.IsActive = true; state.Resolution.OwnerPlayerId = ownerPlayerId;
         state.Resolution.PendingEvents.Clear(); state.Resolution.PendingDecision.Clear();
-        state.Resolution.SelectedInstanceIds.Clear(); state.Resolution.SelectedDefinitionIds.Clear(); state.Resolution.LastSelectionCount = 0;
+        state.Resolution.SelectedInstanceIds.Clear(); state.Resolution.SelectedDefinitionIds.Clear();
+        state.Resolution.LastSelectionCount = 0; state.Resolution.LastSelectedCardCost = -1;
         queue = new ResolutionQueue(state.Resolution); return true;
     }
 
@@ -192,6 +195,11 @@ public sealed class ResolutionQueue
         return true;
     }
 
+    public void SetLastSelectedCardCost(int cost)
+    {
+        _snapshot.LastSelectedCardCost = cost;
+    }
+
     public List<int> TakeSelectedInstanceIds()
     {
         List<int> selected = new List<int>(_snapshot.SelectedInstanceIds); _snapshot.SelectedInstanceIds.Clear(); return selected;
@@ -206,7 +214,8 @@ public sealed class ResolutionQueue
     {
         if (Events.PendingCount > 0 || IsWaitingForDecision) return;
         _snapshot.IsActive = false; _snapshot.OwnerPlayerId = string.Empty; _snapshot.PendingEvents.Clear();
-        _snapshot.PendingDecision.Clear(); _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedDefinitionIds.Clear(); _snapshot.LastSelectionCount = 0;
+        _snapshot.PendingDecision.Clear(); _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedDefinitionIds.Clear();
+        _snapshot.LastSelectionCount = 0; _snapshot.LastSelectedCardCost = -1;
     }
 
     private static PendingDecisionSnapshot CloneDecision(PendingDecisionSnapshot source)
