@@ -5,8 +5,7 @@ using UnityEngine.UI;
 /// <summary>
 /// Applies the low-poly medieval GameBoard skin without changing gameplay layout or logic.
 /// Source PNGs live in Assets/Resources/UI/GameBoardSkin/.
-/// Runtime-created sprites keep the skin modular and let the current editable GameScreen
-/// prefab keep its anchors, card containers and gameplay controllers untouched.
+/// The skin keeps frames decorative and uses calm dark interiors, matching the reference UI hierarchy.
 /// </summary>
 public sealed class GameBoardSkinApplier : MonoBehaviour
 {
@@ -24,10 +23,7 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
 
     private bool _applied;
 
-    private void Start()
-    {
-        Apply();
-    }
+    private void Start() => Apply();
 
     public void Apply()
     {
@@ -42,20 +38,23 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             return;
         }
 
-        ApplyImage("Background", _background, Image.Type.Simple, Color.white);
+        ApplyImage("Background", _background, Image.Type.Simple, new Color(0.72f, 0.62f, 0.50f, 1f));
 
-        // Primary focus areas: strongest contrast and full opacity.
+        // Frames stay decorative; the dark inner shades below provide the calm content surfaces.
         ApplyImage("LocalHand", _handPanel, Image.Type.Sliced, Color.white);
         ApplyImage("StatusPanel", _turnPanel, Image.Type.Sliced, Color.white);
+        ApplyImage("SupplyPanel", _secondaryPanel, Image.Type.Sliced, new Color(0.78f, 0.76f, 0.72f, 1f));
+        ApplyImage("InPlayPanel", _secondaryPanel, Image.Type.Sliced, new Color(0.78f, 0.76f, 0.72f, 1f));
+        ApplyImage("JournalPanel", _secondaryPanel, Image.Type.Sliced, new Color(0.78f, 0.76f, 0.72f, 1f));
 
-        // Secondary information areas deliberately sit one visual level lower.
-        Color secondaryTint = new Color(0.90f, 0.88f, 0.84f, 0.94f);
-        ApplyImage("SupplyPanel", _secondaryPanel, Image.Type.Sliced, secondaryTint);
-        ApplyImage("InPlayPanel", _secondaryPanel, Image.Type.Sliced, secondaryTint);
-        ApplyImage("JournalPanel", _secondaryPanel, Image.Type.Sliced, secondaryTint);
-
-        // Legacy prototype fills must not sit on top of the new skin.
         MakeContentRootTransparent("InPlayPanel", "Cards");
+
+        // Reference look: dark neutral interiors inside the carved frames.
+        EnsureInnerShade("SupplyPanel", 22f, 22f, 34f, 22f, new Color(0.055f, 0.050f, 0.043f, 0.68f));
+        EnsureInnerShade("InPlayPanel", 22f, 22f, 30f, 22f, new Color(0.055f, 0.050f, 0.043f, 0.62f));
+        EnsureInnerShade("JournalPanel", 20f, 20f, 30f, 20f, new Color(0.050f, 0.047f, 0.042f, 0.70f));
+        EnsureInnerShade("StatusPanel", 18f, 18f, 42f, 24f, new Color(0.050f, 0.047f, 0.042f, 0.60f));
+        EnsureInnerShade("LocalHand", 24f, 24f, 34f, 22f, new Color(0.055f, 0.050f, 0.043f, 0.48f));
 
         StyleTopBar();
         ApplyTitlePlates();
@@ -81,46 +80,22 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             return false;
 
         _background = CreateWholeSprite(backgroundTexture, Vector4.zero);
-
-        _secondaryPanel = CreateCroppedSprite(
-            boardTexture,
-            new RectInt(6, 348, 1431, 367),
-            new Vector4(72f, 52f, 72f, 52f));
-
-        _handPanel = CreateCroppedSprite(
-            handTexture,
-            new RectInt(3, 111, 2040, 439),
-            new Vector4(86f, 62f, 86f, 62f));
-
-        _turnPanel = CreateCroppedSprite(
-            turnTexture,
-            new RectInt(29, 25, 966, 1477),
-            new Vector4(76f, 82f, 76f, 82f));
-
-        _titlePlate = CreateCroppedSprite(
-            titleTexture,
-            new RectInt(71, 131, 1907, 360),
-            new Vector4(150f, 48f, 150f, 48f));
-
-        _buttonNormal = CreateCroppedSprite(
-            buttonTexture,
-            new RectInt(94, 58, 1349, 271),
-            new Vector4(82f, 38f, 82f, 38f));
-
-        _buttonHover = CreateCroppedSprite(
-            buttonTexture,
-            new RectInt(93, 372, 1350, 272),
-            new Vector4(82f, 38f, 82f, 38f));
-
-        _buttonPressed = CreateCroppedSprite(
-            buttonTexture,
-            new RectInt(94, 690, 1349, 276),
-            new Vector4(82f, 38f, 82f, 38f));
-
-        _separator = CreateCroppedSprite(
-            separatorTexture,
-            new RectInt(32, 123, 1472, 99),
-            new Vector4(68f, 16f, 68f, 16f));
+        _secondaryPanel = CreateCroppedSprite(boardTexture,
+            new RectInt(6, 348, 1431, 367), new Vector4(72f, 52f, 72f, 52f));
+        _handPanel = CreateCroppedSprite(handTexture,
+            new RectInt(3, 111, 2040, 439), new Vector4(86f, 62f, 86f, 62f));
+        _turnPanel = CreateCroppedSprite(turnTexture,
+            new RectInt(29, 25, 966, 1477), new Vector4(76f, 82f, 76f, 82f));
+        _titlePlate = CreateCroppedSprite(titleTexture,
+            new RectInt(71, 131, 1907, 360), new Vector4(150f, 48f, 150f, 48f));
+        _buttonNormal = CreateCroppedSprite(buttonTexture,
+            new RectInt(94, 58, 1349, 271), new Vector4(82f, 38f, 82f, 38f));
+        _buttonHover = CreateCroppedSprite(buttonTexture,
+            new RectInt(93, 372, 1350, 272), new Vector4(82f, 38f, 82f, 38f));
+        _buttonPressed = CreateCroppedSprite(buttonTexture,
+            new RectInt(94, 690, 1349, 276), new Vector4(82f, 38f, 82f, 38f));
+        _separator = CreateCroppedSprite(separatorTexture,
+            new RectInt(32, 123, 1472, 99), new Vector4(68f, 16f, 68f, 16f));
 
         return _background != null && _secondaryPanel != null && _handPanel != null &&
                _turnPanel != null && _titlePlate != null &&
@@ -129,23 +104,14 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
 
     private static Sprite CreateWholeSprite(Texture2D texture, Vector4 border)
     {
-        if (texture == null)
-            return null;
-
-        return Sprite.Create(
-            texture,
-            new Rect(0f, 0f, texture.width, texture.height),
-            new Vector2(0.5f, 0.5f),
-            100f,
-            0,
-            SpriteMeshType.FullRect,
-            border);
+        if (texture == null) return null;
+        return Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
     }
 
     private static Sprite CreateCroppedSprite(Texture2D texture, RectInt sourceRect, Vector4 border)
     {
-        if (texture == null || sourceRect.width <= 0 || sourceRect.height <= 0)
-            return null;
+        if (texture == null || sourceRect.width <= 0 || sourceRect.height <= 0) return null;
 
         int x = Mathf.Clamp(sourceRect.x, 0, texture.width - 1);
         int top = Mathf.Clamp(sourceRect.y, 0, texture.height - 1);
@@ -153,13 +119,8 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         int height = Mathf.Clamp(sourceRect.height, 1, texture.height - top);
         int y = Mathf.Clamp(texture.height - top - height, 0, texture.height - height);
 
-        return Sprite.Create(
-            texture,
-            new Rect(x, y, width, height),
-            new Vector2(0.5f, 0.5f),
-            100f,
-            0,
-            SpriteMeshType.FullRect,
+        return Sprite.Create(texture, new Rect(x, y, width, height),
+            new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect,
             ClampBorder(border, width, height));
     }
 
@@ -176,16 +137,11 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
 
     private void ApplyImage(string objectName, Sprite sprite, Image.Type type, Color tint)
     {
-        if (sprite == null)
-            return;
-
+        if (sprite == null) return;
         Transform target = FindDeepChild(transform, objectName);
-        if (target == null)
-            return;
-
+        if (target == null) return;
         Image image = target.GetComponent<Image>();
-        if (image == null)
-            return;
+        if (image == null) return;
 
         image.sprite = sprite;
         image.type = type;
@@ -194,44 +150,63 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         image.raycastTarget = false;
     }
 
+    private void EnsureInnerShade(string panelName, float left, float right, float top, float bottom, Color color)
+    {
+        Transform panel = FindDeepChild(transform, panelName);
+        if (panel == null) return;
+
+        Transform existing = FindDirectChild(panel, "SkinInnerShade");
+        RectTransform rect;
+        Image image;
+        if (existing == null)
+        {
+            GameObject go = new GameObject("SkinInnerShade", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            go.transform.SetParent(panel, false);
+            go.transform.SetAsFirstSibling();
+            rect = (RectTransform)go.transform;
+            image = go.GetComponent<Image>();
+        }
+        else
+        {
+            rect = existing as RectTransform;
+            image = existing.GetComponent<Image>();
+        }
+
+        if (rect == null || image == null) return;
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = new Vector2(left, bottom);
+        rect.offsetMax = new Vector2(-right, -top);
+        image.sprite = null;
+        image.type = Image.Type.Simple;
+        image.color = color;
+        image.raycastTarget = false;
+    }
+
     private void MakeContentRootTransparent(string panelName, string contentName)
     {
         Transform panel = FindDeepChild(transform, panelName);
-        if (panel == null)
-            return;
-
+        if (panel == null) return;
         Transform content = FindDirectChild(panel, contentName) ?? FindDeepChild(panel, contentName);
-        if (content == null)
-            return;
-
+        if (content == null) return;
         Image image = content.GetComponent<Image>();
-        if (image == null)
-            return;
-
+        if (image == null) return;
         Color color = image.color;
         color.a = 0f;
         image.color = color;
         image.raycastTarget = false;
     }
 
-    /// <summary>
-    /// Removes the prototype-black TopBar while keeping its exact layout and children.
-    /// The wood background remains visible through a subtle warm translucent strip.
-    /// </summary>
     private void StyleTopBar()
     {
         Transform topBar = FindDeepChild(transform, "TopBar");
-        if (topBar == null)
-            return;
-
+        if (topBar == null) return;
         Image image = topBar.GetComponent<Image>();
-        if (image != null)
-        {
-            image.sprite = null;
-            image.type = Image.Type.Simple;
-            image.color = new Color(0.10f, 0.065f, 0.035f, 0.68f);
-            image.raycastTarget = false;
-        }
+        if (image == null) return;
+        image.sprite = null;
+        image.type = Image.Type.Simple;
+        image.color = new Color(0.035f, 0.032f, 0.028f, 0.86f);
+        image.raycastTarget = false;
     }
 
     private void ApplyButtons()
@@ -239,14 +214,9 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         Button[] buttons = GetComponentsInChildren<Button>(true);
         foreach (Button button in buttons)
         {
-            if (button == null)
-                continue;
-
-            Image image = button.targetGraphic as Image;
-            if (image == null)
-                image = button.GetComponent<Image>();
-            if (image == null)
-                continue;
+            if (button == null) continue;
+            Image image = button.targetGraphic as Image ?? button.GetComponent<Image>();
+            if (image == null) continue;
 
             image.sprite = _buttonNormal;
             image.type = Image.Type.Sliced;
@@ -263,19 +233,12 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// The deck/discard counters are not Buttons, so they escaped the regular button skin
-    /// and remained black prototype rectangles. Detect their labels and skin the nearest
-    /// Image-bearing parent with the quieter Normal button sprite.
-    /// </summary>
     private void StyleDeckAndDiscardTiles()
     {
         Text[] labels = GetComponentsInChildren<Text>(true);
         foreach (Text label in labels)
         {
-            if (label == null || string.IsNullOrWhiteSpace(label.text))
-                continue;
-
+            if (label == null || string.IsNullOrWhiteSpace(label.text)) continue;
             string value = label.text.Trim().ToUpperInvariant();
             if (!value.StartsWith("PIOCHE", StringComparison.Ordinal) &&
                 !value.StartsWith("DÉFAUSSE", StringComparison.Ordinal) &&
@@ -287,18 +250,22 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             for (int depth = 0; depth < 3 && current != null; depth++, current = current.parent)
             {
                 tileImage = current.GetComponent<Image>();
-                if (tileImage != null)
-                    break;
+                if (tileImage != null) break;
             }
+            if (tileImage == null) continue;
 
-            if (tileImage == null)
-                continue;
-
-            tileImage.sprite = _buttonNormal;
-            tileImage.type = Image.Type.Sliced;
-            tileImage.color = new Color(0.80f, 0.72f, 0.58f, 0.96f);
+            tileImage.sprite = null;
+            tileImage.type = Image.Type.Simple;
+            tileImage.color = new Color(0.035f, 0.032f, 0.028f, 0.92f);
             tileImage.raycastTarget = false;
-            label.color = new Color(0.98f, 0.94f, 0.84f, 1f);
+            label.color = new Color(0.88f, 0.80f, 0.64f, 1f);
+            label.fontStyle = FontStyle.Bold;
+
+            Outline outline = tileImage.GetComponent<Outline>();
+            if (outline == null) outline = tileImage.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(0.55f, 0.42f, 0.24f, 0.72f);
+            outline.effectDistance = new Vector2(1f, -1f);
+            outline.useGraphicAlpha = true;
         }
     }
 
@@ -307,32 +274,71 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
         Text[] labels = GetComponentsInChildren<Text>(true);
         foreach (Text label in labels)
         {
-            if (label == null || !ShouldDecorateTitle(label.text))
-                continue;
-
-            label.rectTransform.anchoredPosition += new Vector2(8f, -8f);
-            EnsureCompactTitlePlateBehind(label);
-            label.color = new Color(0.98f, 0.93f, 0.80f, 1f);
+            if (label == null || !ShouldDecorateTitle(label.text)) continue;
+            ConfigureTitleTransform(label);
+            EnsureTitlePlateBehind(label);
+            label.color = new Color(0.16f, 0.105f, 0.055f, 1f);
             label.fontStyle = FontStyle.Bold;
+            label.alignment = TextAnchor.MiddleCenter;
         }
     }
 
     private static bool ShouldDecorateTitle(string text)
     {
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
+        if (string.IsNullOrWhiteSpace(text)) return false;
         string value = text.Trim().ToUpperInvariant();
         return value == "VOTRE MAIN" || value == "VOTRE TOUR" || value == "RÉSERVE" ||
                value.StartsWith("PLATEAU", StringComparison.Ordinal) || value == "JOURNAL";
     }
 
-    private void EnsureCompactTitlePlateBehind(Text label)
+    private void ConfigureTitleTransform(Text label)
+    {
+        string value = label.text.Trim().ToUpperInvariant();
+        RectTransform rect = label.rectTransform;
+
+        Vector2 anchor = new Vector2(0.5f, 1f);
+        Vector2 position = new Vector2(0f, -12f);
+        float width = Mathf.Clamp(label.preferredWidth + 64f, 150f, 330f);
+        float height = 42f;
+
+        if (value == "VOTRE MAIN")
+        {
+            anchor = new Vector2(0.16f, 1f);
+            position = new Vector2(0f, -10f);
+            width = Mathf.Clamp(label.preferredWidth + 58f, 170f, 260f);
+        }
+        else if (value == "VOTRE TOUR")
+        {
+            position = new Vector2(0f, -13f);
+            width = Mathf.Clamp(label.preferredWidth + 48f, 155f, 235f);
+        }
+        else if (value == "JOURNAL")
+        {
+            position = new Vector2(0f, -12f);
+            width = Mathf.Clamp(label.preferredWidth + 52f, 145f, 230f);
+        }
+        else if (value == "RÉSERVE")
+        {
+            width = Mathf.Clamp(label.preferredWidth + 70f, 185f, 280f);
+        }
+        else if (value.StartsWith("PLATEAU", StringComparison.Ordinal))
+        {
+            width = Mathf.Clamp(label.preferredWidth + 70f, 235f, 360f);
+        }
+
+        rect.anchorMin = anchor;
+        rect.anchorMax = anchor;
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = new Vector2(width - 24f, height - 6f);
+        label.fontSize = Mathf.Clamp(label.fontSize, 16, 22);
+    }
+
+    private void EnsureTitlePlateBehind(Text label)
     {
         RectTransform labelRect = label.rectTransform;
         RectTransform parentRect = labelRect.parent as RectTransform;
-        if (parentRect == null)
-            return;
+        if (parentRect == null) return;
 
         string plateName = "SkinTitlePlate_" + label.gameObject.name;
         Transform existing = FindDirectChild(parentRect, plateName);
@@ -341,15 +347,11 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
 
         if (existing == null)
         {
-            GameObject plateObject = new GameObject(
-                plateName,
-                typeof(RectTransform),
-                typeof(CanvasRenderer),
-                typeof(Image));
-            plateObject.transform.SetParent(parentRect, false);
-            plateObject.transform.SetSiblingIndex(labelRect.GetSiblingIndex());
-            plateRect = (RectTransform)plateObject.transform;
-            plateImage = plateObject.GetComponent<Image>();
+            GameObject go = new GameObject(plateName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            go.transform.SetParent(parentRect, false);
+            go.transform.SetSiblingIndex(labelRect.GetSiblingIndex());
+            plateRect = (RectTransform)go.transform;
+            plateImage = go.GetComponent<Image>();
         }
         else
         {
@@ -357,72 +359,36 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             plateImage = existing.GetComponent<Image>();
         }
 
-        if (plateRect == null || plateImage == null)
-            return;
-
-        float preferredWidth = Mathf.Max(1f, label.preferredWidth);
-        float plateWidth = Mathf.Clamp(preferredWidth + 38f, 118f, 285f);
-        float plateHeight = Mathf.Clamp(Mathf.Max(label.preferredHeight + 12f, 32f), 32f, 46f);
-
-        Vector2 anchor = (labelRect.anchorMin + labelRect.anchorMax) * 0.5f;
-        plateRect.anchorMin = anchor;
-        plateRect.anchorMax = anchor;
+        if (plateRect == null || plateImage == null) return;
+        plateRect.anchorMin = labelRect.anchorMin;
+        plateRect.anchorMax = labelRect.anchorMax;
         plateRect.pivot = new Vector2(0.5f, 0.5f);
-        plateRect.sizeDelta = new Vector2(plateWidth, plateHeight);
+        plateRect.anchoredPosition = labelRect.anchoredPosition;
+        plateRect.sizeDelta = labelRect.sizeDelta + new Vector2(24f, 8f);
         plateRect.localScale = Vector3.one;
-
-        Vector2 position = labelRect.anchoredPosition;
-        float availableWidth = Mathf.Max(labelRect.rect.width, preferredWidth);
-        float horizontalTravel = Mathf.Max(0f, (availableWidth - plateWidth) * 0.5f);
-
-        switch (label.alignment)
-        {
-            case TextAnchor.UpperLeft:
-            case TextAnchor.MiddleLeft:
-            case TextAnchor.LowerLeft:
-                position.x -= horizontalTravel;
-                break;
-            case TextAnchor.UpperRight:
-            case TextAnchor.MiddleRight:
-            case TextAnchor.LowerRight:
-                position.x += horizontalTravel;
-                break;
-        }
-
-        position.x += (0.5f - labelRect.pivot.x) * labelRect.rect.width;
-        position.y += (0.5f - labelRect.pivot.y) * labelRect.rect.height;
-        plateRect.anchoredPosition = position;
 
         plateImage.sprite = _titlePlate;
         plateImage.type = Image.Type.Sliced;
-        plateImage.color = new Color(0.90f, 0.82f, 0.67f, 0.94f);
+        plateImage.color = new Color(0.96f, 0.86f, 0.66f, 1f);
         plateImage.raycastTarget = false;
     }
 
     private void ApplyTopBarSeparator()
     {
-        if (_separator == null)
-            return;
-
+        if (_separator == null) return;
         Transform topBar = FindDeepChild(transform, "TopBar");
-        if (topBar == null)
-            return;
+        if (topBar == null) return;
 
         Transform existing = FindDirectChild(topBar, "SkinBottomSeparator");
         RectTransform rect;
         Image image;
-
         if (existing == null)
         {
-            GameObject separatorObject = new GameObject(
-                "SkinBottomSeparator",
-                typeof(RectTransform),
-                typeof(CanvasRenderer),
-                typeof(Image));
-            separatorObject.transform.SetParent(topBar, false);
-            separatorObject.transform.SetAsFirstSibling();
-            rect = (RectTransform)separatorObject.transform;
-            image = separatorObject.GetComponent<Image>();
+            GameObject go = new GameObject("SkinBottomSeparator", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            go.transform.SetParent(topBar, false);
+            go.transform.SetAsFirstSibling();
+            rect = (RectTransform)go.transform;
+            image = go.GetComponent<Image>();
         }
         else
         {
@@ -430,51 +396,38 @@ public sealed class GameBoardSkinApplier : MonoBehaviour
             image = existing.GetComponent<Image>();
         }
 
-        if (rect == null || image == null)
-            return;
-
+        if (rect == null || image == null) return;
         rect.anchorMin = new Vector2(0.02f, 0f);
-        rect.anchorMax = new Vector2(0.98f, 0.075f);
+        rect.anchorMax = new Vector2(0.98f, 0.055f);
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
-
         image.sprite = _separator;
         image.type = Image.Type.Sliced;
-        image.color = new Color(0.82f, 0.70f, 0.48f, 0.82f);
+        image.color = new Color(0.62f, 0.50f, 0.32f, 0.58f);
         image.raycastTarget = false;
     }
 
     private static Transform FindDirectChild(Transform parent, string childName)
     {
-        if (parent == null)
-            return null;
-
+        if (parent == null) return null;
         for (int i = 0; i < parent.childCount; i++)
         {
             Transform child = parent.GetChild(i);
-            if (string.Equals(child.name, childName, StringComparison.Ordinal))
-                return child;
+            if (string.Equals(child.name, childName, StringComparison.Ordinal)) return child;
         }
-
         return null;
     }
 
     private static Transform FindDeepChild(Transform parent, string childName)
     {
-        if (parent == null)
-            return null;
-
+        if (parent == null) return null;
         for (int i = 0; i < parent.childCount; i++)
         {
             Transform child = parent.GetChild(i);
-            if (string.Equals(child.name, childName, StringComparison.Ordinal))
-                return child;
-
+            if (string.Equals(child.name, childName, StringComparison.Ordinal)) return child;
             Transform nested = FindDeepChild(child, childName);
-            if (nested != null)
-                return nested;
+            if (nested != null) return nested;
         }
-
         return null;
     }
 }
