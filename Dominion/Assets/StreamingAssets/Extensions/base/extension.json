@@ -57,7 +57,13 @@
     },
     { "id": "bureaucrate", "name": "Bureaucrate", "cost": 4, "types": ["Action", "Attaque"], "image": "bureaucrate.png", "text": "Recevez un Argent et placez-le sur votre pioche.\n\nChaque autre joueur révèle une carte Victoire de sa main et la place sur sa pioche (ou révèle une main ne contenant aucune carte Victoire)." },
     { "id": "jardins", "name": "Jardins", "cost": 4, "types": ["Victoire"], "image": "jardins.png", "text": "Vaut 1 VP par tranche de 10 cartes dans votre deck (arrondi à l’entier inférieur)." },
-    { "id": "milice", "name": "Milice", "cost": 4, "types": ["Action", "Attaque"], "image": "milice.png", "text": "+2 🪙\n\nChaque autre joueur se défausse jusqu’à n’avoir plus que 3 cartes en main." },
+    {
+      "id": "milice", "name": "Milice", "cost": 4, "types": ["Action", "Attaque"], "image": "milice.png", "text": "+2 🪙\n\nChaque autre joueur se défausse jusqu’à n’avoir plus que 3 cartes en main.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
+        { "op": "discard_others_down_to", "target": "others", "amount": 3, "prompt": "Défaussez jusqu’à n’avoir plus que 3 cartes en main." }
+      ] } ]
+    },
     {
       "id": "preteur_sur_gage", "name": "Prêteur sur gage", "cost": 4, "types": ["Action"], "image": "preteur_sur_gage.png", "text": "Vous pouvez écarter un Cuivre de votre main. Dans ce cas, +3 🪙.",
       "abilities": [ { "when": "play", "effects": [
