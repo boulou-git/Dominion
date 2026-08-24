@@ -198,8 +198,8 @@ public sealed class PendingDecisionController : MonoBehaviour
                 continue;
 
             Outline outline = child.gameObject.AddComponent<Outline>();
-            outline.effectColor = new Color(1f, 0.82f, 0.30f, 1f);
-            outline.effectDistance = new Vector2(4f, -4f);
+            outline.effectColor = new Color(1f, 1f, 1f, 0.95f);
+            outline.effectDistance = new Vector2(2f, -2f);
             outline.useGraphicAlpha = true;
             _selectionOutlines.Add(outline);
         }
