@@ -8,7 +8,7 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Gameplay behaviour layered onto the single editable GameScreen:
-/// Reserve layout/purchases, Treasure play, in-play stacks, discard top and cleanup animation.
+/// Reserve layout/purchases, card play during Buy, in-play stacks, discard top and cleanup animation.
 /// It never owns rules; every mutation is routed to NetworkGameState through PlayersTurnsHandler.
 /// </summary>
 public sealed class BuyPhaseGameplayController : MonoBehaviour
@@ -342,7 +342,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             HandGameplayInteraction gameplay = child.GetComponent<HandGameplayInteraction>();
             if (gameplay == null)
                 gameplay = child.gameObject.AddComponent<HandGameplayInteraction>();
-            gameplay.Bind(motion.InstanceId, _inPlayRoot, RequestPlayTreasure, playable);
+            gameplay.Bind(motion.InstanceId, _inPlayRoot, RequestPlayCard, playable);
         }
     }
 
@@ -471,10 +471,10 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         }
     }
 
-    private void RequestPlayTreasure(int instanceId)
+    private void RequestPlayCard(int instanceId)
     {
         if (PlayersTurnsHandler.Instance != null)
-            PlayersTurnsHandler.Instance.PlayTreasure(instanceId);
+            PlayersTurnsHandler.Instance.PlayCard(instanceId);
     }
 
     private void RequestBuyCard(string definitionId)
