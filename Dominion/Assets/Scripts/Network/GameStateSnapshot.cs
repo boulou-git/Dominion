@@ -36,6 +36,10 @@ public class GameStateSnapshot
     // DefinitionId uses qualified refs such as "base:cuivre".
     public List<SupplyPileSnapshot> SupplyPiles = new List<SupplyPileSnapshot>();
 
+    // Durable in-progress rules resolution. Usually inactive/empty between commands, but
+    // survives room replication when an effect must pause for a player's decision.
+    public ResolutionQueueSnapshot Resolution = new ResolutionQueueSnapshot();
+
     // Player order is fixed once the match starts.
     public List<PlayerStateSnapshot> Players = new List<PlayerStateSnapshot>();
 }
