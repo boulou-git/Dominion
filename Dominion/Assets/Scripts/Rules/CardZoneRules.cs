@@ -11,7 +11,8 @@ public enum CardZone
     Deck,
     Hand,
     Discard,
-    InPlay
+    InPlay,
+    Revealed
 }
 
 /// <summary>
@@ -29,6 +30,7 @@ public static class CardZoneRules
         if (string.Equals(normalized, "hand", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.Hand; return true; }
         if (string.Equals(normalized, "discard", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.Discard; return true; }
         if (string.Equals(normalized, "inplay", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.InPlay; return true; }
+        if (string.Equals(normalized, "revealed", StringComparison.OrdinalIgnoreCase)) { zone = CardZone.Revealed; return true; }
         return false;
     }
 
@@ -41,6 +43,9 @@ public static class CardZoneRules
             case CardZone.Hand: return player.Hand;
             case CardZone.Discard: return player.Discard;
             case CardZone.InPlay: return player.InPlay;
+            case CardZone.Revealed:
+                if (player.Revealed == null) player.Revealed = new List<int>();
+                return player.Revealed;
             default: return null;
         }
     }
