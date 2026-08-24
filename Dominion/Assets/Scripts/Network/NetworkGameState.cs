@@ -474,8 +474,8 @@ public static class NetworkGameState
             for (int i = 0; i < StartingEstateCount; i++)
                 CreateOwnedCardInDeck(state, player, EstateDefinitionId);
 
-            Shuffle(player.Deck, random);
-            DrawCardsWithReshuffle(player, StartingHandSize, random);
+            CardZoneRules.Shuffle(player.Deck, random);
+            CardZoneRules.DrawCards(player, StartingHandSize, random, out _);
         }
     }
 
@@ -533,21 +533,17 @@ public static class NetworkGameState
         if (current == null)
             return;
 
-        foreach (int instanceId in current.InPlay)
-            current.Discard.Add(instanceId);
-        current.InPlay.Clear();
+        CardZoneRules.MoveAll(current.InPlay, current.Discard);
 
-        // Hand is stored left-to-right. Appending right-to-left means the visually
-        // leftmost card is appended last and therefore becomes the visible top discard.
-        for (int i = current.Hand.Count - 1; i >= 0; i--)
-            current.Discard.Add(current.Hand[i]);
-        current.Hand.Clear();
+        // Hand is stored left-to-right. Moving it in reverse means the visually leftmost
+        // card is appended last and therefore remains the visible top discard.
+        CardZoneRules.MoveAll(current.Hand, current.Discard, true);
 
         current.Actions = 1;
         current.Buys = 1;
         current.Coins = 0;
 
-        DrawCardsWithReshuffle(current, StartingHandSize, NewRandom());
+        CardZoneRules.DrawCards(current, StartingHandSize, NewRandom(), out _);
 
         int currentIndex = state.Players.FindIndex(player => player != null && player.PlayerId == state.ActivePlayerId);
         if (currentIndex < 0)
@@ -561,44 +557,6 @@ public static class NetworkGameState
         nextPlayer.Actions = 1;
         nextPlayer.Buys = 1;
         nextPlayer.Coins = 0;
-    }
-
-    private static void DrawCardsWithReshuffle(PlayerStateSnapshot player, int count, System.Random random)
-    {
-        if (player == null || count <= 0)
-            return;
-
-        for (int i = 0; i < count; i++)
-        {
-            if (player.Deck.Count == 0)
-            {
-                if (player.Discard.Count == 0)
-                    break;
-
-                player.Deck.AddRange(player.Discard);
-                player.Discard.Clear();
-                Shuffle(player.Deck, random);
-            }
-
-            int topIndex = player.Deck.Count - 1;
-            int instanceId = player.Deck[topIndex];
-            player.Deck.RemoveAt(topIndex);
-            player.Hand.Add(instanceId);
-        }
-    }
-
-    private static void Shuffle(List<int> cards, System.Random random)
-    {
-        if (cards == null || random == null)
-            return;
-
-        for (int i = cards.Count - 1; i > 0; i--)
-        {
-            int j = random.Next(i + 1);
-            int temp = cards[i];
-            cards[i] = cards[j];
-            cards[j] = temp;
-        }
     }
 
     private static System.Random NewRandom()
