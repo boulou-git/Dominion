@@ -40,6 +40,11 @@ public class GameStateSnapshot
     // DefinitionId uses qualified refs such as "base:cuivre".
     public List<SupplyPileSnapshot> SupplyPiles = new List<SupplyPileSnapshot>();
 
+    // Small replicated public journal. It intentionally stores semantic entries instead
+    // of rendered text so every client can format/card-inspect them consistently.
+    public int NextJournalSequence = 1;
+    public List<GameJournalEntrySnapshot> Journal = new List<GameJournalEntrySnapshot>();
+
     // Durable bookkeeping for declarative abilities limited to one resolution per turn.
     // Keeping this in authoritative state makes the limit survive replication/reconnects.
     public List<AbilityUsageSnapshot> AbilityUsages = new List<AbilityUsageSnapshot>();
@@ -50,6 +55,17 @@ public class GameStateSnapshot
 
     // Player order is fixed once the match starts.
     public List<PlayerStateSnapshot> Players = new List<PlayerStateSnapshot>();
+}
+
+[Serializable]
+public class GameJournalEntrySnapshot
+{
+    public int Sequence;
+    public int TurnNumber;
+    public string Kind;
+    public string PlayerId;
+    public string PlayerName;
+    public string CardDefinitionId;
 }
 
 [Serializable]
