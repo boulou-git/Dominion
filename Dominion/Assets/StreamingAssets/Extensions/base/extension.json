@@ -86,7 +86,14 @@
     { "id": "forge", "name": "Forge", "cost": 4, "types": ["Action"], "image": "forge.png", "text": "+3 Cartes", "abilities": [ { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 3 } ] } ] },
     { "id": "salle_du_trone", "name": "Salle du trône", "cost": 4, "types": ["Action"], "image": "salle_du_trone.png", "text": "Vous pouvez jouer deux fois une carte Action de votre main." },
     { "id": "brigand", "name": "Brigand", "cost": 5, "types": ["Action", "Attaque"], "image": "brigand.png", "text": "Recevez un Or.\n\nChaque autre joueur révèle les 2 premières cartes de sa pioche, écarte une carte Trésor révélée autre qu’un Cuivre et défausse les autres cartes révélées." },
-    { "id": "salle_du_conseil", "name": "Salle du conseil", "cost": 5, "types": ["Action"], "image": "salle_du_conseil.png", "text": "+4 Cartes\n+1 Achat\n\nChaque autre joueur pioche une carte." },
+    {
+      "id": "salle_du_conseil", "name": "Salle du conseil", "cost": 5, "types": ["Action"], "image": "salle_du_conseil.png", "text": "+4 Cartes\n+1 Achat\n\nChaque autre joueur pioche une carte.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 4 },
+        { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
+        { "op": "draw", "target": "others", "amount": 1 }
+      ] } ]
+    },
     {
       "id": "festival", "name": "Festival", "cost": 5, "types": ["Action"], "image": "festival.png", "text": "+2 Actions\n+1 Achat\n+2 🪙",
       "abilities": [ { "when": "play", "effects": [
