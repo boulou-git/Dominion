@@ -55,7 +55,8 @@ public static class EffectResolver
         { "remember_selected_card_cost", ResolveRememberSelectedCardCost },
         { "trash_selected", ResolveTrashSelected }, { "discard_selected", ResolveDiscardSelected },
         { "discard_others_down_to", ResolveDiscardOthersDownTo },
-        { "move_selected", ResolveMoveSelected }, { "choose_supply", ResolveChooseSupply },
+        { "move_selected", ResolveMoveSelected }, { "move_top_card", ResolveMoveTopCard }, { "play_selected", ResolvePlaySelected },
+        { "choose_supply", ResolveChooseSupply },
         { "gain_card", ResolveGainCard }, { "gain_selected_supply", ResolveGainSelectedSupply }
     };
 
@@ -148,6 +149,7 @@ public static class EffectResolver
         {
             foreach (int instanceId in source)
             {
+                if (effect.lastMovedOnly && instanceId != context.Resolution.LastMovedCardInstanceId) continue;
                 CardInstance instance = FindCardInstance(context.State, instanceId);
                 if (instance == null) continue;
                 if (!string.IsNullOrWhiteSpace(effect.cardId) &&
@@ -163,7 +165,11 @@ public static class EffectResolver
 
         max = Math.Min(max, candidates.Count);
         if (min > candidates.Count) return EffectResolutionResult.Rejected("choose_cards does not have enough eligible cards for its minimum.");
-        if (candidates.Count == 0 && min == 0) return EffectResolutionResult.Applied();
+        if (candidates.Count == 0 && min == 0)
+        {
+            context.Resolution.ClearSelection();
+            return EffectResolutionResult.Applied();
+        }
 
         if (!context.Resolution.TrySuspendForDecision(context.Actor.PlayerId, "choose_cards", effect.zone, effect.prompt,
                 context.SourceCardInstanceId, min, max, candidates, context.TriggerEvent, context.Timing,
@@ -336,6 +342,87 @@ public static class EffectResolver
         foreach (int instanceId in selected)
             if (!CardZoneRules.MoveCard(context.Actor, source, destination, instanceId))
                 return EffectResolutionResult.Rejected("Selected card could not be moved from " + source + " to " + destination + ".");
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult ResolveMoveTopCard(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("move_top_card currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("move_top_card requires an active ResolutionQueue.");
+        if (!CardZoneRules.TryParseZone(effect.destinationZone, out CardZone destination))
+            return EffectResolutionResult.Rejected("move_top_card requires a valid destinationZone.");
+
+        context.Resolution.ClearSelection();
+        context.Resolution.SetLastMovedCardInstanceId(0);
+        if (!CardZoneRules.TryMoveTopCardFromDeck(context.Actor, destination, context.Random, out int instanceId, out string error))
+            return EffectResolutionResult.Rejected(error);
+        context.Resolution.SetLastMovedCardInstanceId(instanceId);
+        if (instanceId <= 0) return EffectResolutionResult.Applied();
+
+        if (destination == CardZone.Discard && context.EventBus != null)
+        {
+            CardInstance instance = FindCardInstance(context.State, instanceId);
+            if (instance == null) return EffectResolutionResult.Rejected("Moved top card instance could not be resolved.");
+            context.EventBus.Publish(GameEvent.CardDiscarded(
+                context.Actor.PlayerId,
+                instance.InstanceId,
+                instance.DefinitionId,
+                context.SourceCardInstanceId));
+        }
+
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult ResolvePlaySelected(CardEffectData effect, EffectExecutionContext context)
+    {
+        if (!TargetsSelf(effect)) return EffectResolutionResult.Rejected("play_selected currently supports target 'self' only.");
+        if (context.Resolution == null) return EffectResolutionResult.Rejected("play_selected requires an active ResolutionQueue.");
+        if (!CardZoneRules.TryParseZone(effect.sourceZone, out CardZone source))
+            return EffectResolutionResult.Rejected("play_selected requires a valid sourceZone.");
+
+        List<int> selected = context.Resolution.TakeSelectedInstanceIds();
+        if (selected.Count == 0) return EffectResolutionResult.Applied();
+        if (selected.Count > 1) return EffectResolutionResult.Rejected("play_selected currently supports one selected card at a time.");
+
+        int instanceId = selected[0];
+        List<int> sourceZone = CardZoneRules.ResolveZone(context.Actor, source);
+        if (sourceZone == null || !sourceZone.Contains(instanceId))
+            return EffectResolutionResult.Rejected("Selected card is no longer in the requested play source zone.");
+
+        CardInstance instance = FindCardInstance(context.State, instanceId);
+        if (instance == null) return EffectResolutionResult.Rejected("Selected card instance could not be resolved for play.");
+        ExtensionCardData definition = ResolveDefinition(instance.DefinitionId);
+        if (definition == null) return EffectResolutionResult.Rejected("Selected card definition could not be resolved for play: " + instance.DefinitionId);
+
+        if (source != CardZone.InPlay && !CardZoneRules.MoveCard(context.Actor, source, CardZone.InPlay, instanceId))
+            return EffectResolutionResult.Rejected("Selected card could not be moved into play.");
+
+        if (CardDefinitionRules.HasType(definition, "Attaque"))
+        {
+            GameRuleResult reactionResult = GameRules.TryStartAttackReactions(
+                context.State,
+                context.Actor,
+                instance,
+                definition,
+                context.Resolution,
+                ResolveDefinition,
+                context.TriggerEvent,
+                context.Timing,
+                context.ListenerCardInstanceId,
+                context.AbilityIndex,
+                context.EffectIndex);
+
+            if (reactionResult != null)
+            {
+                if (reactionResult.Status == GameRuleStatus.Rejected)
+                    return EffectResolutionResult.Rejected(reactionResult.Error);
+                if (reactionResult.Status == GameRuleStatus.WaitingForChoice)
+                    return EffectResolutionResult.WaitingForChoice();
+            }
+        }
+
+        if (context.EventBus == null) return EffectResolutionResult.Rejected("play_selected requires an active event bus.");
+        context.EventBus.Publish(GameEvent.CardPlayed(context.Actor.PlayerId, instance.InstanceId, instance.DefinitionId));
         return EffectResolutionResult.Applied();
     }
 
