@@ -61,9 +61,12 @@ public sealed class CardEffectData
     public string sourceZone;
     public string destinationZone;
 
-    // Supply-choice constraints. Negative maxCost means no cost ceiling.
-    public int maxCost = -1;
+    // Generic card/pile choice constraints.
+    public string cardId;
     public string cardType;
+
+    // Supply-choice constraint. Negative means no cost ceiling.
+    public int maxCost = -1;
 }
 
 public static class ExtensionCatalog
