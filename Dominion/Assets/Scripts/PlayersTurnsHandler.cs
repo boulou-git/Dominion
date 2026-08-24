@@ -9,9 +9,7 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
 {
     public static PlayersTurnsHandler Instance { get; private set; }
 
-    [SerializeField]
-    private PlayerHandler _playerHandler;
-
+    [SerializeField] private PlayerHandler _playerHandler;
     private string _lastObservedActivePlayerId;
     private int _lastObservedTurnNumber = -1;
 
@@ -33,12 +31,10 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     {
         GameStateSnapshot state = NetworkGameState.State;
         if (!CanSendActivePlayerCommand(state)) return;
-
         PlayerStateSnapshot localPlayer = state.Players != null
             ? state.Players.Find(player => player != null && player.PlayerId == NetworkGameState.LocalPlayerId)
             : null;
         int[] visualHandOrder = LocalHandOrderTracker.ResolveForAuthoritativeHand(localPlayer != null ? localPlayer.Hand : null);
-
         photonView.RPC(nameof(RpcRequestAdvancePhase), RpcTarget.MasterClient,
             NetworkGameState.LocalPlayerId, visualHandOrder, state.Version, state.AuthorityEpoch);
     }
@@ -59,21 +55,20 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
             NetworkGameState.LocalPlayerId, definitionId, state.Version, state.AuthorityEpoch);
     }
 
-    /// <summary>
-    /// Sends one response to the durable PendingDecision. Unlike normal turn commands,
-    /// the responder may be a non-active player when future attacks/reactions request it.
-    /// </summary>
     public void SubmitDecision(string decisionId, int[] selectedInstanceIds)
     {
         GameStateSnapshot state = NetworkGameState.State;
         if (!CanSendPendingDecision(state, decisionId)) return;
-
         photonView.RPC(nameof(RpcRequestSubmitDecision), RpcTarget.MasterClient,
-            NetworkGameState.LocalPlayerId,
-            decisionId,
-            selectedInstanceIds ?? new int[0],
-            state.Version,
-            state.AuthorityEpoch);
+            NetworkGameState.LocalPlayerId, decisionId, selectedInstanceIds ?? new int[0], state.Version, state.AuthorityEpoch);
+    }
+
+    public void SubmitSupplyDecision(string decisionId, string[] selectedDefinitionIds)
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (!CanSendPendingDecision(state, decisionId)) return;
+        photonView.RPC(nameof(RpcRequestSubmitSupplyDecision), RpcTarget.MasterClient,
+            NetworkGameState.LocalPlayerId, decisionId, selectedDefinitionIds ?? new string[0], state.Version, state.AuthorityEpoch);
     }
 
     public void FinishTurn() => AdvancePhase();
@@ -103,29 +98,26 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     }
 
     [PunRPC]
-    private void RpcRequestSubmitDecision(
-        string requesterPlayerId,
-        string decisionId,
-        int[] selectedInstanceIds,
-        int expectedVersion,
-        int expectedAuthorityEpoch,
-        PhotonMessageInfo info)
+    private void RpcRequestSubmitDecision(string requesterPlayerId, string decisionId, int[] selectedInstanceIds,
+        int expectedVersion, int expectedAuthorityEpoch, PhotonMessageInfo info)
     {
         if (!ValidateSender(requesterPlayerId, info)) return;
-        if (!NetworkGameState.TrySubmitDecision(
-                requesterPlayerId,
-                decisionId,
-                selectedInstanceIds,
-                expectedVersion,
-                expectedAuthorityEpoch))
+        if (!NetworkGameState.TrySubmitDecision(requesterPlayerId, decisionId, selectedInstanceIds, expectedVersion, expectedAuthorityEpoch))
             Debug.LogWarning("Rejected stale or invalid SubmitDecision command.");
+    }
+
+    [PunRPC]
+    private void RpcRequestSubmitSupplyDecision(string requesterPlayerId, string decisionId, string[] selectedDefinitionIds,
+        int expectedVersion, int expectedAuthorityEpoch, PhotonMessageInfo info)
+    {
+        if (!ValidateSender(requesterPlayerId, info)) return;
+        if (!NetworkGameState.TrySubmitSupplyDecision(requesterPlayerId, decisionId, selectedDefinitionIds, expectedVersion, expectedAuthorityEpoch))
+            Debug.LogWarning("Rejected stale or invalid SubmitSupplyDecision command.");
     }
 
     private static bool CanSendActivePlayerCommand(GameStateSnapshot state)
     {
-        return state != null &&
-               state.IsStarted &&
-               !state.IsPaused &&
+        return state != null && state.IsStarted && !state.IsPaused &&
                (state.Resolution == null || !state.Resolution.IsActive) &&
                state.ActivePlayerId == NetworkGameState.LocalPlayerId;
     }
@@ -134,12 +126,9 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     {
         if (state == null || !state.IsStarted || state.IsPaused || state.Resolution == null || !state.Resolution.IsActive)
             return false;
-
         PendingDecisionSnapshot decision = state.Resolution.PendingDecision;
-        return decision != null &&
-               decision.IsPending &&
-               decision.PlayerId == NetworkGameState.LocalPlayerId &&
-               decision.DecisionId == decisionId;
+        return decision != null && decision.IsPending &&
+               decision.PlayerId == NetworkGameState.LocalPlayerId && decision.DecisionId == decisionId;
     }
 
     private static bool ValidateSender(string requesterPlayerId, PhotonMessageInfo info)
@@ -154,13 +143,10 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     private void OnGameStateChanged(GameStateSnapshot state)
     {
         if (state == null || !state.IsStarted) return;
-
-        bool turnChanged = state.TurnNumber != _lastObservedTurnNumber ||
-                           state.ActivePlayerId != _lastObservedActivePlayerId;
+        bool turnChanged = state.TurnNumber != _lastObservedTurnNumber || state.ActivePlayerId != _lastObservedActivePlayerId;
         _lastObservedTurnNumber = state.TurnNumber;
         _lastObservedActivePlayerId = state.ActivePlayerId;
         if (!turnChanged || state.IsPaused) return;
-
         LocalHandOrderTracker.Clear();
         if (state.ActivePlayerId == NetworkGameState.LocalPlayerId && _playerHandler != null)
             _playerHandler.BeginTurn();
