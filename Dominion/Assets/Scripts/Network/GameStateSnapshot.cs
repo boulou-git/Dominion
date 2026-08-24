@@ -36,8 +36,9 @@ public class GameStateSnapshot
     // The physical CardInstance remains in CardInstances for logs/replay/inspection.
     public List<int> TrashedCards = new List<int>();
 
-    // Authoritative remaining card counts for every Reserve pile.
-    // DefinitionId uses qualified refs such as "base:cuivre".
+    // Authoritative Reserve state. Cost/types are copied from the immutable card definition
+    // when the match starts so deterministic rules can filter piles without reaching into UI
+    // or extension-loading infrastructure during a resolution.
     public List<SupplyPileSnapshot> SupplyPiles = new List<SupplyPileSnapshot>();
 
     // Durable in-progress rules resolution. Usually inactive/empty between commands, but
@@ -53,15 +54,32 @@ public class SupplyPileSnapshot
 {
     public string DefinitionId;
     public int RemainingCount;
+    public int Cost;
+    public List<string> Types = new List<string>();
 
     public SupplyPileSnapshot()
     {
     }
 
-    public SupplyPileSnapshot(string definitionId, int remainingCount)
+    public SupplyPileSnapshot(string definitionId, int remainingCount, int cost = 0, IEnumerable<string> types = null)
     {
         DefinitionId = definitionId;
         RemainingCount = remainingCount;
+        Cost = cost;
+        if (types != null)
+            Types.AddRange(types);
+    }
+
+    public bool HasType(string type)
+    {
+        if (Types == null || string.IsNullOrWhiteSpace(type))
+            return false;
+
+        foreach (string declaredType in Types)
+            if (string.Equals(declaredType, type, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+        return false;
     }
 }
 
