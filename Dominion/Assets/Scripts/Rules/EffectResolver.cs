@@ -47,7 +47,8 @@ public static class EffectResolver
         {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection},
         {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount}, {"draw_to_hand_size_skipping_type", DrawToHandSizeSkippingType},
         {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile},
-        {"choose_each_other_cards", ChooseEachOtherCards}, {"reveal_each_other_top_trash_type_except", RevealEachOtherTopTrashTypeExcept},
+        {"choose_each_other_cards", ChooseEachOtherCards}, {"reveal_each_other_cards", RevealEachOtherCards},
+        {"reveal_each_other_top_trash_type_except", RevealEachOtherTopTrashTypeExcept},
         {"reveal_top_cards", RevealTopCards}, {"move_all_ordered", MoveAllOrdered},
         {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard},
         {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_others_down_to", DiscardOthersDownTo},
@@ -120,7 +121,7 @@ public static class EffectResolver
     {
         if (!Self(e) || c.Resolution == null || !Cursor(c)) return EffectResolutionResult.Rejected("Invalid choose_cards effect.");
         if (!CardZoneRules.TryParseZone(e.zone, out CardZone z) || (z != CardZone.Hand && z != CardZone.Discard && z != CardZone.Revealed))
-            return EffectResolutionResult.Rejected("choose_cards currently supports hand, discard and revealed zones.");
+            return EffectResolutionResult.Rejected("choose_cards currently supports hand, discard and inspected zones.");
         int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : min;
         List<int> candidates = Eligible(c.State, c.Actor, z, e.cardId, e.cardType, e.lastMovedOnly ? c.Resolution.LastMovedCardInstanceId : 0);
         max = Math.Min(max, candidates.Count);
@@ -141,19 +142,30 @@ public static class EffectResolver
             ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(err);
     }
 
-    private static EffectResolutionResult ChooseEachOtherCards(CardEffectData e, EffectExecutionContext c)
+    private static EffectResolutionResult ChooseEachOtherCards(CardEffectData e, EffectExecutionContext c) =>
+        ChooseEachOtherCards(e, c, false);
+
+    private static EffectResolutionResult RevealEachOtherCards(CardEffectData e, EffectExecutionContext c) =>
+        ChooseEachOtherCards(e, c, true);
+
+    private static EffectResolutionResult ChooseEachOtherCards(CardEffectData e, EffectExecutionContext c, bool publicReveal)
     {
-        if (!Others(e) || c.Resolution == null || !Cursor(c)) return EffectResolutionResult.Rejected("Invalid choose_each_other_cards effect.");
+        if (!Others(e) || c.Resolution == null || !Cursor(c)) return EffectResolutionResult.Rejected("Invalid choose/reveal_each_other_cards effect.");
         if (!CardZoneRules.TryParseZone(e.zone, out CardZone src) || !CardZoneRules.TryParseZone(e.destinationZone, out CardZone dst) || src == dst)
-            return EffectResolutionResult.Rejected("choose_each_other_cards requires distinct valid source and destination zones.");
+            return EffectResolutionResult.Rejected("choose/reveal_each_other_cards requires distinct valid source and destination zones.");
         int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : min; List<PlayerStateSnapshot> targets = new List<PlayerStateSnapshot>(); List<List<int>> choices = new List<List<int>>();
         if (c.State.Players != null) foreach (PlayerStateSnapshot p in c.State.Players)
         {
             if (p == null || p.PlayerId == c.Actor.PlayerId || SkipAttackTarget(c, p)) continue; List<int> cards = Eligible(c.State, p, src, e.cardId, e.cardType, 0);
-            if (cards.Count < min) continue; targets.Add(p); choices.Add(cards);
+            if (cards.Count < min)
+            {
+                if (publicReveal) JournalRules.RecordRevealZone(c.State, p, src);
+                continue;
+            }
+            targets.Add(p); choices.Add(cards);
         }
         if (targets.Count == 0) return EffectResolutionResult.Applied();
-        string op = "choose_each_other_cards|" + (e.cardId ?? string.Empty) + "|" + (e.cardType ?? string.Empty) + "|" + e.destinationZone;
+        string op = (publicReveal ? "choose_each_other_cards_reveal|" : "choose_each_other_cards|") + (e.cardId ?? string.Empty) + "|" + (e.cardType ?? string.Empty) + "|" + e.destinationZone;
         List<string> remaining = new List<string>(); for (int i = 1; i < targets.Count; i++) remaining.Add(targets[i].PlayerId);
         if (!c.Resolution.TrySuspendForDecision(targets[0].PlayerId, op, e.zone, e.prompt, c.SourceCardInstanceId,
             min, Math.Min(max, choices[0].Count), choices[0], c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)) return EffectResolutionResult.Rejected(err);
@@ -174,13 +186,14 @@ public static class EffectResolver
     {
         if (!Self(e) || c.Resolution == null || e.amount < 0) return EffectResolutionResult.Rejected("Invalid reveal_top_cards effect.");
         List<int> revealed = CardZoneRules.ResolveZone(c.Actor, CardZone.Revealed);
-        if (revealed == null) return EffectResolutionResult.Rejected("Revealed zone is unavailable.");
-        if (revealed.Count > 0) return EffectResolutionResult.Rejected("Cannot reveal new cards while the revealed zone is not empty.");
+        if (revealed == null) return EffectResolutionResult.Rejected("Inspected storage zone is unavailable.");
+        if (revealed.Count > 0) return EffectResolutionResult.Rejected("Cannot reveal new cards while temporary storage is not empty.");
         for (int n = 0; n < e.amount; n++)
         {
             if (!CardZoneRules.TryMoveTopCardFromDeck(c.Actor, CardZone.Revealed, c.Random, out int id, out string error))
                 return EffectResolutionResult.Rejected(error);
             if (id <= 0) break;
+            JournalRules.RecordReveal(c.State, c.Actor, id);
         }
         return EffectResolutionResult.Applied();
     }
