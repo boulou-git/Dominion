@@ -125,8 +125,8 @@ public static class NetworkGameState
     }
 
     /// <summary>
-    /// Creates the first authoritative snapshot for a match. For the current gameplay
-    /// milestone we deliberately begin directly in Buy phase; Action will be enabled later.
+    /// Creates the first authoritative snapshot for a match. Each turn now starts in
+    /// Action phase; the existing phase command advances Action -> Buy.
     /// </summary>
     public static bool InitialiseAuthoritativeState()
     {
@@ -153,7 +153,7 @@ public static class NetworkGameState
             IsPaused = roomPlayers.Any(player => player.IsInactive),
             ManualPauseRequested = false,
             TurnNumber = 1,
-            Phase = BuyPhase,
+            Phase = ActionPhase,
             NextCardInstanceId = 1
         };
 
@@ -282,8 +282,7 @@ public static class NetworkGameState
     }
 
     /// <summary>
-    /// Current temporary flow: Buy -> cleanup/draw -> next player's Buy.
-    /// Action remains supported as a compatibility phase and simply enters Buy.
+    /// Normal turn flow: Action -> Buy -> cleanup/draw -> next player's Action.
     /// </summary>
     public static bool TryAdvancePhase(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
     {
@@ -645,7 +644,7 @@ public static class NetworkGameState
         PlayerStateSnapshot nextPlayer = state.Players[nextIndex];
         state.ActivePlayerId = nextPlayer.PlayerId;
         state.TurnNumber++;
-        state.Phase = BuyPhase;
+        state.Phase = ActionPhase;
         nextPlayer.Actions = 1;
         nextPlayer.Buys = 1;
         nextPlayer.Coins = 0;
