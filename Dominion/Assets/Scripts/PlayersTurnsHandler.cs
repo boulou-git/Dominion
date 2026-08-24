@@ -51,6 +51,21 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
             state.AuthorityEpoch);
     }
 
+    public void PlayAction(int instanceId)
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (!CanSendActivePlayerCommand(state) || instanceId <= 0)
+            return;
+
+        photonView.RPC(
+            nameof(RpcRequestPlayAction),
+            RpcTarget.MasterClient,
+            NetworkGameState.LocalPlayerId,
+            instanceId,
+            state.Version,
+            state.AuthorityEpoch);
+    }
+
     public void PlayTreasure(int instanceId)
     {
         GameStateSnapshot state = NetworkGameState.State;
@@ -103,6 +118,21 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
                 expectedAuthorityEpoch,
                 visualHandOrder))
             Debug.LogWarning("Rejected stale or invalid AdvancePhase command.");
+    }
+
+    [PunRPC]
+    private void RpcRequestPlayAction(
+        string requesterPlayerId,
+        int instanceId,
+        int expectedVersion,
+        int expectedAuthorityEpoch,
+        PhotonMessageInfo info)
+    {
+        if (!ValidateSender(requesterPlayerId, info))
+            return;
+
+        if (!NetworkGameState.TryPlayAction(requesterPlayerId, instanceId, expectedVersion, expectedAuthorityEpoch))
+            Debug.LogWarning("Rejected stale or invalid PlayAction command.");
     }
 
     [PunRPC]
