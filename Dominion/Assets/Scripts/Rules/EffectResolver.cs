@@ -44,11 +44,11 @@ public readonly struct EffectResolutionResult
 
 /// <summary>
 /// Minimal context required by the rules engine to resolve one effect.
-/// The state passed here is expected to be an authoritative working copy; the resolver
-/// deliberately knows nothing about Photon, scenes, MonoBehaviours or UI.
+/// The state passed here is an authoritative working copy; the resolver deliberately knows
+/// nothing about Photon, scenes, MonoBehaviours or UI.
 ///
-/// Random, EventBus and TriggerEvent are injected so effects remain deterministic and can
-/// inspect/publish gameplay events inside the same transaction without global state.
+/// Resolution is injected so an effect can publish follow-up events or durably suspend the
+/// same transaction for a decision. TriggerEvent identifies what caused this effect.
 /// </summary>
 public sealed class EffectExecutionContext
 {
@@ -56,7 +56,8 @@ public sealed class EffectExecutionContext
     public PlayerStateSnapshot Actor { get; }
     public int SourceCardInstanceId { get; }
     public System.Random Random { get; }
-    public GameEventBus EventBus { get; }
+    public ResolutionQueue Resolution { get; }
+    public GameEventBus EventBus => Resolution != null ? Resolution.Events : null;
     public GameEvent TriggerEvent { get; }
 
     public EffectExecutionContext(
@@ -64,14 +65,14 @@ public sealed class EffectExecutionContext
         PlayerStateSnapshot actor,
         int sourceCardInstanceId = 0,
         System.Random random = null,
-        GameEventBus eventBus = null,
+        ResolutionQueue resolution = null,
         GameEvent triggerEvent = null)
     {
         State = state;
         Actor = actor;
         SourceCardInstanceId = sourceCardInstanceId;
         Random = random;
-        EventBus = eventBus;
+        Resolution = resolution;
         TriggerEvent = triggerEvent;
     }
 }
