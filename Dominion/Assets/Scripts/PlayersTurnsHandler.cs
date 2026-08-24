@@ -51,29 +51,14 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
             state.AuthorityEpoch);
     }
 
-    public void PlayAction(int instanceId)
+    public void PlayCard(int instanceId)
     {
         GameStateSnapshot state = NetworkGameState.State;
         if (!CanSendActivePlayerCommand(state) || instanceId <= 0)
             return;
 
         photonView.RPC(
-            nameof(RpcRequestPlayAction),
-            RpcTarget.MasterClient,
-            NetworkGameState.LocalPlayerId,
-            instanceId,
-            state.Version,
-            state.AuthorityEpoch);
-    }
-
-    public void PlayTreasure(int instanceId)
-    {
-        GameStateSnapshot state = NetworkGameState.State;
-        if (!CanSendActivePlayerCommand(state) || instanceId <= 0)
-            return;
-
-        photonView.RPC(
-            nameof(RpcRequestPlayTreasure),
+            nameof(RpcRequestPlayCard),
             RpcTarget.MasterClient,
             NetworkGameState.LocalPlayerId,
             instanceId,
@@ -121,7 +106,7 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     }
 
     [PunRPC]
-    private void RpcRequestPlayAction(
+    private void RpcRequestPlayCard(
         string requesterPlayerId,
         int instanceId,
         int expectedVersion,
@@ -131,23 +116,8 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
         if (!ValidateSender(requesterPlayerId, info))
             return;
 
-        if (!NetworkGameState.TryPlayAction(requesterPlayerId, instanceId, expectedVersion, expectedAuthorityEpoch))
-            Debug.LogWarning("Rejected stale or invalid PlayAction command.");
-    }
-
-    [PunRPC]
-    private void RpcRequestPlayTreasure(
-        string requesterPlayerId,
-        int instanceId,
-        int expectedVersion,
-        int expectedAuthorityEpoch,
-        PhotonMessageInfo info)
-    {
-        if (!ValidateSender(requesterPlayerId, info))
-            return;
-
-        if (!NetworkGameState.TryPlayTreasure(requesterPlayerId, instanceId, expectedVersion, expectedAuthorityEpoch))
-            Debug.LogWarning("Rejected stale or invalid PlayTreasure command.");
+        if (!NetworkGameState.TryPlayCard(requesterPlayerId, instanceId, expectedVersion, expectedAuthorityEpoch))
+            Debug.LogWarning("Rejected stale or invalid PlayCard command.");
     }
 
     [PunRPC]
