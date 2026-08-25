@@ -129,8 +129,8 @@ public sealed class CoreRulesTests
         bool trashed = TrashRules.TryTrashFromHand(state, player, instanceId, 0, null, out string error);
 
         Assert.That(trashed, Is.True, error);
-        Assert.That(player.Hand, Does.Not.Contain(instanceId));
-        Assert.That(state.TrashedCards, Does.Contain(instanceId));
+        Assert.That(player.Hand.Contains(instanceId), Is.False);
+        Assert.That(state.TrashedCards.Contains(instanceId), Is.True);
         Assert.That(state.CardInstances.Any(card => card.InstanceId == instanceId), Is.True);
         Assert.That(GameStateValidator.TryValidate(state, out string validationError), Is.True, validationError);
     }
