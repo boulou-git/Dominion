@@ -50,6 +50,9 @@ MonoBehaviour:
   - RpcRequestAdvancePhase
   - RpcRequestBuyCard
   - RpcRequestPlayTreasure
+  - RpcRequestPlayCard
+  - RpcRequestSubmitDecision
+  - RpcRequestSubmitSupplyDecision
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 0

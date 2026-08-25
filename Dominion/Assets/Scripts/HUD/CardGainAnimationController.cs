@@ -158,7 +158,7 @@ public sealed class CardGainAnimationController : MonoBehaviour
             yield return null;
         }
 
-        yield return new WaitForSecondsRealtime(0.13f);
+        yield return new WaitForSecondsRealtime(0.4f);
 
         Vector3 startWorld = rect.position;
         Vector3 targetWorld = destination != null
