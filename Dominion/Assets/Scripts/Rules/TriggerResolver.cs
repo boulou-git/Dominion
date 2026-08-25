@@ -39,11 +39,11 @@ public static class TriggerResolver
         System.Random random)
     {
         if (resolution == null)
-            return TriggerResolutionResult.Rejected(0, 0, 0, "Resolution queue is missing.");
+            return RejectAndAbort(state, 0, 0, 0, "Resolution queue is missing.");
         if (state == null)
-            return TriggerResolutionResult.Rejected(0, 0, 0, "Game state is null.");
+            return RejectAndAbort(state, 0, 0, 0, "Game state is null.");
         if (resolveCardDefinition == null)
-            return TriggerResolutionResult.Rejected(0, 0, 0, "Card definition resolver is missing.");
+            return RejectAndAbort(state, 0, 0, 0, "Card definition resolver is missing.");
 
         int eventsProcessed = 0;
         int abilitiesMatched = 0;
@@ -53,7 +53,7 @@ public static class TriggerResolver
         {
             eventsProcessed++;
             if (eventsProcessed > MaxEventsPerResolution)
-                return TriggerResolutionResult.Rejected(eventsProcessed, abilitiesMatched, effectsResolved, "Event resolution limit exceeded. A trigger loop is likely present.");
+                return RejectAndAbort(state, eventsProcessed, abilitiesMatched, effectsResolved, "Event resolution limit exceeded. A trigger loop is likely present.");
 
             string timing = ResolveTiming(gameEvent != null ? gameEvent.Type : default);
             if (string.IsNullOrEmpty(timing))
@@ -63,7 +63,7 @@ public static class TriggerResolver
             abilitiesMatched += subjectResult.AbilitiesMatched;
             effectsResolved += subjectResult.EffectsResolved;
             if (subjectResult.Status == EffectResolutionStatus.Rejected)
-                return TriggerResolutionResult.Rejected(eventsProcessed, abilitiesMatched, effectsResolved, subjectResult.Error);
+                return RejectAndAbort(state, eventsProcessed, abilitiesMatched, effectsResolved, subjectResult.Error);
             if (subjectResult.Status == EffectResolutionStatus.WaitingForChoice)
                 return TriggerResolutionResult.WaitingForChoice(eventsProcessed, abilitiesMatched, effectsResolved);
 
@@ -71,7 +71,7 @@ public static class TriggerResolver
             abilitiesMatched += listenerResult.AbilitiesMatched;
             effectsResolved += listenerResult.EffectsResolved;
             if (listenerResult.Status == EffectResolutionStatus.Rejected)
-                return TriggerResolutionResult.Rejected(eventsProcessed, abilitiesMatched, effectsResolved, listenerResult.Error);
+                return RejectAndAbort(state, eventsProcessed, abilitiesMatched, effectsResolved, listenerResult.Error);
             if (listenerResult.Status == EffectResolutionStatus.WaitingForChoice)
                 return TriggerResolutionResult.WaitingForChoice(eventsProcessed, abilitiesMatched, effectsResolved);
         }
@@ -87,21 +87,21 @@ public static class TriggerResolver
         System.Random random)
     {
         if (resolution == null || continuation == null || continuation.TriggerEvent == null)
-            return TriggerResolutionResult.Rejected(0, 0, 0, "Decision continuation is incomplete.");
+            return RejectAndAbort(state, 0, 0, 0, "Decision continuation is incomplete.");
         if (!continuation.TriggerEvent.TryToRuntime(out GameEvent gameEvent))
-            return TriggerResolutionResult.Rejected(0, 0, 0, "Decision trigger event is invalid.");
+            return RejectAndAbort(state, 0, 0, 0, "Decision trigger event is invalid.");
         if (continuation.ListenerCardInstanceId <= 0 || continuation.ListenerCardInstanceId != gameEvent.CardInstanceId)
-            return TriggerResolutionResult.Rejected(0, 0, 0, "Only subject-card decision continuation is supported currently.");
+            return RejectAndAbort(state, 0, 0, 0, "Only subject-card decision continuation is supported currently.");
 
         CardInstance instance = FindCardInstance(state, continuation.ListenerCardInstanceId);
         if (instance == null)
-            return TriggerResolutionResult.Rejected(0, 0, 0, "Decision source card instance was not found.");
+            return RejectAndAbort(state, 0, 0, 0, "Decision source card instance was not found.");
         PlayerStateSnapshot owner = FindPlayer(state, instance.OwnerPlayerId);
         if (owner == null)
-            return TriggerResolutionResult.Rejected(0, 0, 0, "Decision source card owner was not found.");
+            return RejectAndAbort(state, 0, 0, 0, "Decision source card owner was not found.");
         ExtensionCardData definition = resolveCardDefinition(instance.DefinitionId);
         if (definition == null)
-            return TriggerResolutionResult.Rejected(0, 0, 0, "Decision source card definition was not found.");
+            return RejectAndAbort(state, 0, 0, 0, "Decision source card definition was not found.");
 
         AbilityResolutionResult resumed = AbilityResolver.ResolveTimingFromCursor(
             definition,
@@ -112,7 +112,7 @@ public static class TriggerResolver
             continuation.EffectIndex + 1);
 
         if (resumed.Status == EffectResolutionStatus.Rejected)
-            return TriggerResolutionResult.Rejected(0, resumed.AbilitiesMatched, resumed.EffectsResolved, resumed.Error);
+            return RejectAndAbort(state, 0, resumed.AbilitiesMatched, resumed.EffectsResolved, resumed.Error);
         if (resumed.Status == EffectResolutionStatus.WaitingForChoice)
             return TriggerResolutionResult.WaitingForChoice(0, resumed.AbilitiesMatched, resumed.EffectsResolved);
 
@@ -127,7 +127,7 @@ public static class TriggerResolver
         int matched = resumed.AbilitiesMatched + listeners.AbilitiesMatched;
         int resolved = resumed.EffectsResolved + listeners.EffectsResolved;
         if (listeners.Status == EffectResolutionStatus.Rejected)
-            return TriggerResolutionResult.Rejected(0, matched, resolved, listeners.Error);
+            return RejectAndAbort(state, 0, matched, resolved, listeners.Error);
         if (listeners.Status == EffectResolutionStatus.WaitingForChoice)
             return TriggerResolutionResult.WaitingForChoice(0, matched, resolved);
 
@@ -140,6 +140,35 @@ public static class TriggerResolver
             return TriggerResolutionResult.WaitingForChoice(remaining.EventsProcessed, matched, resolved);
 
         return TriggerResolutionResult.Applied(remaining.EventsProcessed, matched, resolved);
+    }
+
+    private static TriggerResolutionResult RejectAndAbort(
+        GameStateSnapshot state,
+        int eventsProcessed,
+        int abilitiesMatched,
+        int effectsResolved,
+        string error)
+    {
+        AbortResolution(state);
+        return TriggerResolutionResult.Rejected(eventsProcessed, abilitiesMatched, effectsResolved, error);
+    }
+
+    private static void AbortResolution(GameStateSnapshot state)
+    {
+        if (state == null || state.Resolution == null)
+            return;
+
+        ResolutionQueue.EnsureSnapshot(state);
+        state.Resolution.IsActive = false;
+        state.Resolution.OwnerPlayerId = string.Empty;
+        state.Resolution.PendingEvents.Clear();
+        state.Resolution.PendingDecision.Clear();
+        state.Resolution.SelectedInstanceIds.Clear();
+        state.Resolution.SelectedDefinitionIds.Clear();
+        state.Resolution.AttackProtectedPlayerIds.Clear();
+        state.Resolution.LastSelectionCount = 0;
+        state.Resolution.LastSelectedCardCost = -1;
+        state.Resolution.LastMovedCardInstanceId = 0;
     }
 
     private static AbilityResolutionResult ResolveSubjectAbility(
