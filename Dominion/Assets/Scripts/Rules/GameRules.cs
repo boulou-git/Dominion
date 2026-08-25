@@ -45,6 +45,7 @@ public static class GameRules
         if (s.Phase != BuyPhase) return GameRuleResult.Rejected("Cards can only be bought during the Buy phase.");
         PlayerStateSnapshot p = Player(s, playerId); if (p == null || p.Buys <= 0) return GameRuleResult.Rejected("Player was not found or has no Buys.");
         ExtensionCardData d = resolve(definitionId); if (d == null || d.cost < 0 || d.cost > p.Coins) return GameRuleResult.Rejected("Card definition/cost is invalid for this purchase.");
+        if (!GainRules.CanGainFromSupply(s, definitionId, out string gainCheckErr)) return GameRuleResult.Rejected(gainCheckErr);
         if (!ResolutionQueue.TryBegin(s, playerId, out ResolutionQueue q, out string err)) return GameRuleResult.Rejected(err);
         p.Coins -= d.cost; p.Buys--;
         if (!GainRules.TryGainFromSupply(s, p, definitionId, CardZone.Discard, 0, q.Events, out _, out string gainErr)) return GameRuleResult.Rejected(gainErr, q.Events.SnapshotHistory());
