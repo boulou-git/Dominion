@@ -6,6 +6,9 @@ using Photon.Pun;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 /// <summary>
 /// Two-step Dominion end-game presentation:
@@ -15,6 +18,7 @@ using UnityEngine.SceneManagement;
 public sealed partial class EndGameFlowController : MonoBehaviour
 {
     private const string VictoryPointShieldResource = "UI/VictoryPointShield";
+    private const string VictoryPointShieldEditorAsset = "Assets/2D/victory_point.png";
 
     private const string RootName = "DominionEndGameFlow";
     private const string PrefabResourcePath = "UI/EndGameFlow";
@@ -123,12 +127,31 @@ public sealed partial class EndGameFlowController : MonoBehaviour
 
     private static Sprite LoadVictoryPointShield()
     {
+#if UNITY_EDITOR
+        Sprite editorSprite = AssetDatabase.LoadAssetAtPath<Sprite>(VictoryPointShieldEditorAsset);
+        if (editorSprite != null)
+        {
+            Debug.Log("Loaded victory point shield from " + VictoryPointShieldEditorAsset + ".");
+            return editorSprite;
+        }
+
+        Texture2D editorTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(VictoryPointShieldEditorAsset);
+        if (editorTexture != null)
+        {
+            Sprite runtimeEditorSprite = Sprite.Create(
+                editorTexture,
+                new Rect(0f, 0f, editorTexture.width, editorTexture.height),
+                new Vector2(0.5f, 0.5f),
+                100f);
+            runtimeEditorSprite.name = "VictoryPointShield_EditorRuntime";
+            Debug.LogWarning("victory_point.png is not imported as Sprite; using its texture directly in Editor.");
+            return runtimeEditorSprite;
+        }
+#endif
+
         Sprite sprite = Resources.Load<Sprite>(VictoryPointShieldResource);
         if (sprite != null)
-        {
-            Debug.Log("Loaded victory point shield as Sprite from Resources/UI/VictoryPointShield.");
             return sprite;
-        }
 
         Texture2D texture = Resources.Load<Texture2D>(VictoryPointShieldResource);
         if (texture != null)
@@ -139,11 +162,12 @@ public sealed partial class EndGameFlowController : MonoBehaviour
                 new Vector2(0.5f, 0.5f),
                 100f);
             runtimeSprite.name = "VictoryPointShield_Runtime";
-            Debug.LogWarning("Victory point shield was not exposed as a Sprite; created one from the Resources texture at runtime.");
             return runtimeSprite;
         }
 
-        Debug.LogError("Victory point shield could not be loaded from Resources/UI/VictoryPointShield (neither Sprite nor Texture2D).");
+        Debug.LogError(
+            "Victory point shield could not be loaded. In Editor, expected " + VictoryPointShieldEditorAsset +
+            "; build fallback is Resources/" + VictoryPointShieldResource + ".");
         return null;
     }
 
