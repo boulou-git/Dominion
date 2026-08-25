@@ -7,7 +7,7 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Renders replicated public journal entries over the existing journal Text slot.
-/// Card names are separate raycast targets so right-click inspection is precise.
+/// Card names are separate raycast targets so left/right-click inspection is precise.
 /// </summary>
 public sealed class PublicJournalView : MonoBehaviour
 {
@@ -192,6 +192,7 @@ public sealed class PublicJournalView : MonoBehaviour
         {
             CardPointerInteraction pointer = textObject.AddComponent<CardPointerInteraction>();
             pointer.InspectOnLongPress = false;
+            pointer.PrimaryActionRequested += inspect;
             pointer.InspectRequested += inspect;
         }
 
