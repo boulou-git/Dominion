@@ -120,6 +120,34 @@ public sealed class CoreRulesTests
     }
 
     [Test]
+    public void BuyFromEmptySupply_DoesNotSpendCoinsOrBuy()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        state.Phase = GameRules.BuyPhase;
+        player.Coins = 3;
+        player.Buys = 1;
+        state.SupplyPiles.Add(new SupplyPileSnapshot("base:argent", 0));
+        ExtensionCardData argent = new ExtensionCardData { id = "argent", name = "Argent", cost = 3 };
+
+        GameRuleResult result = GameRules.TryBuyCard(
+            state,
+            player.PlayerId,
+            "base:argent",
+            definitionId => string.Equals(definitionId, "base:argent", StringComparison.OrdinalIgnoreCase) ? argent : null,
+            new Random(1));
+
+        Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Rejected));
+        StringAssert.Contains("empty", result.Error);
+        Assert.That(player.Coins, Is.EqualTo(3));
+        Assert.That(player.Buys, Is.EqualTo(1));
+        Assert.That(state.Phase, Is.EqualTo(GameRules.BuyPhase));
+        Assert.That(state.NextCardInstanceId, Is.EqualTo(1));
+        Assert.That(state.CardInstances, Is.Empty);
+        Assert.That(player.Discard, Is.Empty);
+        Assert.That(state.SupplyPiles[0].RemainingCount, Is.Zero);
+    }
+
+    [Test]
     public void TrashFromHand_MovesCardToTrashAndKeepsRegistryEntry()
     {
         GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
