@@ -18,6 +18,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
     private const string PlayerIdPrefKey = "Dominion.PlayerId";
     private const string LastRoomPrefKey = "Dominion.LastRoom";
     private const string GameStartedPropertyKey = "dominion.gameStarted";
+    private const string RoomClosingPropertyKey = "dominion.roomClosing";
 
     private static readonly TypedLobby TypedLobby = new TypedLobby("Lobby", LobbyType.Default);
 
@@ -27,12 +28,16 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         IsVisible = true,
         IsOpen = true,
         PlayerTtl = 300_000,
-        EmptyRoomTtl = 300_000,
+        // A deliberately empty room must disappear immediately so the fixed
+        // "Dominion" room name can be reused for a new match straight away.
+        EmptyRoomTtl = 0,
         PublishUserId = true
     };
 
     private bool _tryingToRejoin;
     private bool _resumeAttemptedThisConnection;
+    private bool _joinAfterFailedRejoin;
+    private bool _leavingBecauseRoomClosed;
     private string _lastRoomName;
     private bool _gameSceneTransitionInProgress;
     private bool _lobbySceneTransitionInProgress;
@@ -76,7 +81,28 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
             return;
         }
 
+        if (PhotonNetwork.InRoom)
+            return;
+
+        string rememberedRoom = PlayerPrefs.GetString(LastRoomPrefKey, string.Empty);
+        if (string.Equals(rememberedRoom, RoomName, StringComparison.Ordinal))
+        {
+            _lastRoomName = rememberedRoom;
+            _tryingToRejoin = true;
+            _joinAfterFailedRejoin = true;
+            Debug.Log($"Trying to rejoin inactive player slot in '{RoomName}' before normal join.");
+            PhotonNetwork.RejoinRoom(RoomName);
+            return;
+        }
+
+        JoinOrCreateLobbyRoom();
+    }
+
+    private void JoinOrCreateLobbyRoom()
+    {
         _tryingToRejoin = false;
+        _joinAfterFailedRejoin = false;
+        _leavingBecauseRoomClosed = false;
         PhotonNetwork.JoinOrCreateRoom(RoomName, RoomOptions, TypedLobby);
     }
 
@@ -104,11 +130,54 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         PhotonNetwork.CurrentRoom.SetCustomProperties(roomProperties);
     }
 
+    /// <summary>
+    /// Host-only deliberate shutdown. Unlike a network drop, nobody should keep an
+    /// inactive Photon slot: every client receives roomClosing and leaves permanently.
+    /// With EmptyRoomTtl = 0 the room is deleted as soon as the last player leaves.
+    /// </summary>
+    public void CloseCurrentRoomAsHost()
+    {
+        if (!PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null)
+            return;
+
+        PhotonNetwork.CurrentRoom.IsOpen = false;
+        PhotonNetwork.CurrentRoom.IsVisible = false;
+
+        _leavingBecauseRoomClosed = true;
+        _lastRoomName = null;
+        ClearLastRoom();
+
+        Hashtable roomProperties = new Hashtable
+        {
+            { RoomClosingPropertyKey, true }
+        };
+        PhotonNetwork.CurrentRoom.SetCustomProperties(roomProperties);
+
+        // false = remove this actor completely instead of preserving an inactive slot.
+        PhotonNetwork.LeaveRoom(false);
+    }
+
+    /// <summary>
+    /// Explicit player quit: this is not a temporary disconnect, so don't retain an
+    /// inactive slot that could block a future join with the same UserId.
+    /// </summary>
+    public void LeaveCurrentRoomPermanently()
+    {
+        if (!PhotonNetwork.InRoom)
+            return;
+
+        _lastRoomName = null;
+        ClearLastRoom();
+        PhotonNetwork.LeaveRoom(false);
+    }
+
     public override void OnJoinedRoom()
     {
         _lastRoomName = PhotonNetwork.CurrentRoom.Name;
         SaveLastRoom(_lastRoomName);
         _tryingToRejoin = false;
+        _joinAfterFailedRejoin = false;
+        _leavingBecauseRoomClosed = false;
         _resumeAttemptedThisConnection = true;
 
         bool hasGameState = NetworkGameState.HydrateFromRoom(true);
@@ -128,6 +197,17 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
     {
         Debug.LogWarning($"Photon disconnected: {cause}");
 
+        // A deliberate host shutdown must never trigger reconnect/rejoin behavior.
+        if (_leavingBecauseRoomClosed)
+        {
+            _leavingBecauseRoomClosed = false;
+            _lastRoomName = null;
+            ClearLastRoom();
+            NetworkGameState.ResetLocalState();
+            EnsureLobbySceneLoaded();
+            return;
+        }
+
         if (string.IsNullOrEmpty(_lastRoomName))
             _lastRoomName = PlayerPrefs.GetString(LastRoomPrefKey, string.Empty);
 
@@ -135,6 +215,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
             return;
 
         _tryingToRejoin = true;
+        _joinAfterFailedRejoin = false;
         _resumeAttemptedThisConnection = false;
 
         if (!PhotonNetwork.ReconnectAndRejoin())
@@ -154,6 +235,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
         _resumeAttemptedThisConnection = true;
         _tryingToRejoin = true;
+        _joinAfterFailedRejoin = false;
         Debug.Log($"Trying to resume previous room '{_lastRoomName}'.");
         PhotonNetwork.RejoinRoom(_lastRoomName);
     }
@@ -162,16 +244,34 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
     {
         if (!_tryingToRejoin)
         {
+            if (returnCode == 32749 && PhotonNetwork.IsConnectedAndReady)
+            {
+                _tryingToRejoin = true;
+                _joinAfterFailedRejoin = false;
+                Debug.LogWarning("Normal join found an inactive local UserId. Retrying as RejoinRoom.");
+                PhotonNetwork.RejoinRoom(RoomName);
+                return;
+            }
+
             Debug.LogError($"Could not join room: {returnCode} - {message}");
             return;
         }
 
         Debug.LogWarning($"Previous match could not be resumed: {returnCode} - {message}");
+
+        bool shouldJoinFreshLobby = _joinAfterFailedRejoin;
         _tryingToRejoin = false;
+        _joinAfterFailedRejoin = false;
         _lastRoomName = null;
         ClearLastRoom();
         NetworkGameState.ResetLocalState();
         EnsureLobbySceneLoaded();
+
+        if (shouldJoinFreshLobby && PhotonNetwork.IsConnectedAndReady)
+        {
+            Debug.Log("No inactive slot could be resumed. Joining/creating a fresh Dominion lobby.");
+            JoinOrCreateLobbyRoom();
+        }
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
@@ -208,6 +308,24 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
     public override void OnRoomPropertiesUpdate(Hashtable propertiesThatChanged)
     {
+        // A deliberate shutdown is authoritative room state. Any player that is still
+        // present must leave permanently, even if Photon has just promoted that player
+        // to Master Client after the original host left.
+        if (propertiesThatChanged != null &&
+            propertiesThatChanged.ContainsKey(RoomClosingPropertyKey) &&
+            propertiesThatChanged[RoomClosingPropertyKey] is bool closing && closing)
+        {
+            if (PhotonNetwork.InRoom)
+            {
+                _leavingBecauseRoomClosed = true;
+                _lastRoomName = null;
+                ClearLastRoom();
+                NetworkGameState.ResetLocalState();
+                PhotonNetwork.LeaveRoom(false);
+            }
+            return;
+        }
+
         bool stateChanged = NetworkGameState.ApplyRoomProperties(propertiesThatChanged);
 
         if (stateChanged)
@@ -221,6 +339,8 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
     {
         _lastRoomName = null;
         _tryingToRejoin = false;
+        _joinAfterFailedRejoin = false;
+        _leavingBecauseRoomClosed = false;
         _resumeAttemptedThisConnection = true;
         ClearLastRoom();
         NetworkGameState.ResetLocalState();

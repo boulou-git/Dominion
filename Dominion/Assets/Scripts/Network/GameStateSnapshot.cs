@@ -20,14 +20,72 @@ public class GameStateSnapshot
     public bool IsStarted;
     public bool IsInitialised;
     public bool IsPaused;
+    public bool ManualPauseRequested;
     public string PauseReason;
 
     public string ActivePlayerId;
     public int TurnNumber;
     public string Phase = "Setup";
 
+    // One registry for every physical card created during the match.
+    // Player zones only store InstanceId values referencing this registry.
+    public int NextCardInstanceId = 1;
+    public List<CardInstance> CardInstances = new List<CardInstance>();
+
+    // Cards removed from player decks by the Dominion "trash" operation.
+    // The physical CardInstance remains in CardInstances for logs/replay/inspection.
+    public List<int> TrashedCards = new List<int>();
+
+    // Authoritative remaining card counts for every Reserve pile.
+    // DefinitionId uses qualified refs such as "base:cuivre".
+    public List<SupplyPileSnapshot> SupplyPiles = new List<SupplyPileSnapshot>();
+
+    // Durable bookkeeping for declarative abilities limited to one resolution per turn.
+    // Keeping this in authoritative state makes the limit survive replication/reconnects.
+    public List<AbilityUsageSnapshot> AbilityUsages = new List<AbilityUsageSnapshot>();
+
+    // Durable in-progress rules resolution. Usually inactive/empty between commands, but
+    // survives room replication when an effect must pause for a player's decision.
+    public ResolutionQueueSnapshot Resolution = new ResolutionQueueSnapshot();
+
     // Player order is fixed once the match starts.
     public List<PlayerStateSnapshot> Players = new List<PlayerStateSnapshot>();
+}
+
+[Serializable]
+public class AbilityUsageSnapshot
+{
+    public int CardInstanceId;
+    public int AbilityIndex;
+    public int TurnNumber;
+
+    public AbilityUsageSnapshot()
+    {
+    }
+
+    public AbilityUsageSnapshot(int cardInstanceId, int abilityIndex, int turnNumber)
+    {
+        CardInstanceId = cardInstanceId;
+        AbilityIndex = abilityIndex;
+        TurnNumber = turnNumber;
+    }
+}
+
+[Serializable]
+public class SupplyPileSnapshot
+{
+    public string DefinitionId;
+    public int RemainingCount;
+
+    public SupplyPileSnapshot()
+    {
+    }
+
+    public SupplyPileSnapshot(string definitionId, int remainingCount)
+    {
+        DefinitionId = definitionId;
+        RemainingCount = remainingCount;
+    }
 }
 
 [Serializable]
@@ -41,7 +99,7 @@ public class PlayerStateSnapshot
     public string NickName;
     public bool IsConnected = true;
 
-    // Card instance IDs will be stored here once the card runtime is implemented.
+    // All zones contain CardInstance.InstanceId values.
     public List<int> Deck = new List<int>();
     public List<int> Hand = new List<int>();
     public List<int> Discard = new List<int>();
