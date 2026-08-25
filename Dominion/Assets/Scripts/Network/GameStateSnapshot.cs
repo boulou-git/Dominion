@@ -23,6 +23,12 @@ public class GameStateSnapshot
     public bool ManualPauseRequested;
     public string PauseReason;
 
+    // Durable match-end state. End conditions are evaluated at the end of the
+    // active player's turn so they never interrupt an effect/decision mid-turn.
+    public bool IsGameOver;
+    public string GameEndReason;
+    public int EndedTurnNumber;
+
     public string ActivePlayerId;
     public int TurnNumber;
     public string Phase = "Setup";

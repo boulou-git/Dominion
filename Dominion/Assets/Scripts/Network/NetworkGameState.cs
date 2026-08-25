@@ -300,6 +300,11 @@ public static class NetworkGameState
         CardZoneRules.MoveAll(current, CardZone.Hand, CardZone.Discard, true);
         current.Actions = 1; current.Buys = 1; current.Coins = 0;
         CardZoneRules.DrawCards(current, StartingHandSize, NewRandom(), out _);
+
+        // Dominion end conditions never interrupt the current turn. Finalise only
+        // after cleanup, before rotating the active player or incrementing TurnNumber.
+        if (GameEndRules.TryFinaliseAtTurnBoundary(state)) return;
+
         int currentIndex = state.Players.FindIndex(player => player != null && player.PlayerId == state.ActivePlayerId);
         if (currentIndex < 0) currentIndex = 0;
         int nextIndex = (currentIndex + 1) % state.Players.Count;
@@ -397,8 +402,13 @@ public static class NetworkGameState
         if (state == null) return;
         if (state.CardInstances == null) state.CardInstances = new List<CardInstance>();
         if (state.SupplyPiles == null) state.SupplyPiles = new List<SupplyPileSnapshot>();
+        if (state.Journal == null) state.Journal = new List<GameJournalEntrySnapshot>();
+        if (state.NextJournalSequence < 1)
+            state.NextJournalSequence = state.Journal.Count > 0 ? state.Journal.Max(entry => entry != null ? entry.Sequence : 0) + 1 : 1;
         if (state.NextCardInstanceId < 1)
             state.NextCardInstanceId = state.CardInstances.Count > 0 ? state.CardInstances.Max(card => card != null ? card.InstanceId : 0) + 1 : 1;
+        if (state.TrashedCards == null) state.TrashedCards = new List<int>();
+        if (state.AbilityUsages == null) state.AbilityUsages = new List<AbilityUsageSnapshot>();
         if (state.Players == null) state.Players = new List<PlayerStateSnapshot>();
         foreach (PlayerStateSnapshot player in state.Players)
         {
