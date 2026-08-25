@@ -62,29 +62,14 @@ public sealed class CardEffectData
     public string sourceZone;
     public string destinationZone;
 
-    // Generic card/pile choice constraints.
     public string cardId;
     public string cardType;
 
-    // Restrict a card choice to the card most recently moved by this resolution.
-    // Useful for reveal/discard-top flows without introducing card-specific operations.
     public bool lastMovedOnly;
-
-    // Generic conditional execution: when true, this effect becomes a no-op if the
-    // immediately preceding player choice selected no cards/piles.
     public bool requiresLastSelection;
-
-    // Supply-choice constraints. Negative maxCost means no fixed cost ceiling.
     public int maxCost = -1;
-
-    // When true, choose_supply uses LastSelectedCardCost + costOffset as its ceiling.
-    // This is intentionally separate from maxCost so cards such as Rénovation/Mine stay data-driven.
     public bool useLastSelectionCost;
     public int costOffset;
-
-    // If a mandatory-looking supply choice has no eligible non-empty pile, resolve it as
-    // a no-op instead of rejecting the whole transaction. This matches Dominion's
-    // "do as much as you can" behavior without making an available gain optional.
     public bool allowNoEligible;
 }
 
@@ -139,11 +124,6 @@ public static class ExtensionCatalog
         return FindCard(Find(extensionId), cardId);
     }
 
-    /// <summary>
-    /// Validates one in-memory package without touching the filesystem. This is kept
-    /// public so EditMode tests and future authoring tools can validate custom packages
-    /// using exactly the same rules as the runtime loader.
-    /// </summary>
     public static bool TryValidatePackage(ExtensionPackageData extension, out string error)
     {
         error = string.Empty;
@@ -186,9 +166,7 @@ public static class ExtensionCatalog
         if (cards == null)
             return null;
 
-        return cards.Find(card =>
-            card != null &&
-            string.Equals(card.id, cardId, StringComparison.OrdinalIgnoreCase));
+        return cards.Find(card => card != null && string.Equals(card.id, cardId, StringComparison.OrdinalIgnoreCase));
     }
 
     private static List<ExtensionPackageData> LoadAll()
@@ -443,7 +421,7 @@ public static class ExtensionCatalog
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(filter.cardId) && !IsValidCardReference(filter.cardId))
+        if (!string.IsNullOrWhiteSpace(filter.cardId) && !CardDefinitionReference.IsValid(filter.cardId))
         {
             error = "Card '" + cardId + "' ability[" + abilityIndex + "] has malformed filter.cardId '" + filter.cardId + "'.";
             return false;
@@ -506,7 +484,7 @@ public static class ExtensionCatalog
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(effect.cardId) && !IsValidCardReference(effect.cardId))
+        if (!string.IsNullOrWhiteSpace(effect.cardId) && !CardDefinitionReference.IsValid(effect.cardId))
         {
             error = prefix + " has malformed cardId '" + effect.cardId + "'.";
             return false;
@@ -525,19 +503,5 @@ public static class ExtensionCatalog
 
         error = prefix + " uses unsupported " + fieldName + " '" + value + "'.";
         return false;
-    }
-
-    private static bool IsValidCardReference(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return false;
-
-        string reference = value.Trim();
-        int separator = reference.IndexOf(':');
-        if (separator < 0)
-            return true;
-        if (separator == 0 || separator == reference.Length - 1)
-            return false;
-        return reference.IndexOf(':', separator + 1) < 0;
     }
 }
