@@ -93,7 +93,7 @@ public static class NetworkGameState
     {
         if (!CanWrite()) return false;
         HydrateFromRoom(true);
-        if (_state != null && _state.IsStarted) return false;
+        if (_state != null && (_state.IsStarted || _state.IsGameOver)) return false;
 
         List<Player> roomPlayers = PhotonNetwork.CurrentRoom.Players.Values.OrderBy(player => player.ActorNumber).ToList();
         if (roomPlayers.Count == 0) return false;
@@ -365,9 +365,21 @@ public static class NetworkGameState
     {
         if (!CanWrite() || state == null) return false;
         NormaliseCollections(state);
+        if (!GameStateSnapshotMigration.TryUpgradeToCurrent(state, out string migrationError))
+        {
+            Debug.LogError("Cannot commit Dominion game state: " + migrationError);
+            return false;
+        }
+
         GameStateSnapshot committed = Clone(state);
         int previousVersion = _state != null ? _state.Version : 0;
         committed.Version = Math.Max(previousVersion, committed.Version) + 1;
+        if (!GameStateValidator.TryValidate(committed, out string validationError))
+        {
+            Debug.LogError("Refusing to commit invalid Dominion game state:\n" + validationError);
+            return false;
+        }
+
         string json = JsonUtility.ToJson(committed);
         Hashtable properties = new Hashtable { { StatePropertyKey, json } };
         bool queued = PhotonNetwork.CurrentRoom.SetCustomProperties(properties);
@@ -380,7 +392,19 @@ public static class NetworkGameState
         if (string.IsNullOrEmpty(json)) return false;
         GameStateSnapshot incoming = JsonUtility.FromJson<GameStateSnapshot>(json);
         if (incoming == null) return false;
+        if (!GameStateSnapshotMigration.TryUpgradeToCurrent(incoming, out string migrationError))
+        {
+            Debug.LogError("Cannot hydrate Dominion game state: " + migrationError);
+            return false;
+        }
+
         NormaliseCollections(incoming);
+        if (!GameStateValidator.TryValidate(incoming, out string validationError))
+        {
+            Debug.LogError("Ignoring invalid replicated Dominion game state:\n" + validationError);
+            return false;
+        }
+
         if (!force && _state != null && incoming.Version <= _state.Version) return false;
         SetLocalState(incoming); return true;
     }
