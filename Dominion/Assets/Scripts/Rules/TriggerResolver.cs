@@ -31,9 +31,6 @@ public readonly struct TriggerResolutionResult
 public static class TriggerResolver
 {
     private const int MaxEventsPerResolution = 512;
-    private const string SubjectScope = "subject";
-    private const string InHandScope = "in_hand";
-    private const string InPlayScope = "in_play";
 
     public static TriggerResolutionResult ResolvePending(
         ResolutionQueue resolution,
@@ -82,12 +79,6 @@ public static class TriggerResolver
         return TriggerResolutionResult.Applied(eventsProcessed, abilitiesMatched, effectsResolved);
     }
 
-    /// <summary>
-    /// First resumable interaction path: resumes a subject ability immediately after the
-    /// effect that created the decision, then finishes listeners for that same event and
-    /// continues with later queued events. External-listener decisions are intentionally
-    /// rejected by choose_cards until a listener cursor is persisted as well.
-    /// </summary>
     public static TriggerResolutionResult ResumeSubjectDecision(
         ResolutionQueue resolution,
         PendingDecisionSnapshot continuation,
@@ -199,7 +190,7 @@ public static class TriggerResolver
             if (owner == null)
                 continue;
 
-            AbilityResolutionResult handResult = ResolveZoneListeners(owner, owner.Hand, InHandScope, gameEvent, timing, resolution, state, resolveCardDefinition, random);
+            AbilityResolutionResult handResult = ResolveZoneListeners(owner, owner.Hand, DeclarativeRuleVocabulary.InHandScope, gameEvent, timing, resolution, state, resolveCardDefinition, random);
             matched += handResult.AbilitiesMatched;
             resolved += handResult.EffectsResolved;
             if (handResult.Status == EffectResolutionStatus.Rejected)
@@ -207,7 +198,7 @@ public static class TriggerResolver
             if (handResult.Status == EffectResolutionStatus.WaitingForChoice)
                 return AbilityResolutionResult.WaitingForChoice(matched, resolved);
 
-            AbilityResolutionResult inPlayResult = ResolveZoneListeners(owner, owner.InPlay, InPlayScope, gameEvent, timing, resolution, state, resolveCardDefinition, random);
+            AbilityResolutionResult inPlayResult = ResolveZoneListeners(owner, owner.InPlay, DeclarativeRuleVocabulary.InPlayScope, gameEvent, timing, resolution, state, resolveCardDefinition, random);
             matched += inPlayResult.AbilitiesMatched;
             resolved += inPlayResult.EffectsResolved;
             if (inPlayResult.Status == EffectResolutionStatus.Rejected)
@@ -278,7 +269,7 @@ public static class TriggerResolver
 
     private static bool IsSubjectScope(CardAbilityData ability)
     {
-        return ability != null && (string.IsNullOrWhiteSpace(ability.scope) || string.Equals(ability.scope, SubjectScope, StringComparison.OrdinalIgnoreCase));
+        return ability != null && (string.IsNullOrWhiteSpace(ability.scope) || string.Equals(ability.scope, DeclarativeRuleVocabulary.SubjectScope, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool ScopeEquals(CardAbilityData ability, string scope)
@@ -295,21 +286,23 @@ public static class TriggerResolver
         if (filter == null)
             return true;
 
-        string eventPlayer = string.IsNullOrWhiteSpace(filter.eventPlayer) ? "any" : filter.eventPlayer.Trim();
-        if (string.Equals(eventPlayer, "self", StringComparison.OrdinalIgnoreCase))
+        string eventPlayer = string.IsNullOrWhiteSpace(filter.eventPlayer)
+            ? DeclarativeRuleVocabulary.AnyEventPlayer
+            : filter.eventPlayer.Trim();
+        if (string.Equals(eventPlayer, DeclarativeRuleVocabulary.SelfEventPlayer, StringComparison.OrdinalIgnoreCase))
         {
             if (string.IsNullOrEmpty(gameEvent.PlayerId) || !string.Equals(gameEvent.PlayerId, listenerOwner.PlayerId, StringComparison.Ordinal))
                 return false;
         }
-        else if (string.Equals(eventPlayer, "other", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(eventPlayer, DeclarativeRuleVocabulary.OtherEventPlayer, StringComparison.OrdinalIgnoreCase))
         {
             if (string.IsNullOrEmpty(gameEvent.PlayerId) || string.Equals(gameEvent.PlayerId, listenerOwner.PlayerId, StringComparison.Ordinal))
                 return false;
         }
-        else if (!string.Equals(eventPlayer, "any", StringComparison.OrdinalIgnoreCase))
+        else if (!string.Equals(eventPlayer, DeclarativeRuleVocabulary.AnyEventPlayer, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        if (!string.IsNullOrWhiteSpace(filter.cardId) && !string.Equals(filter.cardId, gameEvent.CardDefinitionId, StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(filter.cardId) && !CardDefinitionReference.Matches(filter.cardId, gameEvent.CardDefinitionId))
             return false;
 
         if (!string.IsNullOrWhiteSpace(filter.cardType))
@@ -317,39 +310,27 @@ public static class TriggerResolver
             if (string.IsNullOrEmpty(gameEvent.CardDefinitionId))
                 return false;
             ExtensionCardData eventCard = resolveCardDefinition(gameEvent.CardDefinitionId);
-            if (!HasType(eventCard, filter.cardType))
+            if (!CardDefinitionRules.HasType(eventCard, filter.cardType))
                 return false;
         }
 
         return true;
     }
 
-    private static bool HasType(ExtensionCardData definition, string type)
-    {
-        if (definition == null || definition.types == null || string.IsNullOrWhiteSpace(type))
-            return false;
-        foreach (string declaredType in definition.types)
-        {
-            if (string.Equals(declaredType, type, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        return false;
-    }
-
     private static string ResolveTiming(GameEventType eventType)
     {
         switch (eventType)
         {
-            case GameEventType.CardPlayed: return "play";
-            case GameEventType.CardGained: return "card_gained";
-            case GameEventType.CardDiscarded: return "card_discarded";
-            case GameEventType.CardTrashed: return "card_trashed";
-            case GameEventType.TurnStarted: return "turn_started";
-            case GameEventType.TurnEnded: return "turn_ended";
-            case GameEventType.BuyStarted: return "buy_started";
-            case GameEventType.PileEmptied: return "pile_emptied";
-            case GameEventType.ArtifactGained: return "artifact_gained";
-            case GameEventType.DiseaseGained: return "disease_gained";
+            case GameEventType.CardPlayed: return DeclarativeRuleVocabulary.PlayTiming;
+            case GameEventType.CardGained: return DeclarativeRuleVocabulary.CardGainedTiming;
+            case GameEventType.CardDiscarded: return DeclarativeRuleVocabulary.CardDiscardedTiming;
+            case GameEventType.CardTrashed: return DeclarativeRuleVocabulary.CardTrashedTiming;
+            case GameEventType.TurnStarted: return DeclarativeRuleVocabulary.TurnStartedTiming;
+            case GameEventType.TurnEnded: return DeclarativeRuleVocabulary.TurnEndedTiming;
+            case GameEventType.BuyStarted: return DeclarativeRuleVocabulary.BuyStartedTiming;
+            case GameEventType.PileEmptied: return DeclarativeRuleVocabulary.PileEmptiedTiming;
+            case GameEventType.ArtifactGained: return DeclarativeRuleVocabulary.ArtifactGainedTiming;
+            case GameEventType.DiseaseGained: return DeclarativeRuleVocabulary.DiseaseGainedTiming;
             default: return string.Empty;
         }
     }
