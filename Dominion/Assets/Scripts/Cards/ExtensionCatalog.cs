@@ -92,6 +92,49 @@ public static class ExtensionCatalog
 {
     private const string ExtensionFileName = "extension.json";
     public const int SupportedSchemaVersion = 2;
+
+    private static readonly HashSet<string> SupportedAbilityTimings = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "play",
+        "card_gained",
+        "card_discarded",
+        "card_trashed",
+        "turn_started",
+        "turn_ended",
+        "buy_started",
+        "pile_emptied",
+        "artifact_gained",
+        "disease_gained",
+        ReactionRules.AttackReactionTiming
+    };
+
+    private static readonly HashSet<string> SupportedAbilityScopes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "subject",
+        "in_hand",
+        "in_play"
+    };
+
+    private static readonly HashSet<string> SupportedEventPlayers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "any",
+        "self",
+        "other"
+    };
+
+    private static readonly HashSet<string> SupportedEffectTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "self",
+        "others"
+    };
+
+    private static readonly HashSet<string> SupportedResources = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "actions",
+        "buys",
+        "coins"
+    };
+
     private static List<ExtensionPackageData> _cached;
 
     public static IReadOnlyList<ExtensionPackageData> All
@@ -289,8 +332,35 @@ public static class ExtensionCatalog
 
             foreach (CardAbilityData ability in card.abilities)
             {
-                if (ability != null && ability.effects == null)
+                if (ability == null)
+                    continue;
+
+                ability.when = (ability.when ?? string.Empty).Trim();
+                ability.scope = (ability.scope ?? string.Empty).Trim();
+                if (ability.filter != null)
+                {
+                    ability.filter.eventPlayer = (ability.filter.eventPlayer ?? string.Empty).Trim();
+                    ability.filter.cardId = (ability.filter.cardId ?? string.Empty).Trim();
+                    ability.filter.cardType = (ability.filter.cardType ?? string.Empty).Trim();
+                }
+                if (ability.effects == null)
                     ability.effects = new List<CardEffectData>();
+
+                foreach (CardEffectData effect in ability.effects)
+                {
+                    if (effect == null)
+                        continue;
+
+                    effect.op = (effect.op ?? string.Empty).Trim();
+                    effect.target = (effect.target ?? string.Empty).Trim();
+                    effect.resource = (effect.resource ?? string.Empty).Trim();
+                    effect.zone = (effect.zone ?? string.Empty).Trim();
+                    effect.sourceZone = (effect.sourceZone ?? string.Empty).Trim();
+                    effect.destinationZone = (effect.destinationZone ?? string.Empty).Trim();
+                    effect.cardId = (effect.cardId ?? string.Empty).Trim();
+                    effect.cardType = (effect.cardType ?? string.Empty).Trim();
+                    effect.prompt = (effect.prompt ?? string.Empty).Trim();
+                }
             }
         }
     }
@@ -364,6 +434,22 @@ public static class ExtensionCatalog
                     return false;
                 }
 
+                string timing = ability.when.Trim();
+                if (!SupportedAbilityTimings.Contains(timing))
+                {
+                    error = "Card '" + card.id + "' ability[" + abilityIndex + "] uses unsupported timing '" + ability.when + "'.";
+                    return false;
+                }
+
+                if (!string.IsNullOrWhiteSpace(ability.scope) && !SupportedAbilityScopes.Contains(ability.scope.Trim()))
+                {
+                    error = "Card '" + card.id + "' ability[" + abilityIndex + "] uses unsupported scope '" + ability.scope + "'.";
+                    return false;
+                }
+
+                if (!ValidateTriggerFilter(card.id, abilityIndex, ability.filter, out error))
+                    return false;
+
                 if (ability.effects == null)
                 {
                     error = "Card '" + card.id + "' ability[" + abilityIndex + "] has a null effects list.";
@@ -379,15 +465,122 @@ public static class ExtensionCatalog
                         return false;
                     }
 
-                    if (string.IsNullOrWhiteSpace(effect.op))
-                    {
-                        error = "Card '" + card.id + "' ability[" + abilityIndex + "] effect[" + effectIndex + "] has no operation ('op').";
+                    if (!ValidateEffect(card.id, abilityIndex, effectIndex, timing, effect, out error))
                         return false;
-                    }
                 }
             }
         }
 
         return true;
+    }
+
+    private static bool ValidateTriggerFilter(string cardId, int abilityIndex, CardTriggerFilterData filter, out string error)
+    {
+        error = string.Empty;
+        if (filter == null)
+            return true;
+
+        if (!string.IsNullOrWhiteSpace(filter.eventPlayer) && !SupportedEventPlayers.Contains(filter.eventPlayer.Trim()))
+        {
+            error = "Card '" + cardId + "' ability[" + abilityIndex + "] uses unsupported filter.eventPlayer '" + filter.eventPlayer + "'.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.cardId) && !IsValidCardReference(filter.cardId))
+        {
+            error = "Card '" + cardId + "' ability[" + abilityIndex + "] has malformed filter.cardId '" + filter.cardId + "'.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool ValidateEffect(string cardId, int abilityIndex, int effectIndex, string timing, CardEffectData effect, out string error)
+    {
+        error = string.Empty;
+        string prefix = "Card '" + cardId + "' ability[" + abilityIndex + "] effect[" + effectIndex + "]";
+
+        if (string.IsNullOrWhiteSpace(effect.op))
+        {
+            error = prefix + " has no operation ('op').";
+            return false;
+        }
+
+        string op = effect.op.Trim();
+        bool isBlockAttack = string.Equals(op, ReactionRules.BlockAttackOperation, StringComparison.OrdinalIgnoreCase);
+        if (!isBlockAttack && !EffectResolver.IsSupported(op))
+        {
+            error = prefix + " uses unsupported operation '" + effect.op + "'.";
+            return false;
+        }
+
+        bool isAttackReaction = string.Equals(timing, ReactionRules.AttackReactionTiming, StringComparison.OrdinalIgnoreCase);
+        if (isAttackReaction && !isBlockAttack)
+        {
+            error = prefix + " uses operation '" + effect.op + "', but attack_reaction currently supports only '" + ReactionRules.BlockAttackOperation + "'.";
+            return false;
+        }
+        if (isBlockAttack && !isAttackReaction)
+        {
+            error = prefix + " uses '" + ReactionRules.BlockAttackOperation + "' outside attack_reaction timing.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(effect.target) || !SupportedEffectTargets.Contains(effect.target.Trim()))
+        {
+            error = prefix + " uses unsupported or missing target '" + (effect.target ?? string.Empty) + "'.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(effect.resource) && !SupportedResources.Contains(effect.resource.Trim()))
+        {
+            error = prefix + " uses unsupported resource '" + effect.resource + "'.";
+            return false;
+        }
+
+        if (!ValidateOptionalZone(prefix, "zone", effect.zone, out error) ||
+            !ValidateOptionalZone(prefix, "sourceZone", effect.sourceZone, out error) ||
+            !ValidateOptionalZone(prefix, "destinationZone", effect.destinationZone, out error))
+            return false;
+
+        if (effect.min < 0 || effect.max < 0)
+        {
+            error = prefix + " has negative selection bounds.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(effect.cardId) && !IsValidCardReference(effect.cardId))
+        {
+            error = prefix + " has malformed cardId '" + effect.cardId + "'.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool ValidateOptionalZone(string prefix, string fieldName, string value, out string error)
+    {
+        error = string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+        if (CardZoneRules.TryParseZone(value, out _))
+            return true;
+
+        error = prefix + " uses unsupported " + fieldName + " '" + value + "'.";
+        return false;
+    }
+
+    private static bool IsValidCardReference(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        string reference = value.Trim();
+        int separator = reference.IndexOf(':');
+        if (separator < 0)
+            return true;
+        if (separator == 0 || separator == reference.Length - 1)
+            return false;
+        return reference.IndexOf(':', separator + 1) < 0;
     }
 }
