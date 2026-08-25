@@ -59,12 +59,9 @@ public static class ReactionRules
             return false;
         if (!string.IsNullOrWhiteSpace(filter.cardId))
         {
-            string attackId = attackDefinition.id ?? string.Empty;
-            string requested = filter.cardId.Trim();
-            int separator = requested.IndexOf(':');
-            if (separator >= 0 && separator < requested.Length - 1)
-                requested = requested.Substring(separator + 1);
-            if (!string.Equals(requested, attackId, StringComparison.OrdinalIgnoreCase))
+            if (!CardDefinitionReference.TryGetCardId(filter.cardId, out string requestedCardId))
+                return false;
+            if (!string.Equals(requestedCardId, attackDefinition.id ?? string.Empty, StringComparison.OrdinalIgnoreCase))
                 return false;
         }
         return true;
