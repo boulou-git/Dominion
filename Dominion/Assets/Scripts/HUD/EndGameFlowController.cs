@@ -113,12 +113,38 @@ public sealed partial class EndGameFlowController : MonoBehaviour
         }
         Stretch(ownRect);
 
-        _vpShield = Resources.Load<Sprite>(VictoryPointShieldResource);
+        _vpShield = LoadVictoryPointShield();
         _cardBack = CardBackReference.LoadSprite();
         BuildSurface();
         NetworkGameState.StateChanged += OnStateChanged;
         NetworkGameState.HydrateFromRoom(true);
         OnStateChanged(NetworkGameState.State);
+    }
+
+    private static Sprite LoadVictoryPointShield()
+    {
+        Sprite sprite = Resources.Load<Sprite>(VictoryPointShieldResource);
+        if (sprite != null)
+        {
+            Debug.Log("Loaded victory point shield as Sprite from Resources/UI/VictoryPointShield.");
+            return sprite;
+        }
+
+        Texture2D texture = Resources.Load<Texture2D>(VictoryPointShieldResource);
+        if (texture != null)
+        {
+            Sprite runtimeSprite = Sprite.Create(
+                texture,
+                new Rect(0f, 0f, texture.width, texture.height),
+                new Vector2(0.5f, 0.5f),
+                100f);
+            runtimeSprite.name = "VictoryPointShield_Runtime";
+            Debug.LogWarning("Victory point shield was not exposed as a Sprite; created one from the Resources texture at runtime.");
+            return runtimeSprite;
+        }
+
+        Debug.LogError("Victory point shield could not be loaded from Resources/UI/VictoryPointShield (neither Sprite nor Texture2D).");
+        return null;
     }
 
     private void OnDestroy()
