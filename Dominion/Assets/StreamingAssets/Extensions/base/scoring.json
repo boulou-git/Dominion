@@ -1,0 +1,10 @@
+{
+  "extensionId": "base",
+  "cards": [
+    { "cardId": "domaine", "fixedPoints": 1 },
+    { "cardId": "duche", "fixedPoints": 3 },
+    { "cardId": "province", "fixedPoints": 6 },
+    { "cardId": "malediction", "fixedPoints": -1 },
+    { "cardId": "jardins", "pointsPerCards": 1, "cardsPerPoint": 10 }
+  ]
+}
