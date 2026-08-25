@@ -136,6 +136,48 @@ public sealed class CoreRulesTests
     }
 
     [Test]
+    public void TrashFromHand_WithRegistryOwnerMismatch_IsRejectedWithoutMutation()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        Assert.That(CardInstanceRules.TryCreateOwnedCard(state, player, "base:cuivre", CardZone.Hand,
+            out int instanceId, out string createError), Is.True, createError);
+        state.CardInstances.Single(card => card.InstanceId == instanceId).OwnerPlayerId = "another-player";
+
+        bool trashed = TrashRules.TryTrashFromHand(state, player, instanceId, 0, null, out string error);
+
+        Assert.That(trashed, Is.False);
+        Assert.That(string.IsNullOrEmpty(error), Is.False);
+        Assert.That(player.Hand.Contains(instanceId), Is.True);
+        Assert.That(state.TrashedCards.Contains(instanceId), Is.False);
+    }
+
+    [Test]
+    public void DiscardSelected_InvalidSelectionDoesNotPartiallyMutateZones()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        Assert.That(CardInstanceRules.TryCreateOwnedCard(state, player, "base:cuivre", CardZone.Hand,
+            out int firstId, out string firstError), Is.True, firstError);
+        Assert.That(CardInstanceRules.TryCreateOwnedCard(state, player, "base:argent", CardZone.Hand,
+            out int secondId, out string secondError), Is.True, secondError);
+        Assert.That(ResolutionQueue.TryBegin(state, player.PlayerId, out ResolutionQueue queue, out string queueError),
+            Is.True, queueError);
+
+        bool discarded = DiscardRules.TryDiscardSelectedFromHand(
+            state,
+            player,
+            new[] { firstId, 999 },
+            0,
+            queue.Events,
+            out string error);
+
+        Assert.That(discarded, Is.False);
+        Assert.That(string.IsNullOrEmpty(error), Is.False);
+        Assert.That(player.Hand.Contains(firstId), Is.True);
+        Assert.That(player.Hand.Contains(secondId), Is.True);
+        Assert.That(player.Discard, Is.Empty);
+    }
+
+    [Test]
     public void ProvinceEmpty_FinalisesMatchAtTurnBoundary()
     {
         GameStateSnapshot state = NewState(out _);

@@ -48,28 +48,33 @@ public static class DiscardRules
         List<int> selected = selectedInstanceIds != null
             ? new List<int>(selectedInstanceIds)
             : new List<int>();
+        List<CardInstance> selectedInstances = new List<CardInstance>(selected.Count);
 
+        // Validate the whole selection before mutating anything. This keeps discard
+        // operations atomic when a stale/invalid decision reaches the rules layer.
         foreach (int instanceId in selected)
         {
-            CardInstance instance = state.CardInstances != null
-                ? state.CardInstances.Find(card => card != null && card.InstanceId == instanceId)
-                : null;
-            if (instance == null)
+            if (!CardMutationRules.TryResolveOwnedCardInZone(
+                    state,
+                    player,
+                    sourceZone,
+                    instanceId,
+                    out CardInstance instance,
+                    out _,
+                    out string validationError))
             {
-                error = "Selected discard card instance was not found: " + instanceId;
+                error = "Selected discard card is invalid: " + instanceId + ". " + validationError;
                 return false;
             }
-            if (instance.OwnerPlayerId != player.PlayerId || !source.Contains(instanceId))
-            {
-                error = "Selected discard card is not in the expected source zone: " + instanceId;
-                return false;
-            }
+
+            selectedInstances.Add(instance);
         }
 
-        foreach (int instanceId in selected)
+        for (int index = 0; index < selected.Count; index++)
         {
-            CardInstance instance = state.CardInstances.Find(card => card != null && card.InstanceId == instanceId);
-            if (!CardZoneRules.MoveCard(player, sourceZone, CardZone.Discard, instanceId))
+            int instanceId = selected[index];
+            CardInstance instance = selectedInstances[index];
+            if (!CardZoneRules.MoveCard(source, player.Discard, instanceId))
             {
                 error = "Could not move selected card to discard: " + instanceId;
                 return false;

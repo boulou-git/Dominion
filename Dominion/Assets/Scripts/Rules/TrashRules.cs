@@ -1,9 +1,8 @@
-using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Shared deterministic rules for trashing cards. This is the only rules primitive that
-/// removes a physical card from a player zone and places it in the match-wide trash zone.
+/// Shared deterministic rules for trashing cards. This is the semantic layer that
+/// moves a physical owned card into the match-wide trash and emits CardTrashed.
 /// </summary>
 public static class TrashRules
 {
@@ -29,47 +28,16 @@ public static class TrashRules
     {
         error = string.Empty;
 
-        if (state == null)
+        if (!CardMutationRules.TryResolveOwnedCardInZone(
+                state,
+                owner,
+                sourceZone,
+                instanceId,
+                out CardInstance instance,
+                out List<int> source,
+                out string validationError))
         {
-            error = "Game state is null.";
-            return false;
-        }
-
-        if (owner == null || string.IsNullOrEmpty(owner.PlayerId))
-        {
-            error = "Trash owner is missing.";
-            return false;
-        }
-
-        if (sourceZone == CardZone.None)
-        {
-            error = "Trash source zone is invalid.";
-            return false;
-        }
-
-        if (instanceId <= 0)
-        {
-            error = "Trash card instance id is invalid.";
-            return false;
-        }
-
-        List<int> source = CardZoneRules.ResolveZone(owner, sourceZone);
-        if (source == null || !source.Contains(instanceId))
-        {
-            error = "Card is not in the expected trash source zone.";
-            return false;
-        }
-
-        CardInstance instance = FindCardInstance(state, instanceId);
-        if (instance == null)
-        {
-            error = "Trash card instance was not found.";
-            return false;
-        }
-
-        if (!string.Equals(instance.OwnerPlayerId, owner.PlayerId, StringComparison.Ordinal))
-        {
-            error = "Trash card does not belong to the expected player.";
+            error = "Could not trash card: " + validationError;
             return false;
         }
 
@@ -91,13 +59,5 @@ public static class TrashRules
             CardZone.None));
 
         return true;
-    }
-
-    private static CardInstance FindCardInstance(GameStateSnapshot state, int instanceId)
-    {
-        if (state == null || state.CardInstances == null)
-            return null;
-
-        return state.CardInstances.Find(card => card != null && card.InstanceId == instanceId);
     }
 }
