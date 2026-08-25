@@ -7,28 +7,13 @@ using System;
 /// </summary>
 public static class GainRules
 {
-    public static bool TryGainFromSupply(
-        GameStateSnapshot state,
-        PlayerStateSnapshot owner,
-        string definitionId,
-        CardZone destination,
-        int sourceCardInstanceId,
-        GameEventBus eventBus,
-        out int gainedInstanceId,
-        out string error)
+    public static bool CanGainFromSupply(GameStateSnapshot state, string definitionId, out string error)
     {
-        gainedInstanceId = 0;
         error = string.Empty;
 
         if (state == null)
         {
             error = "Game state is null.";
-            return false;
-        }
-
-        if (owner == null || string.IsNullOrEmpty(owner.PlayerId))
-        {
-            error = "Gain owner is missing.";
             return false;
         }
 
@@ -51,6 +36,32 @@ public static class GainRules
             return false;
         }
 
+        return true;
+    }
+
+    public static bool TryGainFromSupply(
+        GameStateSnapshot state,
+        PlayerStateSnapshot owner,
+        string definitionId,
+        CardZone destination,
+        int sourceCardInstanceId,
+        GameEventBus eventBus,
+        out int gainedInstanceId,
+        out string error)
+    {
+        gainedInstanceId = 0;
+        error = string.Empty;
+
+        if (owner == null || string.IsNullOrEmpty(owner.PlayerId))
+        {
+            error = "Gain owner is missing.";
+            return false;
+        }
+
+        if (!CanGainFromSupply(state, definitionId, out error))
+            return false;
+
+        SupplyPileSnapshot pile = FindSupplyPile(state, definitionId);
         if (!CardInstanceRules.TryCreateOwnedCard(
                 state,
                 owner,
