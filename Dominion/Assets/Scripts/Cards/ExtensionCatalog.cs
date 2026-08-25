@@ -91,6 +91,7 @@ public sealed class CardEffectData
 public static class ExtensionCatalog
 {
     private const string ExtensionFileName = "extension.json";
+    public const int SupportedSchemaVersion = 2;
     private static List<ExtensionPackageData> _cached;
 
     public static IReadOnlyList<ExtensionPackageData> All
@@ -110,12 +111,13 @@ public static class ExtensionCatalog
 
     public static ExtensionPackageData Find(string extensionId)
     {
-        if (string.IsNullOrEmpty(extensionId))
+        if (string.IsNullOrWhiteSpace(extensionId))
             return null;
 
+        string requestedId = extensionId.Trim();
         foreach (ExtensionPackageData extension in All)
         {
-            if (extension != null && string.Equals(extension.id, extensionId, StringComparison.OrdinalIgnoreCase))
+            if (extension != null && string.Equals(extension.id, requestedId, StringComparison.OrdinalIgnoreCase))
                 return extension;
         }
 
@@ -124,16 +126,59 @@ public static class ExtensionCatalog
 
     public static ExtensionCardData FindCard(ExtensionPackageData extension, string cardId)
     {
-        if (extension == null || string.IsNullOrEmpty(cardId))
+        if (extension == null || string.IsNullOrWhiteSpace(cardId))
             return null;
 
-        ExtensionCardData card = FindIn(extension.cards, cardId);
-        return card ?? FindIn(extension.baseCards, cardId);
+        string requestedId = cardId.Trim();
+        ExtensionCardData card = FindIn(extension.cards, requestedId);
+        return card ?? FindIn(extension.baseCards, requestedId);
     }
 
     public static ExtensionCardData FindCard(string extensionId, string cardId)
     {
         return FindCard(Find(extensionId), cardId);
+    }
+
+    /// <summary>
+    /// Validates one in-memory package without touching the filesystem. This is kept
+    /// public so EditMode tests and future authoring tools can validate custom packages
+    /// using exactly the same rules as the runtime loader.
+    /// </summary>
+    public static bool TryValidatePackage(ExtensionPackageData extension, out string error)
+    {
+        error = string.Empty;
+        if (extension == null)
+        {
+            error = "Extension package is null.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(extension.id))
+        {
+            error = "Extension id is required.";
+            return false;
+        }
+
+        if (extension.id.IndexOf(':') >= 0)
+        {
+            error = "Extension id '" + extension.id + "' cannot contain ':'.";
+            return false;
+        }
+
+        if (extension.schemaVersion < 1 || extension.schemaVersion > SupportedSchemaVersion)
+        {
+            error = "Extension '" + extension.id + "' uses unsupported schema version " + extension.schemaVersion +
+                    ". Supported versions are 1 to " + SupportedSchemaVersion + ".";
+            return false;
+        }
+
+        HashSet<string> cardIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!ValidateCards(extension.cards, "cards", cardIds, out error))
+            return false;
+        if (!ValidateCards(extension.baseCards, "baseCards", cardIds, out error))
+            return false;
+
+        return true;
     }
 
     private static ExtensionCardData FindIn(List<ExtensionCardData> cards, string cardId)
@@ -149,6 +194,7 @@ public static class ExtensionCatalog
     private static List<ExtensionPackageData> LoadAll()
     {
         List<ExtensionPackageData> result = new List<ExtensionPackageData>();
+        HashSet<string> extensionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string root = Path.Combine(Application.streamingAssetsPath, "Extensions");
 
         if (root.Contains("://"))
@@ -176,22 +222,27 @@ public static class ExtensionCatalog
             {
                 string json = File.ReadAllText(path);
                 ExtensionPackageData extension = JsonUtility.FromJson<ExtensionPackageData>(json);
-                if (extension == null || string.IsNullOrWhiteSpace(extension.id))
+                if (extension == null)
                 {
-                    Debug.LogWarning("Ignored invalid Dominion extension file: " + path);
+                    Debug.LogError("Ignored invalid Dominion extension file '" + path + "': package is null.");
                     continue;
                 }
 
                 extension.packageDirectory = directory;
-                if (extension.schemaVersion <= 0)
-                    extension.schemaVersion = 1;
-                if (extension.cards == null)
-                    extension.cards = new List<ExtensionCardData>();
-                if (extension.baseCards == null)
-                    extension.baseCards = new List<ExtensionCardData>();
+                NormalisePackage(extension);
 
-                NormaliseCards(extension.cards);
-                NormaliseCards(extension.baseCards);
+                if (!TryValidatePackage(extension, out string validationError))
+                {
+                    Debug.LogError("Ignored invalid Dominion extension file '" + path + "': " + validationError);
+                    continue;
+                }
+
+                if (!extensionIds.Add(extension.id))
+                {
+                    Debug.LogError("Ignored duplicate Dominion extension id '" + extension.id + "' from: " + path);
+                    continue;
+                }
+
                 result.Add(extension);
             }
             catch (Exception exception)
@@ -204,6 +255,21 @@ public static class ExtensionCatalog
         return result;
     }
 
+    private static void NormalisePackage(ExtensionPackageData extension)
+    {
+        extension.id = (extension.id ?? string.Empty).Trim();
+        extension.name = (extension.name ?? string.Empty).Trim();
+        if (extension.schemaVersion <= 0)
+            extension.schemaVersion = 1;
+        if (extension.cards == null)
+            extension.cards = new List<ExtensionCardData>();
+        if (extension.baseCards == null)
+            extension.baseCards = new List<ExtensionCardData>();
+
+        NormaliseCards(extension.cards);
+        NormaliseCards(extension.baseCards);
+    }
+
     private static void NormaliseCards(List<ExtensionCardData> cards)
     {
         if (cards == null)
@@ -214,6 +280,8 @@ public static class ExtensionCatalog
             if (card == null)
                 continue;
 
+            card.id = (card.id ?? string.Empty).Trim();
+            card.name = (card.name ?? string.Empty).Trim();
             if (card.types == null)
                 card.types = new List<string>();
             if (card.abilities == null)
@@ -225,5 +293,101 @@ public static class ExtensionCatalog
                     ability.effects = new List<CardEffectData>();
             }
         }
+    }
+
+    private static bool ValidateCards(List<ExtensionCardData> cards, string listName, HashSet<string> cardIds, out string error)
+    {
+        error = string.Empty;
+        if (cards == null)
+        {
+            error = listName + " cannot be null after normalisation.";
+            return false;
+        }
+
+        for (int cardIndex = 0; cardIndex < cards.Count; cardIndex++)
+        {
+            ExtensionCardData card = cards[cardIndex];
+            if (card == null)
+            {
+                error = listName + "[" + cardIndex + "] is null.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(card.id))
+            {
+                error = listName + "[" + cardIndex + "] has no card id.";
+                return false;
+            }
+
+            if (card.id.IndexOf(':') >= 0)
+            {
+                error = "Card id '" + card.id + "' cannot contain ':'.";
+                return false;
+            }
+
+            if (!cardIds.Add(card.id))
+            {
+                error = "Duplicate card id '" + card.id + "' across the extension package.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(card.name))
+            {
+                error = "Card '" + card.id + "' has no display name.";
+                return false;
+            }
+
+            if (card.cost < 0)
+            {
+                error = "Card '" + card.id + "' has a negative cost.";
+                return false;
+            }
+
+            if (card.abilities == null)
+            {
+                error = "Card '" + card.id + "' has a null abilities list.";
+                return false;
+            }
+
+            for (int abilityIndex = 0; abilityIndex < card.abilities.Count; abilityIndex++)
+            {
+                CardAbilityData ability = card.abilities[abilityIndex];
+                if (ability == null)
+                {
+                    error = "Card '" + card.id + "' ability[" + abilityIndex + "] is null.";
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(ability.when))
+                {
+                    error = "Card '" + card.id + "' ability[" + abilityIndex + "] has no timing ('when').";
+                    return false;
+                }
+
+                if (ability.effects == null)
+                {
+                    error = "Card '" + card.id + "' ability[" + abilityIndex + "] has a null effects list.";
+                    return false;
+                }
+
+                for (int effectIndex = 0; effectIndex < ability.effects.Count; effectIndex++)
+                {
+                    CardEffectData effect = ability.effects[effectIndex];
+                    if (effect == null)
+                    {
+                        error = "Card '" + card.id + "' ability[" + abilityIndex + "] effect[" + effectIndex + "] is null.";
+                        return false;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(effect.op))
+                    {
+                        error = "Card '" + card.id + "' ability[" + abilityIndex + "] effect[" + effectIndex + "] has no operation ('op').";
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
     }
 }
