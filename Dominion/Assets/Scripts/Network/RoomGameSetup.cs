@@ -136,12 +136,17 @@ public static class RoomGameSetup
             if (extension == null || !extension.enabled || string.IsNullOrWhiteSpace(extension.extensionId) || extension.selectedCardIds == null)
                 continue;
 
+            ExtensionPackageData package = ExtensionCatalog.Find(extension.extensionId.Trim());
+            if (package == null)
+                continue;
+
             foreach (string cardId in extension.selectedCardIds)
             {
-                if (string.IsNullOrWhiteSpace(cardId))
+                ExtensionCardData kingdomCard = FindKingdomCard(package, cardId);
+                if (kingdomCard == null)
                     continue;
 
-                string cardRef = MakeCardRef(extension.extensionId, cardId);
+                string cardRef = MakeCardRef(package.id, kingdomCard.id);
                 if (seenCardRefs.Add(cardRef))
                     result.Add(cardRef);
             }
@@ -152,7 +157,7 @@ public static class RoomGameSetup
 
     public static string MakeCardRef(string extensionId, string cardId)
     {
-        return (extensionId ?? string.Empty) + ":" + (cardId ?? string.Empty);
+        return (extensionId ?? string.Empty).Trim() + ":" + (cardId ?? string.Empty).Trim();
     }
 
     /// <summary>
@@ -164,15 +169,18 @@ public static class RoomGameSetup
     {
         extension = null;
         card = null;
-        if (string.IsNullOrEmpty(cardRef))
+        if (string.IsNullOrWhiteSpace(cardRef))
             return false;
 
         int separator = cardRef.IndexOf(':');
         if (separator <= 0 || separator >= cardRef.Length - 1)
             return false;
 
-        string extensionId = cardRef.Substring(0, separator);
-        string cardId = cardRef.Substring(separator + 1);
+        string extensionId = cardRef.Substring(0, separator).Trim();
+        string cardId = cardRef.Substring(separator + 1).Trim();
+        if (extensionId.Length == 0 || cardId.Length == 0)
+            return false;
+
         extension = ExtensionCatalog.Find(extensionId);
         if (extension == null)
             return false;
@@ -208,7 +216,61 @@ public static class RoomGameSetup
                 selection.selectedCardIds = new List<string>();
         }
 
+        config.kingdomCardIds = NormaliseKingdomCardRefs(config.kingdomCardIds);
         return config;
+    }
+
+    private static List<string> NormaliseKingdomCardRefs(List<string> cardRefs)
+    {
+        List<string> result = new List<string>();
+        HashSet<string> seenCardRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (cardRefs == null)
+            return result;
+
+        foreach (string cardRef in cardRefs)
+        {
+            if (!TryResolveKingdomCard(cardRef, out ExtensionPackageData extension, out ExtensionCardData card))
+                continue;
+
+            string canonicalRef = MakeCardRef(extension.id, card.id);
+            if (seenCardRefs.Add(canonicalRef))
+                result.Add(canonicalRef);
+        }
+
+        return result;
+    }
+
+    private static bool TryResolveKingdomCard(string cardRef, out ExtensionPackageData extension, out ExtensionCardData card)
+    {
+        extension = null;
+        card = null;
+        if (string.IsNullOrWhiteSpace(cardRef))
+            return false;
+
+        int separator = cardRef.IndexOf(':');
+        if (separator <= 0 || separator >= cardRef.Length - 1)
+            return false;
+
+        string extensionId = cardRef.Substring(0, separator).Trim();
+        string cardId = cardRef.Substring(separator + 1).Trim();
+        if (extensionId.Length == 0 || cardId.Length == 0)
+            return false;
+
+        extension = ExtensionCatalog.Find(extensionId);
+        card = FindKingdomCard(extension, cardId);
+        return card != null;
+    }
+
+    private static ExtensionCardData FindKingdomCard(ExtensionPackageData extension, string cardId)
+    {
+        if (extension == null || extension.cards == null || string.IsNullOrWhiteSpace(cardId))
+            return null;
+
+        string trimmedCardId = cardId.Trim();
+        return extension.cards.Find(candidate =>
+            candidate != null &&
+            !string.IsNullOrWhiteSpace(candidate.id) &&
+            string.Equals(candidate.id.Trim(), trimmedCardId, StringComparison.OrdinalIgnoreCase));
     }
 
     private static ExtensionSetupSelection CreateDefaultSelection(ExtensionPackageData extension)
