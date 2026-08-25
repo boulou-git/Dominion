@@ -9,6 +9,12 @@ using System.Collections.Generic;
 [Serializable]
 public class GameStateSnapshot
 {
+    public const int CurrentSchemaVersion = 1;
+
+    // Version of the serialized snapshot shape. This is deliberately separate from
+    // Version, which is the monotonic revision number of one running match.
+    public int SchemaVersion = CurrentSchemaVersion;
+
     public string MatchId;
 
     // Monotonic version of the entire authoritative state.
