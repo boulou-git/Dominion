@@ -157,7 +157,7 @@ public static class RoomGameSetup
 
     public static string MakeCardRef(string extensionId, string cardId)
     {
-        return (extensionId ?? string.Empty).Trim() + ":" + (cardId ?? string.Empty).Trim();
+        return CardDefinitionReference.Format(extensionId, cardId);
     }
 
     /// <summary>
@@ -169,16 +169,7 @@ public static class RoomGameSetup
     {
         extension = null;
         card = null;
-        if (string.IsNullOrWhiteSpace(cardRef))
-            return false;
-
-        int separator = cardRef.IndexOf(':');
-        if (separator <= 0 || separator >= cardRef.Length - 1)
-            return false;
-
-        string extensionId = cardRef.Substring(0, separator).Trim();
-        string cardId = cardRef.Substring(separator + 1).Trim();
-        if (extensionId.Length == 0 || cardId.Length == 0)
+        if (!CardDefinitionReference.TryParseQualified(cardRef, out string extensionId, out string cardId))
             return false;
 
         extension = ExtensionCatalog.Find(extensionId);
@@ -244,16 +235,7 @@ public static class RoomGameSetup
     {
         extension = null;
         card = null;
-        if (string.IsNullOrWhiteSpace(cardRef))
-            return false;
-
-        int separator = cardRef.IndexOf(':');
-        if (separator <= 0 || separator >= cardRef.Length - 1)
-            return false;
-
-        string extensionId = cardRef.Substring(0, separator).Trim();
-        string cardId = cardRef.Substring(separator + 1).Trim();
-        if (extensionId.Length == 0 || cardId.Length == 0)
+        if (!CardDefinitionReference.TryParseQualified(cardRef, out string extensionId, out string cardId))
             return false;
 
         extension = ExtensionCatalog.Find(extensionId);
