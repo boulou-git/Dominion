@@ -92,49 +92,6 @@ public static class ExtensionCatalog
 {
     private const string ExtensionFileName = "extension.json";
     public const int SupportedSchemaVersion = 2;
-
-    private static readonly HashSet<string> SupportedAbilityTimings = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "play",
-        "card_gained",
-        "card_discarded",
-        "card_trashed",
-        "turn_started",
-        "turn_ended",
-        "buy_started",
-        "pile_emptied",
-        "artifact_gained",
-        "disease_gained",
-        ReactionRules.AttackReactionTiming
-    };
-
-    private static readonly HashSet<string> SupportedAbilityScopes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "subject",
-        "in_hand",
-        "in_play"
-    };
-
-    private static readonly HashSet<string> SupportedEventPlayers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "any",
-        "self",
-        "other"
-    };
-
-    private static readonly HashSet<string> SupportedEffectTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "self",
-        "others"
-    };
-
-    private static readonly HashSet<string> SupportedResources = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "actions",
-        "buys",
-        "coins"
-    };
-
     private static List<ExtensionPackageData> _cached;
 
     public static IReadOnlyList<ExtensionPackageData> All
@@ -435,13 +392,13 @@ public static class ExtensionCatalog
                 }
 
                 string timing = ability.when.Trim();
-                if (!SupportedAbilityTimings.Contains(timing))
+                if (!DeclarativeRuleVocabulary.IsSupportedTiming(timing))
                 {
                     error = "Card '" + card.id + "' ability[" + abilityIndex + "] uses unsupported timing '" + ability.when + "'.";
                     return false;
                 }
 
-                if (!string.IsNullOrWhiteSpace(ability.scope) && !SupportedAbilityScopes.Contains(ability.scope.Trim()))
+                if (!string.IsNullOrWhiteSpace(ability.scope) && !DeclarativeRuleVocabulary.IsSupportedScope(ability.scope))
                 {
                     error = "Card '" + card.id + "' ability[" + abilityIndex + "] uses unsupported scope '" + ability.scope + "'.";
                     return false;
@@ -480,7 +437,7 @@ public static class ExtensionCatalog
         if (filter == null)
             return true;
 
-        if (!string.IsNullOrWhiteSpace(filter.eventPlayer) && !SupportedEventPlayers.Contains(filter.eventPlayer.Trim()))
+        if (!string.IsNullOrWhiteSpace(filter.eventPlayer) && !DeclarativeRuleVocabulary.IsSupportedEventPlayer(filter.eventPlayer))
         {
             error = "Card '" + cardId + "' ability[" + abilityIndex + "] uses unsupported filter.eventPlayer '" + filter.eventPlayer + "'.";
             return false;
@@ -508,7 +465,7 @@ public static class ExtensionCatalog
 
         string op = effect.op.Trim();
         bool isBlockAttack = string.Equals(op, ReactionRules.BlockAttackOperation, StringComparison.OrdinalIgnoreCase);
-        if (!isBlockAttack && !EffectResolver.IsSupported(op))
+        if (!DeclarativeRuleVocabulary.IsSupportedOperation(op))
         {
             error = prefix + " uses unsupported operation '" + effect.op + "'.";
             return false;
@@ -526,13 +483,13 @@ public static class ExtensionCatalog
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(effect.target) || !SupportedEffectTargets.Contains(effect.target.Trim()))
+        if (string.IsNullOrWhiteSpace(effect.target) || !DeclarativeRuleVocabulary.IsSupportedTarget(effect.target))
         {
             error = prefix + " uses unsupported or missing target '" + (effect.target ?? string.Empty) + "'.";
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(effect.resource) && !SupportedResources.Contains(effect.resource.Trim()))
+        if (!string.IsNullOrWhiteSpace(effect.resource) && !DeclarativeRuleVocabulary.IsSupportedResource(effect.resource))
         {
             error = prefix + " uses unsupported resource '" + effect.resource + "'.";
             return false;
