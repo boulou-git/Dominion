@@ -127,18 +127,23 @@ public static class RoomGameSetup
     public static List<string> BuildEnabledCardPool(GameSetupConfig config)
     {
         List<string> result = new List<string>();
+        HashSet<string> seenCardRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (config == null || config.extensions == null)
             return result;
 
         foreach (ExtensionSetupSelection extension in config.extensions)
         {
-            if (extension == null || !extension.enabled || extension.selectedCardIds == null)
+            if (extension == null || !extension.enabled || string.IsNullOrWhiteSpace(extension.extensionId) || extension.selectedCardIds == null)
                 continue;
 
             foreach (string cardId in extension.selectedCardIds)
             {
-                if (!string.IsNullOrEmpty(cardId))
-                    result.Add(MakeCardRef(extension.extensionId, cardId));
+                if (string.IsNullOrWhiteSpace(cardId))
+                    continue;
+
+                string cardRef = MakeCardRef(extension.extensionId, cardId);
+                if (seenCardRefs.Add(cardRef))
+                    result.Add(cardRef);
             }
         }
 
