@@ -1,4 +1,5 @@
 using System;
+using ExitGames.Client.Photon;
 using Photon.Pun;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -14,9 +15,12 @@ using UnityEngine.UI;
 public sealed class GamePauseMenu : MonoBehaviour
 {
     private const string RootName = "DominionPauseMenu";
+    private const string StatePropertyKey = "dominion.gameState.v1";
+
     private GameObject _panel;
     private Button _pauseButton;
     private Text _pauseButtonText;
+    private Button _finishTestButton;
     private Text _statusText;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -104,6 +108,10 @@ public sealed class GamePauseMenu : MonoBehaviour
         _pauseButton = CreateButton("Mettre en pause", window, 0.40f, ToggleHostPause);
         _pauseButtonText = _pauseButton.GetComponentInChildren<Text>();
 
+        _finishTestButton = CreateButton("FINIR LA PARTIE (TEST)", window, 0.26f, ForceEndGameForTest);
+        _finishTestButton.gameObject.name = "FinishGameTestButton";
+        _finishTestButton.GetComponent<Image>().color = new Color(0.42f, 0.20f, 0.12f, 1f);
+
         CreateButton("Quitter la partie", window, 0.26f, LeaveGame).gameObject.name = "LeaveGameButton";
         CreateButton("Quitter et fermer la partie", window, 0.12f, CloseGameAsHost).gameObject.name = "CloseGameButton";
     }
@@ -111,13 +119,20 @@ public sealed class GamePauseMenu : MonoBehaviour
     private void Refresh()
     {
         bool isHost = PhotonNetwork.InRoom && PhotonNetwork.IsMasterClient;
+        bool gameOver = NetworkGameState.State != null && NetworkGameState.State.IsGameOver;
         bool manuallyPaused = NetworkGameState.State != null && NetworkGameState.State.ManualPauseRequested;
 
         if (_pauseButton != null)
         {
-            _pauseButton.gameObject.SetActive(isHost);
+            _pauseButton.gameObject.SetActive(isHost && !gameOver);
             if (_pauseButtonText != null)
                 _pauseButtonText.text = manuallyPaused ? "Reprendre la partie" : "Mettre en pause";
+        }
+
+        if (_finishTestButton != null)
+        {
+            _finishTestButton.gameObject.SetActive(isHost && !gameOver);
+            _finishTestButton.interactable = isHost && !gameOver && NetworkGameState.State != null;
         }
 
         Transform leave = _panel != null ? _panel.transform.Find("Window/LeaveGameButton") : null;
@@ -132,6 +147,8 @@ public sealed class GamePauseMenu : MonoBehaviour
         {
             if (!PhotonNetwork.InRoom)
                 _statusText.text = "Hors ligne";
+            else if (gameOver)
+                _statusText.text = "Partie terminée";
             else if (NetworkGameState.IsPaused)
                 _statusText.text = NetworkGameState.State != null ? NetworkGameState.State.PauseReason : "Partie en pause";
             else
@@ -151,6 +168,42 @@ public sealed class GamePauseMenu : MonoBehaviour
 
         NetworkGameState.SetManualPause(!NetworkGameState.State.ManualPauseRequested);
         Refresh();
+    }
+
+    /// <summary>
+    /// Host-only developer shortcut used to exercise the real replicated end-game UI
+    /// without emptying Province/three Supply piles. This deliberately bypasses the
+    /// normal GameEndRules condition check but publishes the same durable end-state.
+    /// </summary>
+    private void ForceEndGameForTest()
+    {
+        if (!PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null)
+            return;
+
+        GameStateSnapshot current = NetworkGameState.State;
+        if (current == null || current.IsGameOver)
+            return;
+
+        GameStateSnapshot next = JsonUtility.FromJson<GameStateSnapshot>(JsonUtility.ToJson(current));
+        if (next == null)
+            return;
+
+        next.Version = current.Version + 1;
+        next.IsGameOver = true;
+        next.GameEndReason = "Fin forcée par l’hôte (test).";
+        next.EndedTurnNumber = current.TurnNumber;
+        next.IsStarted = false;
+        next.IsPaused = false;
+        next.ManualPauseRequested = false;
+        next.PauseReason = string.Empty;
+
+        Hashtable properties = new Hashtable
+        {
+            { StatePropertyKey, JsonUtility.ToJson(next) }
+        };
+
+        if (PhotonNetwork.CurrentRoom.SetCustomProperties(properties))
+            _panel.SetActive(false);
     }
 
     private void LeaveGame()
