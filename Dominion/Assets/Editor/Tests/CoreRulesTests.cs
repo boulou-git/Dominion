@@ -34,6 +34,40 @@ public sealed class CoreRulesTests
     }
 
     [Test]
+    public void MoveTopCard_AndDrawUseIdenticalReshuffleSemantics()
+    {
+        PlayerStateSnapshot drawPlayer = NewPlayer();
+        PlayerStateSnapshot inspectPlayer = NewPlayer();
+        drawPlayer.Discard.AddRange(new[] { 1, 2, 3, 4 });
+        inspectPlayer.Discard.AddRange(new[] { 1, 2, 3, 4 });
+
+        bool drawn = CardZoneRules.DrawCards(drawPlayer, 1, new Random(9876), out string drawError);
+        bool moved = CardZoneRules.TryMoveTopCardFromDeck(inspectPlayer, CardZone.Inspected, new Random(9876),
+            out int movedInstanceId, out string moveError);
+
+        Assert.That(drawn, Is.True, drawError);
+        Assert.That(moved, Is.True, moveError);
+        Assert.That(drawPlayer.Hand.Single(), Is.EqualTo(movedInstanceId));
+        CollectionAssert.AreEqual(drawPlayer.Deck, inspectPlayer.Deck);
+        Assert.That(drawPlayer.Discard, Is.Empty);
+        Assert.That(inspectPlayer.Discard, Is.Empty);
+        CollectionAssert.AreEqual(new[] { movedInstanceId }, inspectPlayer.Inspected);
+    }
+
+    [Test]
+    public void MoveTopCard_WithNoCards_SucceedsWithoutInventingCard()
+    {
+        PlayerStateSnapshot player = NewPlayer();
+
+        bool moved = CardZoneRules.TryMoveTopCardFromDeck(player, CardZone.Inspected, null,
+            out int instanceId, out string error);
+
+        Assert.That(moved, Is.True, error);
+        Assert.That(instanceId, Is.Zero);
+        Assert.That(player.Inspected, Is.Empty);
+    }
+
+    [Test]
     public void CreateOwnedCard_AllocatesStableUniqueInstanceIds()
     {
         GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
