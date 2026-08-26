@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Photon.Pun;
 using Photon.Realtime;
@@ -41,6 +42,14 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private float _nextPhotonStateCheck;
     private Canvas _canvas;
     private GraphicRaycaster _raycaster;
+    private RectTransform _extensionsPanel;
+    private RectTransform _cardsPanel;
+    private Button _cardsBackButton;
+    private Coroutine _panelTransition;
+    private bool _cardsPanelOpen;
+    private bool _selectionFlowConfigured;
+
+    private const float PanelSlideDuration = 0.24f;
 
     // Final 10-card screen. Each revealed card is ONE GameObject with ONE Image.
     // The sprite is assigned directly to the exact Image visible in the grid.
@@ -57,6 +66,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     {
         _canvas = GetComponent<Canvas>();
         _raycaster = GetComponent<GraphicRaycaster>();
+        ConfigureSelectionFlow();
 
         ExtensionCatalog.Reload();
         _config = RoomGameSetup.ReadCurrent();
@@ -98,6 +108,8 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     public override void OnJoinedRoom()
     {
+        _cardsPanelOpen = false;
+        ApplySelectionFlowState(true);
         ExtensionCatalog.Reload();
         _config = RoomGameSetup.ReadCurrent();
         PickInitialExtension();
@@ -111,6 +123,8 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     public override void OnLeftRoom()
     {
+        _cardsPanelOpen = false;
+        ApplySelectionFlowState(true);
         _config = RoomGameSetup.ReadCurrent();
         CapturePhotonState();
         RefreshAll();
@@ -188,6 +202,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         RebuildExtensions();
         RebuildCards();
         RefreshSummary();
+        ApplySelectionFlowState(false);
     }
 
     private void RebuildExtensions()
@@ -213,6 +228,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
                 {
                     _viewedExtensionId = extensionId;
                     RebuildCards();
+                    ShowCardsPanel();
                 },
                 value => SetExtensionEnabled(extensionId, value));
 
@@ -250,7 +266,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
                 extension,
                 card,
                 effectiveSelected,
-                extensionEnabled,
+                true,
                 value => SetCardSelected(extension.id, cardId, value));
 
             _spawnedCards.Add(tile.gameObject);
@@ -501,15 +517,25 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         if (selected)
         {
+            // A click in a disabled extension starts a fresh partial selection. Default
+            // configs retain every card id even while disabled, so clear those defaults.
+            if (!extension.enabled)
+            {
+                extension.selectedCardIds.Clear();
+                extension.enabled = true;
+            }
             if (!extension.selectedCardIds.Contains(cardId))
                 extension.selectedCardIds.Add(cardId);
         }
         else
         {
             extension.selectedCardIds.Remove(cardId);
+            if (extension.selectedCardIds.Count == 0)
+                extension.enabled = false;
         }
 
         RoomGameSetup.Publish(_config);
+        RebuildExtensions();
         RebuildCards();
         RefreshSummary();
     }
@@ -533,6 +559,174 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         if (ExtensionCatalog.All.Count > 0)
             _viewedExtensionId = ExtensionCatalog.All[0].id;
+    }
+
+    /// <summary>
+    /// Turns the legacy side-by-side selection prefab into a two-step flow while keeping
+    /// every existing serialized control and callback. Future prefab rebuilds create the
+    /// same hierarchy, but this also migrates older prefab instances safely at runtime.
+    /// </summary>
+    private void ConfigureSelectionFlow()
+    {
+        if (_selectionFlowConfigured || _hostSelectionScreen == null)
+            return;
+
+        _extensionsPanel = FindDeepChild(_hostSelectionScreen.transform, "ExtensionsPanel") as RectTransform;
+        _cardsPanel = FindDeepChild(_hostSelectionScreen.transform, "CardsPanel") as RectTransform;
+        if (_extensionsPanel == null || _cardsPanel == null)
+            return;
+
+        _selectionFlowConfigured = true;
+        SetAnchors(_extensionsPanel, new Vector2(0.035f, 0.14f), new Vector2(0.965f, 0.89f));
+        SetAnchors(_cardsPanel, new Vector2(0.035f, 0.14f), new Vector2(0.965f, 0.89f));
+
+        Image extensionsBackground = _extensionsPanel.GetComponent<Image>();
+        if (extensionsBackground != null)
+            extensionsBackground.color = new Color(0.075f, 0.07f, 0.06f, 0.97f);
+        Transform extensionsHeaderTransform = FindDeepChild(_extensionsPanel, "Header");
+        Text extensionsHeader = extensionsHeaderTransform != null ? extensionsHeaderTransform.GetComponent<Text>() : null;
+        if (extensionsHeader != null)
+        {
+            extensionsHeader.text = "CHOISISSEZ VOS EXTENSIONS";
+            extensionsHeader.fontSize = 25;
+        }
+
+        Image cardsBackground = _cardsPanel.GetComponent<Image>();
+        if (cardsBackground != null)
+        {
+            cardsBackground.color = new Color(0.055f, 0.052f, 0.047f, 1f);
+            cardsBackground.raycastTarget = true;
+        }
+
+        // The summary belongs to the global flow, not to one extension's card drawer.
+        if (_selectionSummary != null)
+        {
+            _selectionSummary.transform.SetParent(_hostSelectionScreen.transform, false);
+            SetAnchors(_selectionSummary.rectTransform, new Vector2(0.055f, 0.035f), new Vector2(0.64f, 0.125f));
+            _selectionSummary.fontSize = 19;
+        }
+        if (_validateButton != null)
+        {
+            _validateButton.transform.SetParent(_hostSelectionScreen.transform, false);
+            SetAnchors(_validateButton.GetComponent<RectTransform>(), new Vector2(0.70f, 0.03f), new Vector2(0.945f, 0.13f));
+        }
+
+        Transform existingBack = FindDeepChild(_cardsPanel, "BackButton");
+        _cardsBackButton = existingBack != null ? existingBack.GetComponent<Button>() : null;
+        if (_cardsBackButton == null)
+        {
+            _cardsBackButton = ChildButton(_cardsPanel, "BackButton", "‹  EXTENSIONS",
+                new Vector2(0.025f, 0.905f), new Vector2(0.19f, 0.985f));
+            _cardsBackButton.GetComponent<Image>().color = new Color(0.20f, 0.17f, 0.11f, 1f);
+        }
+        _cardsBackButton.onClick.RemoveAllListeners();
+        _cardsBackButton.onClick.AddListener(HideCardsPanel);
+
+        if (_cardsTitle != null)
+        {
+            SetAnchors(_cardsTitle.rectTransform, new Vector2(0.22f, 0.905f), new Vector2(0.97f, 0.99f));
+            _cardsTitle.alignment = TextAnchor.MiddleLeft;
+            _cardsTitle.fontSize = 27;
+        }
+
+        LayoutElement[] extensionLayouts = _extensionsRoot != null
+            ? _extensionsRoot.GetComponentsInChildren<LayoutElement>(true)
+            : new LayoutElement[0];
+        foreach (LayoutElement layout in extensionLayouts)
+            layout.preferredHeight = 270f;
+
+        ApplySelectionFlowState(true);
+    }
+
+    private void ShowCardsPanel()
+    {
+        ConfigureSelectionFlow();
+        if (_cardsPanel == null)
+            return;
+
+        _cardsPanelOpen = true;
+        _cardsPanel.gameObject.SetActive(true);
+        _cardsPanel.SetAsLastSibling();
+        StartPanelTransition(true);
+    }
+
+    private void HideCardsPanel()
+    {
+        if (_cardsPanel == null || !_cardsPanel.gameObject.activeSelf)
+            return;
+
+        _cardsPanelOpen = false;
+        StartPanelTransition(false);
+    }
+
+    private void ApplySelectionFlowState(bool immediate)
+    {
+        if (!_selectionFlowConfigured || _cardsPanel == null)
+            return;
+
+        if (_cardsPanelOpen)
+        {
+            _cardsPanel.gameObject.SetActive(true);
+            _cardsPanel.SetAsLastSibling();
+            if (immediate) _cardsPanel.anchoredPosition = Vector2.zero;
+        }
+        else if (immediate)
+        {
+            _cardsPanel.anchoredPosition = new Vector2(PanelSlideDistance(), 0f);
+            _cardsPanel.gameObject.SetActive(false);
+        }
+    }
+
+    private void StartPanelTransition(bool opening)
+    {
+        if (_panelTransition != null)
+            StopCoroutine(_panelTransition);
+        _panelTransition = StartCoroutine(AnimateCardsPanel(opening));
+    }
+
+    private IEnumerator AnimateCardsPanel(bool opening)
+    {
+        Vector2 visible = Vector2.zero;
+        Vector2 hidden = new Vector2(PanelSlideDistance(), 0f);
+        Vector2 start = opening ? hidden : _cardsPanel.anchoredPosition;
+        Vector2 end = opening ? visible : hidden;
+        if (opening) _cardsPanel.anchoredPosition = start;
+
+        float elapsed = 0f;
+        while (elapsed < PanelSlideDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / PanelSlideDuration);
+            t = 1f - Mathf.Pow(1f - t, 3f);
+            _cardsPanel.anchoredPosition = Vector2.LerpUnclamped(start, end, t);
+            yield return null;
+        }
+
+        _cardsPanel.anchoredPosition = end;
+        if (!opening) _cardsPanel.gameObject.SetActive(false);
+        _panelTransition = null;
+    }
+
+    private float PanelSlideDistance()
+    {
+        RectTransform hostRect = _hostSelectionScreen != null ? _hostSelectionScreen.GetComponent<RectTransform>() : null;
+        float width = hostRect != null ? hostRect.rect.width : 0f;
+        return width > 0f ? width : 1920f;
+    }
+
+    private static Transform FindDeepChild(Transform parent, string childName)
+    {
+        if (parent == null)
+            return null;
+        foreach (Transform child in parent)
+        {
+            if (child.name == childName)
+                return child;
+            Transform nested = FindDeepChild(child, childName);
+            if (nested != null)
+                return nested;
+        }
+        return null;
     }
 
     private static GameObject UiObject(string name, params Type[] components)

@@ -19,6 +19,10 @@ public sealed class ExtensionTileView : MonoBehaviour
 
         _toggleCallback = toggle;
 
+        LayoutElement layout = GetComponent<LayoutElement>();
+        if (layout != null)
+            layout.preferredHeight = 270f;
+
         if (_nameText != null)
             _nameText.text = string.IsNullOrEmpty(extension.name) ? extension.id : extension.name;
         if (_countText != null)
@@ -26,8 +30,24 @@ public sealed class ExtensionTileView : MonoBehaviour
 
         if (_selectionVisual != null)
         {
-            _selectionVisual.SetArtwork(ExtensionVisualLoader.LoadExtensionArtwork(extension));
+            Sprite artworkSprite = ExtensionVisualLoader.LoadExtensionArtwork(extension);
+            _selectionVisual.SetArtwork(artworkSprite);
             _selectionVisual.SetSelected(enabled);
+
+            Image artwork = _selectionVisual.Artwork;
+            if (artwork != null)
+            {
+                if (GetComponent<RectMask2D>() == null)
+                    gameObject.AddComponent<RectMask2D>();
+                AspectRatioFitter fitter = artwork.GetComponent<AspectRatioFitter>();
+                if (fitter == null)
+                    fitter = artwork.gameObject.AddComponent<AspectRatioFitter>();
+                if (artworkSprite != null && artworkSprite.rect.height > 0f)
+                    fitter.aspectRatio = artworkSprite.rect.width / artworkSprite.rect.height;
+                fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+                artwork.preserveAspect = false;
+                artwork.raycastTarget = false;
+            }
         }
 
         if (_enabledToggle != null)

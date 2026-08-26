@@ -29,13 +29,15 @@ public static class DominionLobbyPrefabBuilder
 
     private static ExtensionTileView BuildExtensionTile()
     {
-        GameObject root = UiObject("ExtensionTile", typeof(Image), typeof(Button), typeof(LayoutElement), typeof(ExtensionTileView));
+        GameObject root = UiObject("ExtensionTile", typeof(Image), typeof(Button), typeof(LayoutElement), typeof(RectMask2D), typeof(ExtensionTileView));
         LayoutElement layout = root.GetComponent<LayoutElement>();
         layout.preferredWidth = 420f;
-        layout.preferredHeight = 220f;
+        layout.preferredHeight = 270f;
         root.GetComponent<Image>().color = new Color(0.13f, 0.13f, 0.13f, 1f);
 
         Image artwork = ChildImage(root.transform, "Artwork", Vector2.zero, Vector2.one, Color.white);
+        AspectRatioFitter artworkFitter = artwork.gameObject.AddComponent<AspectRatioFitter>();
+        artworkFitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
         SelectableArtworkView selection = artwork.gameObject.AddComponent<SelectableArtworkView>();
         SetSerialized(selection, "_artwork", artwork);
 
@@ -107,15 +109,17 @@ public static class DominionLobbyPrefabBuilder
         GameObject host = Screen(root.transform, "HostSelection");
         ChildText(host.transform, "Title", "PRÉPARATION DE LA PARTIE", 34, TextAnchor.MiddleCenter, new Vector2(0.03f, 0.91f), new Vector2(0.97f, 0.985f));
 
-        RectTransform extPanel = Panel(host.transform, "ExtensionsPanel", new Vector2(0.035f, 0.14f), new Vector2(0.34f, 0.89f));
+        RectTransform extPanel = Panel(host.transform, "ExtensionsPanel", new Vector2(0.035f, 0.14f), new Vector2(0.965f, 0.89f));
         ChildText(extPanel, "Header", "EXTENSIONS", 23, TextAnchor.MiddleLeft, new Vector2(0.04f, 0.91f), new Vector2(0.96f, 0.99f));
         RectTransform extContent = ScrollContent(extPanel, "ExtensionScroll", new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.90f), false, new Vector2(420f, 220f), 16f);
 
-        RectTransform cardsPanel = Panel(host.transform, "CardsPanel", new Vector2(0.36f, 0.14f), new Vector2(0.965f, 0.89f));
-        Text cardsTitle = ChildText(cardsPanel, "Header", "CARTES", 25, TextAnchor.MiddleLeft, new Vector2(0.03f, 0.91f), new Vector2(0.97f, 0.99f));
+        RectTransform cardsPanel = Panel(host.transform, "CardsPanel", new Vector2(0.035f, 0.14f), new Vector2(0.965f, 0.89f));
+        cardsPanel.GetComponent<Image>().color = new Color(0.055f, 0.052f, 0.047f, 1f);
+        ChildButton(cardsPanel, "BackButton", "‹  EXTENSIONS", new Vector2(0.025f, 0.905f), new Vector2(0.19f, 0.985f));
+        Text cardsTitle = ChildText(cardsPanel, "Header", "CARTES", 27, TextAnchor.MiddleLeft, new Vector2(0.22f, 0.905f), new Vector2(0.97f, 0.99f));
         RectTransform cardsContent = ScrollContent(cardsPanel, "CardsScroll", new Vector2(0.03f, 0.14f), new Vector2(0.97f, 0.90f), true, new Vector2(210f, 320f), 16f);
-        Text summary = ChildText(cardsPanel, "Summary", "0 cartes dans le pool", 18, TextAnchor.MiddleLeft, new Vector2(0.03f, 0.035f), new Vector2(0.66f, 0.12f));
-        Button validate = ChildButton(cardsPanel, "ValidateButton", "VALIDER LA SÉLECTION", new Vector2(0.68f, 0.025f), new Vector2(0.97f, 0.125f));
+        Text summary = ChildText(host.transform, "Summary", "0 cartes dans le pool", 19, TextAnchor.MiddleLeft, new Vector2(0.055f, 0.035f), new Vector2(0.64f, 0.125f));
+        Button validate = ChildButton(host.transform, "ValidateButton", "VALIDER LA SÉLECTION", new Vector2(0.70f, 0.03f), new Vector2(0.945f, 0.13f));
 
         GameObject waiting = Screen(root.transform, "Waiting");
         ChildText(waiting.transform, "WaitingText", "En attente de l’hôte…", 34, TextAnchor.MiddleCenter, new Vector2(0.18f, 0.30f), new Vector2(0.82f, 0.70f));
