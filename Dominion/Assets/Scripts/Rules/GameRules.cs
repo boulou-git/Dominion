@@ -44,10 +44,11 @@ public static class GameRules
         if (s == null || string.IsNullOrEmpty(playerId) || string.IsNullOrEmpty(definitionId) || resolve == null) return GameRuleResult.Rejected("Invalid buy request.");
         if (s.Phase != BuyPhase) return GameRuleResult.Rejected("Cards can only be bought during the Buy phase.");
         PlayerStateSnapshot p = Player(s, playerId); if (p == null || p.Buys <= 0) return GameRuleResult.Rejected("Player was not found or has no Buys.");
-        ExtensionCardData d = resolve(definitionId); if (d == null || d.cost < 0 || d.cost > p.Coins) return GameRuleResult.Rejected("Card definition/cost is invalid for this purchase.");
+        ExtensionCardData d = resolve(definitionId); int effectiveCost = CostRules.GetEffectiveCost(s, d);
+        if (d == null || effectiveCost < 0 || effectiveCost > p.Coins) return GameRuleResult.Rejected("Card definition/cost is invalid for this purchase.");
         if (!GainRules.CanGainFromSupply(s, definitionId, out string gainCheckErr)) return GameRuleResult.Rejected(gainCheckErr);
         if (!ResolutionQueue.TryBegin(s, playerId, out ResolutionQueue q, out string err)) return GameRuleResult.Rejected(err);
-        p.Coins -= d.cost; p.Buys--;
+        p.Coins -= effectiveCost; p.Buys--;
         if (!GainRules.TryGainFromSupply(s, p, definitionId, CardZone.Discard, 0, q.Events, out _, out string gainErr)) return GameRuleResult.Rejected(gainErr, q.Events.SnapshotHistory());
         TriggerResolutionResult tr = TriggerResolver.ResolvePending(q, s, resolve, random); List<GameEvent> events = q.Events.SnapshotHistory();
         if (tr.Status == EffectResolutionStatus.Rejected) return GameRuleResult.Rejected(tr.Error, events);

@@ -44,7 +44,7 @@ public static class EffectResolver
     private delegate EffectResolutionResult Handler(CardEffectData e, EffectExecutionContext c);
     private static readonly Dictionary<string, Handler> H = new Dictionary<string, Handler>(StringComparer.OrdinalIgnoreCase)
     {
-        {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection},
+        {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection}, {"reduce_costs_this_turn", ReduceCostsThisTurn},
         {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount}, {"draw_to_hand_size_skipping_type", DrawToHandSizeSkippingType},
         {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile}, {"choose_options", ChooseOptions}, {"name_card", NameCard},
         {"choose_each_other_cards", ChooseEachOtherCards}, {"reveal_each_other_cards", RevealEachOtherCards},
@@ -115,6 +115,14 @@ public static class EffectResolver
     {
         if (!Self(e) || c.Resolution == null || e.amount < 0) return EffectResolutionResult.Rejected("Invalid add_resource_per_last_selection effect.");
         return AddResource(new CardEffectData { target = "self", resource = e.resource, amount = e.amount * c.Resolution.LastSelectionCount }, c);
+    }
+
+    private static EffectResolutionResult ReduceCostsThisTurn(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || e.amount < 0) return EffectResolutionResult.Rejected("Invalid reduce_costs_this_turn effect.");
+        return CostRules.AddReductionForCurrentTurn(c.State, c.Actor, e.amount, out string error)
+            ? EffectResolutionResult.Applied()
+            : EffectResolutionResult.Rejected(error);
     }
 
     private static EffectResolutionResult Draw(CardEffectData e, EffectExecutionContext c)
@@ -335,8 +343,9 @@ public static class EffectResolver
         if (c.Resolution.SelectedInstanceIds.Count == 0) { c.Resolution.SetLastSelectedCardCost(-1); return EffectResolutionResult.Applied(); }
         if (c.Resolution.SelectedInstanceIds.Count != 1) return EffectResolutionResult.Rejected("remember_selected_card_cost requires at most one selected card.");
         CardInstance i = Find(c.State, c.Resolution.SelectedInstanceIds[0]); ExtensionCardData d = i != null ? Def(i.DefinitionId) : null;
-        if (d == null || d.cost < 0) return EffectResolutionResult.Rejected("Selected card definition/cost is invalid.");
-        c.Resolution.SetLastSelectedCardCost(d.cost); return EffectResolutionResult.Applied();
+        int effectiveCost = CostRules.GetEffectiveCost(c.State, d);
+        if (d == null || effectiveCost < 0) return EffectResolutionResult.Rejected("Selected card definition/cost is invalid.");
+        c.Resolution.SetLastSelectedCardCost(effectiveCost); return EffectResolutionResult.Applied();
     }
 
     private static EffectResolutionResult RememberSelectedCard(CardEffectData e, EffectExecutionContext c)
@@ -359,7 +368,8 @@ public static class EffectResolver
         List<string> candidates = new List<string>(); if (c.State.SupplyPiles != null) foreach (SupplyPileSnapshot p in c.State.SupplyPiles)
         {
             if (p == null || p.RemainingCount <= 0 || string.IsNullOrEmpty(p.DefinitionId)) continue; ExtensionCardData d = Def(p.DefinitionId); if (d == null) continue;
-            if (ceiling >= 0 && d.cost > ceiling) continue; if (!string.IsNullOrWhiteSpace(e.cardId) && !string.Equals(p.DefinitionId, e.cardId, StringComparison.OrdinalIgnoreCase)) continue;
+            int effectiveCost = CostRules.GetEffectiveCost(c.State, d);
+            if (effectiveCost < 0 || (ceiling >= 0 && effectiveCost > ceiling)) continue; if (!string.IsNullOrWhiteSpace(e.cardId) && !string.Equals(p.DefinitionId, e.cardId, StringComparison.OrdinalIgnoreCase)) continue;
             if (!string.IsNullOrWhiteSpace(e.cardType) && !CardDefinitionRules.HasType(d, e.cardType)) continue; candidates.Add(p.DefinitionId);
         }
         max = Math.Min(max, candidates.Count); if (candidates.Count == 0) return (min == 0 || e.allowNoEligible) ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected("choose_supply has no eligible pile.");

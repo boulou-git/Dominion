@@ -200,6 +200,24 @@
       ]
     },
     {
+      "id": "pont",
+      "name": "Pont",
+      "cost": 4,
+      "types": ["Action"],
+      "image": "pont.png",
+      "text": "+1 Achat\n+1 🪙\n\nPendant ce tour, les cartes coûtent 1 🪙 de moins, mais jamais moins de 0 🪙.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 },
+            { "op": "reduce_costs_this_turn", "target": "self", "amount": 1 }
+          ]
+        }
+      ]
+    },
+    {
       "id": "moulin",
       "name": "Moulin",
       "cost": 4,

@@ -86,6 +86,8 @@ public static class GameStateValidator
             players.Add(player.PlayerId, player);
             if (player.Deck == null || player.Hand == null || player.Discard == null || player.InPlay == null || player.Inspected == null)
                 errors.Add("Player " + player.PlayerId + " has a null card zone.");
+            if (player.CostReductionThisTurn < 0)
+                errors.Add("Player " + player.PlayerId + " has a negative turn cost reduction.");
         }
 
         if (state.IsStarted && !string.IsNullOrEmpty(state.ActivePlayerId) && !players.ContainsKey(state.ActivePlayerId))
