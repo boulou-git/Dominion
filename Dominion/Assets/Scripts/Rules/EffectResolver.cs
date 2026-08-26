@@ -55,7 +55,8 @@ public static class EffectResolver
         {"move_selected", MoveSelected}, {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected},
         {"choose_supply", ChooseSupply}, {"gain_card", GainCard}, {"gain_selected_supply", GainSelectedSupply},
         {"gain_selected_trash", GainSelectedTrash}, {"trash_selected_supply", TrashSelectedSupply},
-        {"reveal_zone", RevealZone}, {"trash_source_card", TrashSourceCard}
+        {"reveal_zone", RevealZone}, {"trash_source_card", TrashSourceCard},
+        {"simultaneous_pass_left", SimultaneousPassLeft}
     };
 
     public static bool IsSupported(string op) => !string.IsNullOrWhiteSpace(op) && H.ContainsKey(op);
@@ -449,6 +450,15 @@ public static class EffectResolver
             return EffectResolutionResult.Rejected(error);
         c.Resolution.SetLastMovedCardInstanceId(c.SourceCardInstanceId);
         return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult SimultaneousPassLeft(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || !Cursor(c))
+            return EffectResolutionResult.Rejected("Invalid simultaneous_pass_left effect.");
+        return FromGameRuleResult(AdvancedActionRules.TryStartSimultaneousPassLeft(c.State, c.Actor, c.Resolution,
+            e.prompt, c.SourceCardInstanceId, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId,
+            c.AbilityIndex, c.EffectIndex));
     }
 
     private static EffectResolutionResult FromGameRuleResult(GameRuleResult result)

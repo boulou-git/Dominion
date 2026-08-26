@@ -11,6 +11,8 @@ public sealed class ResolutionQueueSnapshot
     public List<int> SelectedInstanceIds = new List<int>();
     public List<string> SelectedDefinitionIds = new List<string>();
     public List<string> SelectedOptionIds = new List<string>();
+    public List<string> StagedSelectionPlayerIds = new List<string>();
+    public List<int> StagedSelectedInstanceIds = new List<int>();
     public List<string> AttackProtectedPlayerIds = new List<string>();
     public int LastSelectionCount;
     public int LastSelectedCardCost = -1;
@@ -88,6 +90,8 @@ public sealed class ResolutionQueue
     public IReadOnlyList<int> SelectedInstanceIds => _snapshot.SelectedInstanceIds;
     public IReadOnlyList<string> SelectedDefinitionIds => _snapshot.SelectedDefinitionIds;
     public IReadOnlyList<string> SelectedOptionIds => _snapshot.SelectedOptionIds;
+    public IReadOnlyList<string> StagedSelectionPlayerIds => _snapshot.StagedSelectionPlayerIds;
+    public IReadOnlyList<int> StagedSelectedInstanceIds => _snapshot.StagedSelectedInstanceIds;
     public int LastSelectionCount => _snapshot.LastSelectionCount;
     public int LastSelectedCardCost => _snapshot.LastSelectedCardCost;
     public int LastMovedCardInstanceId => _snapshot.LastMovedCardInstanceId;
@@ -104,7 +108,8 @@ public sealed class ResolutionQueue
         if (state.Resolution.IsActive) { error = "Another rules resolution is already active."; return false; }
         state.Resolution.IsActive = true; state.Resolution.OwnerPlayerId = ownerPlayerId;
         state.Resolution.PendingEvents.Clear(); state.Resolution.PendingDecision.Clear();
-        state.Resolution.SelectedInstanceIds.Clear(); state.Resolution.SelectedDefinitionIds.Clear(); state.Resolution.SelectedOptionIds.Clear(); state.Resolution.AttackProtectedPlayerIds.Clear();
+        state.Resolution.SelectedInstanceIds.Clear(); state.Resolution.SelectedDefinitionIds.Clear(); state.Resolution.SelectedOptionIds.Clear();
+        state.Resolution.StagedSelectionPlayerIds.Clear(); state.Resolution.StagedSelectedInstanceIds.Clear(); state.Resolution.AttackProtectedPlayerIds.Clear();
         state.Resolution.LastSelectionCount = 0; state.Resolution.LastSelectedCardCost = -1; state.Resolution.LastMovedCardInstanceId = 0;
         queue = new ResolutionQueue(state.Resolution); return true;
     }
@@ -261,6 +266,15 @@ public sealed class ResolutionQueue
     public void SetLastMovedCardInstanceId(int instanceId) => _snapshot.LastMovedCardInstanceId = Math.Max(0, instanceId);
     public void ClearSelection() { _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedDefinitionIds.Clear(); _snapshot.LastSelectionCount = 0; }
     public void ClearAttackProtection() => _snapshot.AttackProtectedPlayerIds.Clear();
+    public bool TryStageCardSelection(string playerId, int instanceId, out string error)
+    {
+        error = string.Empty;
+        if (string.IsNullOrEmpty(playerId) || instanceId <= 0) { error = "Staged card selection is invalid."; return false; }
+        if (_snapshot.StagedSelectionPlayerIds.Contains(playerId)) { error = "Player already has a staged card selection."; return false; }
+        if (_snapshot.StagedSelectedInstanceIds.Contains(instanceId)) { error = "Card is already staged by another player."; return false; }
+        _snapshot.StagedSelectionPlayerIds.Add(playerId); _snapshot.StagedSelectedInstanceIds.Add(instanceId); return true;
+    }
+    public void ClearStagedCardSelections() { _snapshot.StagedSelectionPlayerIds.Clear(); _snapshot.StagedSelectedInstanceIds.Clear(); }
     public void MarkAttackProtected(string playerId) { if (!string.IsNullOrEmpty(playerId) && !_snapshot.AttackProtectedPlayerIds.Contains(playerId)) _snapshot.AttackProtectedPlayerIds.Add(playerId); }
     public bool IsAttackProtected(string playerId) => !string.IsNullOrEmpty(playerId) && _snapshot.AttackProtectedPlayerIds.Contains(playerId);
     public List<int> TakeSelectedInstanceIds() { List<int> x = new List<int>(_snapshot.SelectedInstanceIds); _snapshot.SelectedInstanceIds.Clear(); return x; }
@@ -270,7 +284,8 @@ public sealed class ResolutionQueue
     {
         if (Events.PendingCount > 0 || IsWaitingForDecision) return;
         _snapshot.IsActive = false; _snapshot.OwnerPlayerId = string.Empty; _snapshot.PendingEvents.Clear(); _snapshot.PendingDecision.Clear();
-        _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedDefinitionIds.Clear(); _snapshot.SelectedOptionIds.Clear(); _snapshot.AttackProtectedPlayerIds.Clear();
+        _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedDefinitionIds.Clear(); _snapshot.SelectedOptionIds.Clear();
+        _snapshot.StagedSelectionPlayerIds.Clear(); _snapshot.StagedSelectedInstanceIds.Clear(); _snapshot.AttackProtectedPlayerIds.Clear();
         _snapshot.LastSelectionCount = 0; _snapshot.LastSelectedCardCost = -1; _snapshot.LastMovedCardInstanceId = 0;
     }
 
@@ -299,6 +314,8 @@ public sealed class ResolutionQueue
         if (state.Resolution.SelectedInstanceIds == null) state.Resolution.SelectedInstanceIds = new List<int>();
         if (state.Resolution.SelectedDefinitionIds == null) state.Resolution.SelectedDefinitionIds = new List<string>();
         if (state.Resolution.SelectedOptionIds == null) state.Resolution.SelectedOptionIds = new List<string>();
+        if (state.Resolution.StagedSelectionPlayerIds == null) state.Resolution.StagedSelectionPlayerIds = new List<string>();
+        if (state.Resolution.StagedSelectedInstanceIds == null) state.Resolution.StagedSelectedInstanceIds = new List<int>();
         if (state.Resolution.AttackProtectedPlayerIds == null) state.Resolution.AttackProtectedPlayerIds = new List<string>();
     }
 }

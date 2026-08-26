@@ -76,6 +76,25 @@
       ]
     },
     {
+      "id": "mascarade",
+      "name": "Mascarade",
+      "cost": 3,
+      "types": ["Action"],
+      "image": "mascarade.png",
+      "text": "+2 Cartes\n\nChaque joueur ayant au moins une carte en main passe simultanément une carte au prochain joueur concerné à sa gauche.\n\nPuis, vous pouvez écarter une carte de votre main.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 2 },
+            { "op": "simultaneous_pass_left", "target": "self", "prompt": "Choisissez une carte à passer au prochain joueur concerné à votre gauche." },
+            { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "prompt": "Vous pouvez écarter une carte de votre main." },
+            { "op": "trash_selected", "target": "self" }
+          ]
+        }
+      ]
+    },
+    {
       "id": "taudis",
       "name": "Taudis",
       "cost": 3,

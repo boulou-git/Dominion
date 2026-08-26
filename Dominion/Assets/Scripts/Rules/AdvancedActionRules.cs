@@ -2,19 +2,21 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Reusable continuations for action-card effects that repeatedly inspect cards and
-/// may pause for player choices. Nothing here knows specific card ids.
+/// Reusable continuations for action-card effects that may pause for one or more
+/// player choices. Nothing here knows specific card ids.
 /// </summary>
 public static class AdvancedActionRules
 {
     private const string DrawToSizePrefix = "draw_to_hand_size_skipping_type|";
     private const string MoveAllOrderedPrefix = "move_all_ordered|";
+    private const string SimultaneousPassLeftOperation = "simultaneous_pass_left";
 
     public static bool IsContinuation(string operation)
     {
         if (string.IsNullOrEmpty(operation)) return false;
         return operation.StartsWith(DrawToSizePrefix, StringComparison.OrdinalIgnoreCase) ||
-               operation.StartsWith(MoveAllOrderedPrefix, StringComparison.OrdinalIgnoreCase);
+               operation.StartsWith(MoveAllOrderedPrefix, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(operation, SimultaneousPassLeftOperation, StringComparison.OrdinalIgnoreCase);
     }
 
     public static GameRuleResult TryStartDrawToHandSizeSkippingType(
@@ -65,6 +67,37 @@ public static class AdvancedActionRules
             triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex);
     }
 
+    public static GameRuleResult TryStartSimultaneousPassLeft(
+        GameStateSnapshot state,
+        PlayerStateSnapshot actor,
+        ResolutionQueue resolution,
+        string prompt,
+        int sourceCardInstanceId,
+        GameEvent triggerEvent,
+        string timing,
+        int listenerCardInstanceId,
+        int abilityIndex,
+        int effectIndex)
+    {
+        if (state == null || actor == null || resolution == null || state.Players == null)
+            return GameRuleResult.Rejected("Invalid simultaneous pass effect.", resolution != null ? resolution.Events.SnapshotHistory() : null);
+
+        List<PlayerStateSnapshot> participants = PlayersFromActorToLeft(state, actor);
+        if (participants.Count <= 1) return GameRuleResult.Applied(resolution.Events.SnapshotHistory());
+
+        resolution.ClearStagedCardSelections();
+        List<string> remaining = new List<string>();
+        for (int index = 1; index < participants.Count; index++) remaining.Add(participants[index].PlayerId);
+        PlayerStateSnapshot first = participants[0];
+        if (!resolution.TrySuspendForDecision(first.PlayerId, SimultaneousPassLeftOperation, "hand",
+                string.IsNullOrWhiteSpace(prompt) ? "Choisissez une carte à passer à votre gauche." : prompt,
+                sourceCardInstanceId, 1, 1, first.Hand, triggerEvent, timing, listenerCardInstanceId,
+                abilityIndex, effectIndex, out string error))
+            return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
+        resolution.PendingDecision.RemainingPlayerIds.AddRange(remaining);
+        return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+    }
+
     public static GameRuleResult ResolveContinuation(
         GameStateSnapshot state,
         PlayerStateSnapshot player,
@@ -81,8 +114,86 @@ public static class AdvancedActionRules
             return ResolveDrawToHandSizeDecision(state, player, resolution, continuation, resolve, random);
         if (operation.StartsWith(MoveAllOrderedPrefix, StringComparison.OrdinalIgnoreCase))
             return ResolveMoveAllOrderedDecision(player, resolution, continuation);
+        if (string.Equals(operation, SimultaneousPassLeftOperation, StringComparison.OrdinalIgnoreCase))
+            return ResolveSimultaneousPassLeftDecision(state, player, resolution, continuation);
 
         return GameRuleResult.Rejected("Unsupported advanced action continuation: " + operation, resolution.Events.SnapshotHistory());
+    }
+
+    private static GameRuleResult ResolveSimultaneousPassLeftDecision(
+        GameStateSnapshot state,
+        PlayerStateSnapshot player,
+        ResolutionQueue resolution,
+        PendingDecisionSnapshot continuation)
+    {
+        List<int> selected = resolution.TakeSelectedInstanceIds();
+        if (selected.Count != 1 || player.Hand == null || !player.Hand.Contains(selected[0]))
+            return GameRuleResult.Rejected("Simultaneous pass selection is invalid.", resolution.Events.SnapshotHistory());
+        if (!resolution.TryStageCardSelection(player.PlayerId, selected[0], out string stageError))
+            return GameRuleResult.Rejected(stageError, resolution.Events.SnapshotHistory());
+
+        List<string> remaining = continuation.RemainingPlayerIds != null
+            ? new List<string>(continuation.RemainingPlayerIds)
+            : new List<string>();
+        while (remaining.Count > 0)
+        {
+            string playerId = remaining[0]; remaining.RemoveAt(0);
+            PlayerStateSnapshot next = FindPlayer(state, playerId);
+            if (next == null || next.Hand == null || next.Hand.Count == 0)
+                return GameRuleResult.Rejected("A simultaneous pass participant is no longer eligible.", resolution.Events.SnapshotHistory());
+            if (!resolution.TrySuspendForDecision(next.PlayerId, SimultaneousPassLeftOperation, "hand", continuation.Prompt,
+                    continuation.SourceCardInstanceId, 1, 1, next.Hand, RestoreEvent(continuation), continuation.Timing,
+                    continuation.ListenerCardInstanceId, continuation.AbilityIndex, continuation.EffectIndex, out string error))
+                return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
+            resolution.PendingDecision.RemainingPlayerIds.AddRange(remaining);
+            return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+        }
+
+        return ApplyStagedPassLeft(state, resolution);
+    }
+
+    private static GameRuleResult ApplyStagedPassLeft(GameStateSnapshot state, ResolutionQueue resolution)
+    {
+        List<string> playerIds = new List<string>(resolution.StagedSelectionPlayerIds);
+        List<int> cardIds = new List<int>(resolution.StagedSelectedInstanceIds);
+        if (playerIds.Count < 2 || playerIds.Count != cardIds.Count)
+            return GameRuleResult.Rejected("Simultaneous pass staging is incomplete.", resolution.Events.SnapshotHistory());
+
+        List<PlayerStateSnapshot> players = new List<PlayerStateSnapshot>();
+        List<CardInstance> cards = new List<CardInstance>();
+        for (int index = 0; index < playerIds.Count; index++)
+        {
+            PlayerStateSnapshot owner = FindPlayer(state, playerIds[index]);
+            CardInstance card = FindCard(state, cardIds[index]);
+            if (owner == null || owner.Hand == null || !owner.Hand.Contains(cardIds[index]) || card == null ||
+                !string.Equals(card.OwnerPlayerId, owner.PlayerId, StringComparison.Ordinal))
+                return GameRuleResult.Rejected("A staged pass card is no longer owned in hand.", resolution.Events.SnapshotHistory());
+            players.Add(owner); cards.Add(card);
+        }
+
+        for (int index = 0; index < players.Count; index++) players[index].Hand.Remove(cardIds[index]);
+        for (int index = 0; index < players.Count; index++)
+        {
+            PlayerStateSnapshot recipient = players[(index + 1) % players.Count];
+            recipient.Hand.Add(cardIds[index]);
+            cards[index].OwnerPlayerId = recipient.PlayerId;
+        }
+        resolution.ClearStagedCardSelections();
+        return GameRuleResult.Applied(resolution.Events.SnapshotHistory());
+    }
+
+    private static List<PlayerStateSnapshot> PlayersFromActorToLeft(GameStateSnapshot state, PlayerStateSnapshot actor)
+    {
+        List<PlayerStateSnapshot> result = new List<PlayerStateSnapshot>();
+        if (state == null || state.Players == null || state.Players.Count == 0 || actor == null) return result;
+        int actorIndex = state.Players.FindIndex(candidate => candidate != null && candidate.PlayerId == actor.PlayerId);
+        if (actorIndex < 0) return result;
+        for (int offset = 0; offset < state.Players.Count; offset++)
+        {
+            PlayerStateSnapshot candidate = state.Players[(actorIndex + offset) % state.Players.Count];
+            if (candidate != null && candidate.Hand != null && candidate.Hand.Count > 0) result.Add(candidate);
+        }
+        return result;
     }
 
     private static GameRuleResult ResolveDrawToHandSizeDecision(
@@ -247,6 +358,13 @@ public static class AdvancedActionRules
     {
         return state != null && state.CardInstances != null
             ? state.CardInstances.Find(card => card != null && card.InstanceId == instanceId)
+            : null;
+    }
+
+    private static PlayerStateSnapshot FindPlayer(GameStateSnapshot state, string playerId)
+    {
+        return state != null && state.Players != null && !string.IsNullOrEmpty(playerId)
+            ? state.Players.Find(player => player != null && player.PlayerId == playerId)
             : null;
     }
 

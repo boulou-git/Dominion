@@ -317,6 +317,24 @@ public static class GameStateValidator
         ValidateKnownUniqueCardIds(resolution.SelectedInstanceIds, "selected card", cards, errors);
         ValidateUniqueDefinitionIds(resolution.SelectedDefinitionIds, "selected definition", errors);
         ValidateUniqueDefinitionIds(resolution.SelectedOptionIds, "selected option", errors);
+        ValidateKnownUniquePlayerIds(resolution.StagedSelectionPlayerIds, "staged-selection player", players, errors);
+        ValidateKnownUniqueCardIds(resolution.StagedSelectedInstanceIds, "staged selected card", cards, errors);
+        if (resolution.StagedSelectionPlayerIds != null && resolution.StagedSelectedInstanceIds != null &&
+            resolution.StagedSelectionPlayerIds.Count != resolution.StagedSelectedInstanceIds.Count)
+            errors.Add("Staged card selections must have matching player and card counts.");
+        else if (resolution.StagedSelectionPlayerIds != null && resolution.StagedSelectedInstanceIds != null)
+        {
+            for (int index = 0; index < resolution.StagedSelectionPlayerIds.Count; index++)
+            {
+                string playerId = resolution.StagedSelectionPlayerIds[index];
+                int instanceId = resolution.StagedSelectedInstanceIds[index];
+                if (!players.TryGetValue(playerId, out PlayerStateSnapshot stagedPlayer) ||
+                    !cards.TryGetValue(instanceId, out CardInstance stagedCard)) continue;
+                if (stagedPlayer.Hand == null || !stagedPlayer.Hand.Contains(instanceId) ||
+                    !string.Equals(stagedCard.OwnerPlayerId, playerId, StringComparison.Ordinal))
+                    errors.Add("Staged selected card " + instanceId + " is not owned in player " + playerId + "'s hand.");
+            }
+        }
 
         if (!decision.IsPending) return;
 

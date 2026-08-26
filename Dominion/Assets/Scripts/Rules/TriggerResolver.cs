@@ -166,6 +166,8 @@ public static class TriggerResolver
         state.Resolution.SelectedInstanceIds.Clear();
         state.Resolution.SelectedDefinitionIds.Clear();
         state.Resolution.SelectedOptionIds.Clear();
+        state.Resolution.StagedSelectionPlayerIds.Clear();
+        state.Resolution.StagedSelectedInstanceIds.Clear();
         state.Resolution.AttackProtectedPlayerIds.Clear();
         state.Resolution.LastSelectionCount = 0;
         state.Resolution.LastSelectedCardCost = -1;
