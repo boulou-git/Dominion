@@ -20,6 +20,10 @@ public sealed class CardScoringData
     // group of cardsPerPoint cards owned by the player. Gardens is 1 per 10 cards.
     public int pointsPerCards;
     public int cardsPerPoint;
+
+    // Generic cross-card scoring based on copies of another owned definition.
+    public string ownedCardId;
+    public int pointsPerOwnedCard;
 }
 
 public sealed class CardScoreBreakdown
@@ -101,6 +105,9 @@ public static class ScoringRules
             int pointsPerCopy = scoring.fixedPoints;
             if (scoring.pointsPerCards != 0 && scoring.cardsPerPoint > 0)
                 pointsPerCopy += (totalCards / scoring.cardsPerPoint) * scoring.pointsPerCards;
+            if (scoring.pointsPerOwnedCard != 0 && !string.IsNullOrWhiteSpace(scoring.ownedCardId) &&
+                copiesByDefinition.TryGetValue(scoring.ownedCardId, out int ownedCardCopies))
+                pointsPerCopy += ownedCardCopies * scoring.pointsPerOwnedCard;
 
             int subtotal = pointsPerCopy * pair.Value;
             totalPoints += subtotal;
@@ -194,6 +201,10 @@ public static class ScoringRules
                 {
                     if (card == null || string.IsNullOrWhiteSpace(card.cardId))
                         continue;
+                    card.cardId = card.cardId.Trim();
+                    card.ownedCardId = (card.ownedCardId ?? string.Empty).Trim();
+                    if (!string.IsNullOrWhiteSpace(card.ownedCardId) && card.ownedCardId.IndexOf(':') < 0)
+                        card.ownedCardId = extensionId + ":" + card.ownedCardId;
                     result[extensionId + ":" + card.cardId] = card;
                 }
             }

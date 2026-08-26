@@ -75,12 +75,17 @@ public sealed class CardEffectData
     public bool lastMovedOnly;
     public bool requiresLastSelection;
     public bool requiresNoLastSelection;
+    public int requiresLastSelectionCount;
     public int maxCost = -1;
     public bool useLastSelectionCost;
     public int costOffset;
     public bool allowNoEligible;
+    public bool allowPass;
+    public bool minUpToAvailable;
     public List<CardChoiceOptionData> options = new List<CardChoiceOptionData>();
     public string requiresSelectedOption;
+    public string requiresNoCardType;
+    public string conditionZone;
 }
 
 public static class ExtensionCatalog
@@ -306,6 +311,8 @@ public static class ExtensionCatalog
                     effect.cardType = (effect.cardType ?? string.Empty).Trim();
                     effect.prompt = (effect.prompt ?? string.Empty).Trim();
                     effect.requiresSelectedOption = (effect.requiresSelectedOption ?? string.Empty).Trim();
+                    effect.requiresNoCardType = (effect.requiresNoCardType ?? string.Empty).Trim();
+                    effect.conditionZone = (effect.conditionZone ?? string.Empty).Trim();
                     if (effect.options == null)
                         effect.options = new List<CardChoiceOptionData>();
                     foreach (CardChoiceOptionData option in effect.options)
@@ -521,6 +528,16 @@ public static class ExtensionCatalog
             error = prefix + " cannot require both an empty and a non-empty previous selection.";
             return false;
         }
+
+        if (effect.requiresLastSelectionCount < 0)
+        {
+            error = prefix + " has a negative required selection count.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(effect.requiresNoCardType) &&
+            !ValidateOptionalZone(prefix, "conditionZone", effect.conditionZone, out error))
+            return false;
 
         if (string.Equals(op, "choose_options", StringComparison.OrdinalIgnoreCase))
         {

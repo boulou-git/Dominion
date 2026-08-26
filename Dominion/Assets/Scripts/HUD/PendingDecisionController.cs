@@ -296,7 +296,8 @@ public sealed class PendingDecisionController : MonoBehaviour
                 ? selectedCount + " / " + decision.MaxSelections
                 : selectedCount + " sélectionnée(s) — " + decision.MinSelections + " à " + decision.MaxSelections;
         if (_confirmButton != null)
-            _confirmButton.interactable = selectedCount >= decision.MinSelections && selectedCount <= decision.MaxSelections && !_submitPending;
+            _confirmButton.interactable = ((selectedCount == 0 && decision.AllowPass) ||
+                (selectedCount >= decision.MinSelections && selectedCount <= decision.MaxSelections)) && !_submitPending;
         if (!IsSupplyDecision(decision) && !IsOptionDecision(decision)) RefreshSelectionMarkers();
     }
 
@@ -343,7 +344,8 @@ public sealed class PendingDecisionController : MonoBehaviour
         PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
         if (decision == null || _submitPending) return;
         int selectedCount = IsOptionDecision(decision) ? _selectedOptions.Count : IsSupplyDecision(decision) ? _selectedSupply.Count : _selected.Count;
-        if (selectedCount < decision.MinSelections || selectedCount > decision.MaxSelections) return;
+        if (!(selectedCount == 0 && decision.AllowPass) &&
+            (selectedCount < decision.MinSelections || selectedCount > decision.MaxSelections)) return;
 
         PlayersTurnsHandler handler = PlayersTurnsHandler.Instance;
         if (handler == null) return;

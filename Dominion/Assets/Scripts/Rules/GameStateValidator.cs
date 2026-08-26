@@ -316,6 +316,7 @@ public static class GameStateValidator
         ValidateKnownUniquePlayerIds(resolution.AttackProtectedPlayerIds, "attack-protected player", players, errors);
         ValidateKnownUniqueCardIds(resolution.SelectedInstanceIds, "selected card", cards, errors);
         ValidateUniqueDefinitionIds(resolution.SelectedDefinitionIds, "selected definition", errors);
+        ValidateUniqueDefinitionIds(resolution.SelectedOptionIds, "selected option", errors);
 
         if (!decision.IsPending) return;
 

@@ -165,6 +165,7 @@ public static class TriggerResolver
         state.Resolution.PendingDecision.Clear();
         state.Resolution.SelectedInstanceIds.Clear();
         state.Resolution.SelectedDefinitionIds.Clear();
+        state.Resolution.SelectedOptionIds.Clear();
         state.Resolution.AttackProtectedPlayerIds.Clear();
         state.Resolution.LastSelectionCount = 0;
         state.Resolution.LastSelectedCardCost = -1;

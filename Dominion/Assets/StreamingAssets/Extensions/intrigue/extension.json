@@ -74,6 +74,187 @@
           ]
         }
       ]
+    },
+    {
+      "id": "taudis",
+      "name": "Taudis",
+      "cost": 3,
+      "types": ["Action"],
+      "image": "taudis.png",
+      "text": "+2 Actions\n\nRévélez votre main.\n\nSi vous n’avez aucune carte Action en main, +2 Cartes.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 },
+            { "op": "reveal_zone", "target": "self", "zone": "hand" },
+            { "op": "draw", "target": "self", "amount": 2, "requiresNoCardType": "Action", "conditionZone": "hand" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "intendant",
+      "name": "Intendant",
+      "cost": 3,
+      "types": ["Action"],
+      "image": "intendant.png",
+      "text": "Choisissez une option :\n+2 Cartes\n+2 🪙\nÉcartez 2 cartes de votre main.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            {
+              "op": "choose_options",
+              "target": "self",
+              "min": 1,
+              "max": 1,
+              "prompt": "Choisissez une option.",
+              "options": [
+                { "id": "cards", "label": "+2 Cartes" },
+                { "id": "coins", "label": "+2 🪙" },
+                { "id": "trash", "label": "Écarter 2 cartes" }
+              ]
+            },
+            { "op": "draw", "target": "self", "amount": 2, "requiresSelectedOption": "cards" },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "coins" },
+            { "op": "choose_cards", "target": "self", "zone": "hand", "min": 2, "max": 2, "minUpToAvailable": true, "requiresSelectedOption": "trash", "prompt": "Écartez 2 cartes de votre main." },
+            { "op": "trash_selected", "target": "self", "requiresSelectedOption": "trash" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "baron",
+      "name": "Baron",
+      "cost": 4,
+      "types": ["Action"],
+      "image": "baron.png",
+      "text": "+1 Achat\n\nVous pouvez défausser un Domaine pour +4 🪙.\n\nSinon, recevez un Domaine.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
+            { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "cardId": "base:domaine", "prompt": "Vous pouvez défausser un Domaine pour +4 🪙." },
+            { "op": "discard_selected", "target": "self" },
+            { "op": "add_resource_per_last_selection", "target": "self", "resource": "coins", "amount": 4 },
+            { "op": "gain_card", "target": "self", "cardId": "base:domaine", "amount": 1, "destinationZone": "discard", "requiresNoLastSelection": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "moulin",
+      "name": "Moulin",
+      "cost": 4,
+      "types": ["Action", "Victoire"],
+      "image": "moulin.png",
+      "text": "+1 Carte\n+1 Action\n\nVous pouvez défausser 2 cartes pour +2 🪙.\n\n———\n\n1 VP",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+            { "op": "choose_cards", "target": "self", "zone": "hand", "min": 2, "max": 2, "allowPass": true, "prompt": "Vous pouvez défausser exactement 2 cartes pour +2 🪙." },
+            { "op": "discard_selected", "target": "self" },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresLastSelectionCount": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "village_minier",
+      "name": "Village minier",
+      "cost": 4,
+      "types": ["Action"],
+      "image": "village_minier.png",
+      "text": "+1 Carte\n+2 Actions\n\nVous pouvez écarter cette carte pour +2 🪙.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 },
+            {
+              "op": "choose_options",
+              "target": "self",
+              "min": 0,
+              "max": 1,
+              "prompt": "Vous pouvez écarter cette carte pour +2 🪙.",
+              "options": [ { "id": "trash", "label": "Écarter Village minier" } ]
+            },
+            { "op": "trash_source_card", "target": "self", "requiresSelectedOption": "trash" },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "trash" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "duc",
+      "name": "Duc",
+      "cost": 5,
+      "types": ["Victoire"],
+      "image": "duc.png",
+      "text": "Vaut 1 VP par Duché que vous possédez."
+    },
+    {
+      "id": "comptoir",
+      "name": "Comptoir",
+      "cost": 5,
+      "types": ["Action"],
+      "image": "comptoir.png",
+      "text": "Écartez 2 cartes de votre main.\n\nDans ce cas, recevez un Argent dans votre main.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "choose_cards", "target": "self", "zone": "hand", "min": 2, "max": 2, "minUpToAvailable": true, "prompt": "Écartez 2 cartes de votre main." },
+            { "op": "trash_selected", "target": "self" },
+            { "op": "gain_card", "target": "self", "cardId": "base:argent", "amount": 1, "destinationZone": "hand", "requiresLastSelectionCount": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "harem",
+      "name": "Harem",
+      "cost": 6,
+      "types": ["Trésor", "Victoire"],
+      "image": "harem.png",
+      "text": "+2 🪙\n\n———\n\n2 VP",
+      "abilities": [
+        { "when": "play", "effects": [ { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 } ] }
+      ]
+    },
+    {
+      "id": "nobles",
+      "name": "Nobles",
+      "cost": 6,
+      "types": ["Action", "Victoire"],
+      "image": "nobles.png",
+      "text": "Choisissez une option :\n+3 Cartes\nou\n+2 Actions\n\n———\n\n2 VP",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            {
+              "op": "choose_options",
+              "target": "self",
+              "min": 1,
+              "max": 1,
+              "prompt": "Choisissez une option.",
+              "options": [
+                { "id": "cards", "label": "+3 Cartes" },
+                { "id": "actions", "label": "+2 Actions" }
+              ]
+            },
+            { "op": "draw", "target": "self", "amount": 3, "requiresSelectedOption": "cards" },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2, "requiresSelectedOption": "actions" }
+          ]
+        }
+      ]
     }
   ]
 }
