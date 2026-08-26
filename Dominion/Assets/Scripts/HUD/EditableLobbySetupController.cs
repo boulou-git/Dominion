@@ -629,12 +629,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             _cardsTitle.fontSize = 27;
         }
 
-        LayoutElement[] extensionLayouts = _extensionsRoot != null
-            ? _extensionsRoot.GetComponentsInChildren<LayoutElement>(true)
-            : new LayoutElement[0];
-        foreach (LayoutElement layout in extensionLayouts)
-            layout.preferredHeight = 270f;
-
         ApplySelectionFlowState(true);
     }
 

@@ -17,7 +17,12 @@ public static class DominionLobbyPrefabBuilder
         Directory.CreateDirectory(RootFolder);
         AssetDatabase.Refresh();
 
-        ExtensionTileView extensionPrefab = BuildExtensionTile();
+        ExtensionTileView extensionPrefab = AssetDatabase.LoadAssetAtPath<ExtensionTileView>(ExtensionPrefabPath);
+        if (extensionPrefab == null)
+        {
+            Debug.LogError("Missing editable extension tile prefab at " + ExtensionPrefabPath + ".");
+            return;
+        }
         CardSelectionTileView cardPrefab = BuildCardTile();
         BuildLobby(extensionPrefab, cardPrefab);
 
@@ -25,38 +30,6 @@ public static class DominionLobbyPrefabBuilder
         AssetDatabase.Refresh();
         Selection.activeObject = AssetDatabase.LoadAssetAtPath<GameObject>(LobbyPrefabPath);
         Debug.Log("Editable Dominion lobby prefabs created in " + RootFolder + ". Open LobbySetupScreen.prefab to redesign it freely.");
-    }
-
-    private static ExtensionTileView BuildExtensionTile()
-    {
-        GameObject root = UiObject("ExtensionTile", typeof(Image), typeof(Button), typeof(LayoutElement), typeof(RectMask2D), typeof(ExtensionTileView));
-        LayoutElement layout = root.GetComponent<LayoutElement>();
-        layout.preferredWidth = 420f;
-        layout.preferredHeight = 270f;
-        root.GetComponent<Image>().color = new Color(0.13f, 0.13f, 0.13f, 1f);
-
-        Image artwork = ChildImage(root.transform, "Artwork", Vector2.zero, Vector2.one, Color.white);
-        AspectRatioFitter artworkFitter = artwork.gameObject.AddComponent<AspectRatioFitter>();
-        artworkFitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
-        SelectableArtworkView selection = artwork.gameObject.AddComponent<SelectableArtworkView>();
-        SetSerialized(selection, "_artwork", artwork);
-
-        Image shade = ChildImage(root.transform, "BottomShade", new Vector2(0f, 0f), new Vector2(1f, 0.34f), new Color(0f, 0f, 0f, 0.72f));
-        shade.raycastTarget = false;
-        Text name = ChildText(root.transform, "Name", "EXTENSION", 25, TextAnchor.MiddleLeft, new Vector2(0.05f, 0.13f), new Vector2(0.78f, 0.31f));
-        Text count = ChildText(root.transform, "Count", "0 cartes", 17, TextAnchor.MiddleLeft, new Vector2(0.05f, 0.025f), new Vector2(0.78f, 0.15f));
-        Toggle toggle = ChildToggle(root.transform, "EnabledToggle", new Vector2(0.82f, 0.72f), new Vector2(0.96f, 0.94f));
-
-        ExtensionTileView view = root.GetComponent<ExtensionTileView>();
-        SetSerialized(view, "_selectionVisual", selection);
-        SetSerialized(view, "_nameText", name);
-        SetSerialized(view, "_countText", count);
-        SetSerialized(view, "_enabledToggle", toggle);
-        SetSerialized(view, "_openButton", root.GetComponent<Button>());
-
-        GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, ExtensionPrefabPath);
-        Object.DestroyImmediate(root);
-        return prefab.GetComponent<ExtensionTileView>();
     }
 
     private static CardSelectionTileView BuildCardTile()

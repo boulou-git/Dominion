@@ -33,7 +33,6 @@ public sealed class SelectableArtworkView : MonoBehaviour
 
         _artwork.sprite = sprite;
         _artwork.enabled = sprite != null;
-        _artwork.preserveAspect = true;
     }
 
     public void SetSelected(bool selected)
