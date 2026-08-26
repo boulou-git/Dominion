@@ -59,7 +59,7 @@ public sealed class TrashPileViewController : MonoBehaviour
         rect.anchorMin = Vector2.one;
         rect.anchorMax = Vector2.one;
         rect.pivot = Vector2.one;
-        rect.anchoredPosition = new Vector2(-28f, -106f);
+        rect.anchoredPosition = new Vector2(-500f, -80f);
         rect.sizeDelta = new Vector2(158f, 46f);
 
         Image image = buttonObject.GetComponent<Image>();

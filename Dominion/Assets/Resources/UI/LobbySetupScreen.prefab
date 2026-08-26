@@ -345,9 +345,9 @@ MonoBehaviour:
     m_Bottom: 8
   m_ChildAlignment: 0
   m_Spacing: 16
-  m_ChildForceExpandWidth: 1
+  m_ChildForceExpandWidth: 0
   m_ChildForceExpandHeight: 0
-  m_ChildControlWidth: 1
+  m_ChildControlWidth: 0
   m_ChildControlHeight: 0
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
@@ -1103,9 +1103,6 @@ MonoBehaviour:
   _extensionTilePrefab: {fileID: 4818997166688043046, guid: dfb0c60febcf1e84ba44894a2a79d11e, type: 3}
   _cardTilePrefab: {fileID: 6709884789341957966, guid: 806f0203034c3ef4fb1e9fef0324cd23, type: 3}
   _waitingText: {fileID: 1073681643402541729}
-  _revealCardsRoot: {fileID: 2488900561157111373}
-  _revealStatus: {fileID: 5818106595845868402}
-  _startButton: {fileID: 1766138980447226953}
 --- !u!1 &4705374211120547871
 GameObject:
   m_ObjectHideFlags: 0
@@ -1738,8 +1735,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.04, y: 0.05}
   m_AnchorMax: {x: 0.96, y: 0.9}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0.000030518, y: 0}
+  m_SizeDelta: {x: 46.848, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &4019763079488289938
 CanvasRenderer:
