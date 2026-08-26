@@ -10,6 +10,7 @@ public static class AdvancedActionRules
     private const string DrawToSizePrefix = "draw_to_hand_size_skipping_type|";
     private const string MoveAllOrderedPrefix = "move_all_ordered|";
     private const string SimultaneousPassLeftOperation = "simultaneous_pass_left";
+    private const string ReplaceEachOtherTopPrefix = "replace_each_other_top_card|";
 
     public static bool IsContinuation(string operation)
     {
@@ -18,6 +19,9 @@ public static class AdvancedActionRules
                operation.StartsWith(MoveAllOrderedPrefix, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(operation, SimultaneousPassLeftOperation, StringComparison.OrdinalIgnoreCase);
     }
+
+    public static bool IsSupplyContinuation(string operation) =>
+        !string.IsNullOrEmpty(operation) && operation.StartsWith(ReplaceEachOtherTopPrefix, StringComparison.OrdinalIgnoreCase);
 
     public static GameRuleResult TryStartDrawToHandSizeSkippingType(
         GameStateSnapshot state,
@@ -96,6 +100,56 @@ public static class AdvancedActionRules
             return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
         resolution.PendingDecision.RemainingPlayerIds.AddRange(remaining);
         return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+    }
+
+    public static GameRuleResult TryStartReplaceEachOtherTopCard(
+        GameStateSnapshot state,
+        PlayerStateSnapshot actor,
+        ResolutionQueue resolution,
+        string prompt,
+        int sourceCardInstanceId,
+        GameEvent triggerEvent,
+        string timing,
+        int listenerCardInstanceId,
+        int abilityIndex,
+        int effectIndex,
+        Func<string, ExtensionCardData> resolve,
+        System.Random random)
+    {
+        if (state == null || actor == null || resolution == null || resolve == null || state.Players == null)
+            return GameRuleResult.Rejected("Invalid replace-top-card effect.", resolution != null ? resolution.Events.SnapshotHistory() : null);
+        List<string> targets = OtherPlayersFromActorToLeft(state, actor, resolution);
+        return ContinueReplaceEachOtherTopCard(state, actor, resolution, targets, prompt, sourceCardInstanceId,
+            triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, resolve, random);
+    }
+
+    public static GameRuleResult ResolveSupplyContinuation(
+        GameStateSnapshot state,
+        PlayerStateSnapshot actor,
+        ResolutionQueue resolution,
+        PendingDecisionSnapshot continuation,
+        Func<string, ExtensionCardData> resolve,
+        System.Random random)
+    {
+        if (state == null || actor == null || resolution == null || continuation == null || resolve == null ||
+            !IsSupplyContinuation(continuation.Operation))
+            return GameRuleResult.Rejected("Replace-top-card continuation is invalid.", resolution != null ? resolution.Events.SnapshotHistory() : null);
+
+        string targetPlayerId = continuation.Operation.Substring(ReplaceEachOtherTopPrefix.Length);
+        PlayerStateSnapshot target = FindPlayer(state, targetPlayerId);
+        List<string> selected = resolution.TakeSelectedDefinitionIds();
+        if (target == null || selected.Count != 1)
+            return GameRuleResult.Rejected("Replace-top-card gain selection is invalid.", resolution.Events.SnapshotHistory());
+        if (!GainRules.TryGainFromSupply(state, target, selected[0], CardZone.Discard,
+                continuation.SourceCardInstanceId, resolution.Events, out _, out string gainError))
+            return GameRuleResult.Rejected(gainError, resolution.Events.SnapshotHistory());
+
+        List<string> remaining = continuation.RemainingPlayerIds != null
+            ? new List<string>(continuation.RemainingPlayerIds)
+            : new List<string>();
+        return ContinueReplaceEachOtherTopCard(state, actor, resolution, remaining, continuation.Prompt,
+            continuation.SourceCardInstanceId, RestoreEvent(continuation), continuation.Timing,
+            continuation.ListenerCardInstanceId, continuation.AbilityIndex, continuation.EffectIndex, resolve, random);
     }
 
     public static GameRuleResult ResolveContinuation(
@@ -192,6 +246,79 @@ public static class AdvancedActionRules
         {
             PlayerStateSnapshot candidate = state.Players[(actorIndex + offset) % state.Players.Count];
             if (candidate != null && candidate.Hand != null && candidate.Hand.Count > 0) result.Add(candidate);
+        }
+        return result;
+    }
+
+    private static List<string> OtherPlayersFromActorToLeft(GameStateSnapshot state, PlayerStateSnapshot actor, ResolutionQueue resolution)
+    {
+        List<string> result = new List<string>();
+        if (state == null || state.Players == null || state.Players.Count <= 1 || actor == null) return result;
+        int actorIndex = state.Players.FindIndex(candidate => candidate != null && candidate.PlayerId == actor.PlayerId);
+        if (actorIndex < 0) return result;
+        for (int offset = 1; offset < state.Players.Count; offset++)
+        {
+            PlayerStateSnapshot candidate = state.Players[(actorIndex + offset) % state.Players.Count];
+            if (candidate != null && (resolution == null || !resolution.IsAttackProtected(candidate.PlayerId)))
+                result.Add(candidate.PlayerId);
+        }
+        return result;
+    }
+
+    private static GameRuleResult ContinueReplaceEachOtherTopCard(
+        GameStateSnapshot state,
+        PlayerStateSnapshot actor,
+        ResolutionQueue resolution,
+        List<string> remainingPlayerIds,
+        string prompt,
+        int sourceCardInstanceId,
+        GameEvent triggerEvent,
+        string timing,
+        int listenerCardInstanceId,
+        int abilityIndex,
+        int effectIndex,
+        Func<string, ExtensionCardData> resolve,
+        System.Random random)
+    {
+        List<string> remaining = remainingPlayerIds != null ? new List<string>(remainingPlayerIds) : new List<string>();
+        while (remaining.Count > 0)
+        {
+            string targetId = remaining[0]; remaining.RemoveAt(0);
+            PlayerStateSnapshot target = FindPlayer(state, targetId);
+            if (target == null) continue;
+            if (!TrashRules.TryTrashTopCardOfDeck(state, target, random, sourceCardInstanceId, resolution.Events,
+                    out int trashedInstanceId, out string trashError))
+                return GameRuleResult.Rejected(trashError, resolution.Events.SnapshotHistory());
+            if (trashedInstanceId <= 0) continue;
+            CardInstance trashed = FindCard(state, trashedInstanceId);
+            ExtensionCardData trashedDefinition = trashed != null ? resolve(trashed.DefinitionId) : null;
+            if (trashedDefinition == null)
+                return GameRuleResult.Rejected("Trashed top-card definition could not be resolved.", resolution.Events.SnapshotHistory());
+
+            List<string> candidates = ExactCostSupplyCandidates(state, trashedDefinition.cost, resolve);
+            if (candidates.Count == 0) continue;
+            string operation = ReplaceEachOtherTopPrefix + target.PlayerId;
+            if (!resolution.TrySuspendForSupplyDecision(actor.PlayerId, operation,
+                    string.IsNullOrWhiteSpace(prompt) ? "Choisissez la carte que cet adversaire reçoit." : prompt,
+                    sourceCardInstanceId, 1, 1, candidates, triggerEvent, timing, listenerCardInstanceId,
+                    abilityIndex, effectIndex, out string suspendError))
+                return GameRuleResult.Rejected(suspendError, resolution.Events.SnapshotHistory());
+            resolution.PendingDecision.RemainingPlayerIds.AddRange(remaining);
+            return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+        }
+        return GameRuleResult.Applied(resolution.Events.SnapshotHistory());
+    }
+
+    private static List<string> ExactCostSupplyCandidates(GameStateSnapshot state, int cost,
+        Func<string, ExtensionCardData> resolve)
+    {
+        List<string> result = new List<string>();
+        if (state == null || state.SupplyPiles == null || resolve == null || cost < 0) return result;
+        foreach (SupplyPileSnapshot pile in state.SupplyPiles)
+        {
+            if (pile == null || pile.RemainingCount <= 0 || string.IsNullOrEmpty(pile.DefinitionId)) continue;
+            ExtensionCardData definition = resolve(pile.DefinitionId);
+            if (definition != null && definition.cost == cost) result.Add(pile.DefinitionId);
         }
         return result;
     }

@@ -56,7 +56,8 @@ public static class EffectResolver
         {"choose_supply", ChooseSupply}, {"gain_card", GainCard}, {"gain_selected_supply", GainSelectedSupply},
         {"gain_selected_trash", GainSelectedTrash}, {"trash_selected_supply", TrashSelectedSupply},
         {"reveal_zone", RevealZone}, {"trash_source_card", TrashSourceCard},
-        {"simultaneous_pass_left", SimultaneousPassLeft}
+        {"simultaneous_pass_left", SimultaneousPassLeft},
+        {"replace_each_other_top_card", ReplaceEachOtherTopCard}
     };
 
     public static bool IsSupported(string op) => !string.IsNullOrWhiteSpace(op) && H.ContainsKey(op);
@@ -459,6 +460,15 @@ public static class EffectResolver
         return FromGameRuleResult(AdvancedActionRules.TryStartSimultaneousPassLeft(c.State, c.Actor, c.Resolution,
             e.prompt, c.SourceCardInstanceId, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId,
             c.AbilityIndex, c.EffectIndex));
+    }
+
+    private static EffectResolutionResult ReplaceEachOtherTopCard(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Others(e) || c.Resolution == null || !Cursor(c))
+            return EffectResolutionResult.Rejected("Invalid replace_each_other_top_card effect.");
+        return FromGameRuleResult(AdvancedActionRules.TryStartReplaceEachOtherTopCard(c.State, c.Actor, c.Resolution,
+            e.prompt, c.SourceCardInstanceId, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId,
+            c.AbilityIndex, c.EffectIndex, Def, c.Random));
     }
 
     private static EffectResolutionResult FromGameRuleResult(GameRuleResult result)

@@ -92,6 +92,13 @@ public static class GameRules
             SupplyPileSnapshot pile = s.SupplyPiles != null ? s.SupplyPiles.Find(x => x != null && Eq(x.DefinitionId, id)) : null;
             if (pile == null || pile.RemainingCount <= 0) return GameRuleResult.Rejected("Selected supply pile is no longer available: " + id, q.Events.SnapshotHistory());
         }
+        if (AdvancedActionRules.IsSupplyContinuation(c.Operation))
+        {
+            PlayerStateSnapshot actor = Player(s, s.Resolution.OwnerPlayerId);
+            GameRuleResult advanced = AdvancedActionRules.ResolveSupplyContinuation(s, actor, q, c, resolve, random);
+            if (advanced.Status != GameRuleStatus.Applied) return advanced;
+            return ResumeDecision(s, q, c, resolve, random);
+        }
         return ResumeDecision(s, q, c, resolve, random);
     }
 

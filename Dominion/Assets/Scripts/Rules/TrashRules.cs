@@ -91,6 +91,30 @@ public static class TrashRules
         return TryTrashFromZone(state, owner, CardZone.Hand, instanceId, sourceCardInstanceId, eventBus, out error);
     }
 
+    public static bool TryTrashTopCardOfDeck(
+        GameStateSnapshot state,
+        PlayerStateSnapshot owner,
+        System.Random random,
+        int sourceCardInstanceId,
+        GameEventBus eventBus,
+        out int trashedInstanceId,
+        out string error)
+    {
+        trashedInstanceId = 0;
+        if (state == null || owner == null)
+        {
+            error = "Top-card trash requires a game state and player.";
+            return false;
+        }
+        if (!CardZoneRules.TryMoveTopCardFromDeck(owner, CardZone.Inspected, random, out int instanceId, out error))
+            return false;
+        if (instanceId <= 0) return true;
+        if (!TryTrashFromZone(state, owner, CardZone.Inspected, instanceId, sourceCardInstanceId, eventBus, out error))
+            return false;
+        trashedInstanceId = instanceId;
+        return true;
+    }
+
     public static bool TryTrashFromZone(
         GameStateSnapshot state,
         PlayerStateSnapshot owner,

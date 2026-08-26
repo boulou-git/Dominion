@@ -144,6 +144,23 @@
       ]
     },
     {
+      "id": "magouille",
+      "name": "Magouille",
+      "cost": 3,
+      "types": ["Action", "Attaque"],
+      "image": "magouille.png",
+      "text": "+2 🪙\n\nChaque autre joueur écarte la première carte de sa pioche et reçoit une carte de même coût que vous choisissez.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
+            { "op": "replace_each_other_top_card", "target": "others", "prompt": "Choisissez une carte de même coût que la carte écartée pour cet adversaire." }
+          ]
+        }
+      ]
+    },
+    {
       "id": "baron",
       "name": "Baron",
       "cost": 4,
