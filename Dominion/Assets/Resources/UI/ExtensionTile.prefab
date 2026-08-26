@@ -109,8 +109,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.2, y: 0.2}
   m_AnchorMax: {x: 0.8, y: 0.8}
-  m_AnchoredPosition: {x: 0.000011444092, y: 0.0000076293945}
-  m_SizeDelta: {x: 52.1395, y: 47.6197}
+  m_AnchoredPosition: {x: -0.000011444092, y: 11.005}
+  m_SizeDelta: {x: 31.2789, y: 71.211}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &8108183025768097350
 CanvasRenderer:
@@ -140,7 +140,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 1395869697155817394, guid: 73bc6661fb24c79489b7a7da4a44c6b8, type: 3}
+  m_Sprite: {fileID: -1978504130796149500, guid: c0d554317549a3c47a73dd8b162e6129, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -575,6 +575,7 @@ GameObject:
   - component: {fileID: 4680237686320032222}
   - component: {fileID: 3661559027097915621}
   - component: {fileID: 5962751370934595543}
+  - component: {fileID: 2729645950838429015}
   m_Layer: 0
   m_Name: EnabledToggle
   m_TagString: Untagged
@@ -599,8 +600,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.82, y: 0.72}
   m_AnchorMax: {x: 0.96, y: 0.94}
-  m_AnchoredPosition: {x: -1244, y: -12.329}
-  m_SizeDelta: {x: -109.2844, y: -24.6585}
+  m_AnchoredPosition: {x: -1251.2122, y: -26.3025}
+  m_SizeDelta: {x: -94.8601, y: 3.2885}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &4680237686320032222
 CanvasRenderer:
@@ -688,3 +689,18 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_IsOn: 0
+--- !u!114 &2729645950838429015
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9060922625658084380}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e19747de3f5aca642ab2be37e372fb86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Outline
+  m_EffectColor: {r: 1, g: 1, b: 1, a: 0.5}
+  m_EffectDistance: {x: -2, y: -2}
+  m_UseGraphicAlpha: 1
