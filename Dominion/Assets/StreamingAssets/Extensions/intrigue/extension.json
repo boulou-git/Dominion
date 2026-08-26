@@ -161,6 +161,25 @@
       ]
     },
     {
+      "id": "puits_aux_souhaits",
+      "name": "Puits aux souhaits",
+      "cost": 3,
+      "types": ["Action"],
+      "image": "puits_aux_souhaits.png",
+      "text": "+1 Carte\n+1 Action\n\nNommez une carte, puis révélez la première carte de votre pioche.\n\nS’il s’agit de la carte nommée, prenez-la en main.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+            { "op": "name_card", "target": "self", "prompt": "Nommez une carte." },
+            { "op": "reveal_top_if_named", "target": "self" }
+          ]
+        }
+      ]
+    },
+    {
       "id": "baron",
       "name": "Baron",
       "cost": 4,

@@ -279,6 +279,7 @@ public sealed class ResolutionQueue
     public bool IsAttackProtected(string playerId) => !string.IsNullOrEmpty(playerId) && _snapshot.AttackProtectedPlayerIds.Contains(playerId);
     public List<int> TakeSelectedInstanceIds() { List<int> x = new List<int>(_snapshot.SelectedInstanceIds); _snapshot.SelectedInstanceIds.Clear(); return x; }
     public List<string> TakeSelectedDefinitionIds() { List<string> x = new List<string>(_snapshot.SelectedDefinitionIds); _snapshot.SelectedDefinitionIds.Clear(); return x; }
+    public List<string> TakeSelectedOptionIds() { List<string> x = new List<string>(_snapshot.SelectedOptionIds); _snapshot.SelectedOptionIds.Clear(); return x; }
 
     public void CompleteIfIdle()
     {

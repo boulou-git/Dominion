@@ -46,10 +46,10 @@ public static class EffectResolver
     {
         {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection},
         {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount}, {"draw_to_hand_size_skipping_type", DrawToHandSizeSkippingType},
-        {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile}, {"choose_options", ChooseOptions},
+        {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile}, {"choose_options", ChooseOptions}, {"name_card", NameCard},
         {"choose_each_other_cards", ChooseEachOtherCards}, {"reveal_each_other_cards", RevealEachOtherCards},
         {"reveal_each_other_top_trash_type_except", RevealEachOtherTopTrashTypeExcept},
-        {"inspect_top_cards", InspectTopCards}, {"reveal_top_cards", RevealTopCards}, {"move_all_ordered", MoveAllOrdered},
+        {"inspect_top_cards", InspectTopCards}, {"reveal_top_cards", RevealTopCards}, {"reveal_top_if_named", RevealTopIfNamed}, {"move_all_ordered", MoveAllOrdered},
         {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard},
         {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_others_down_to", DiscardOthersDownTo},
         {"move_selected", MoveSelected}, {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected},
@@ -198,6 +198,36 @@ public static class EffectResolver
             ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(err);
     }
 
+    private static EffectResolutionResult NameCard(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || !Cursor(c))
+            return EffectResolutionResult.Rejected("Invalid name_card effect.");
+
+        List<string> ids = new List<string>();
+        List<string> labels = new List<string>();
+        HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Action<string> addCandidate = definitionId =>
+        {
+            if (string.IsNullOrWhiteSpace(definitionId) || !seen.Add(definitionId)) return;
+            ExtensionCardData definition = Def(definitionId);
+            if (definition == null || string.IsNullOrWhiteSpace(definition.name)) return;
+            ids.Add(definitionId);
+            labels.Add(definition.name);
+        };
+
+        if (c.State.SupplyPiles != null)
+            foreach (SupplyPileSnapshot pile in c.State.SupplyPiles)
+                if (pile != null) addCandidate(pile.DefinitionId);
+        if (c.State.CardInstances != null)
+            foreach (CardInstance card in c.State.CardInstances)
+                if (card != null) addCandidate(card.DefinitionId);
+
+        if (ids.Count == 0) return EffectResolutionResult.Rejected("name_card has no known card definitions in this match.");
+        return c.Resolution.TrySuspendForOptionDecision(c.Actor.PlayerId, "name_card", e.prompt, c.SourceCardInstanceId,
+            1, 1, ids, labels, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)
+            ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(err);
+    }
+
     private static EffectResolutionResult ChooseEachOtherCards(CardEffectData e, EffectExecutionContext c) =>
         ChooseEachOtherCards(e, c, false);
 
@@ -243,6 +273,33 @@ public static class EffectResolver
 
     private static EffectResolutionResult RevealTopCards(CardEffectData e, EffectExecutionContext c) =>
         MoveTopCardsToTemporary(e, c, true);
+
+    private static EffectResolutionResult RevealTopIfNamed(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || c.Resolution.SelectedOptionIds.Count != 1)
+            return EffectResolutionResult.Rejected("reveal_top_if_named requires exactly one named card.");
+        List<int> inspected = CardZoneRules.ResolveZone(c.Actor, CardZone.Inspected);
+        if (inspected == null || inspected.Count > 0)
+            return EffectResolutionResult.Rejected("Cannot reveal a named top card while temporary storage is unavailable or not empty.");
+        if (!CardZoneRules.TryMoveTopCardFromDeck(c.Actor, CardZone.Inspected, c.Random, out int instanceId, out string error))
+            return EffectResolutionResult.Rejected(error);
+        if (instanceId <= 0)
+        {
+            c.Resolution.TakeSelectedOptionIds();
+            return EffectResolutionResult.Applied();
+        }
+
+        CardInstance card = Find(c.State, instanceId);
+        if (card == null) return EffectResolutionResult.Rejected("Revealed card instance could not be resolved.");
+        JournalRules.RecordReveal(c.State, c.Actor, instanceId);
+        string namedDefinitionId = c.Resolution.TakeSelectedOptionIds()[0];
+        CardZone destination = string.Equals(card.DefinitionId, namedDefinitionId, StringComparison.OrdinalIgnoreCase)
+            ? CardZone.Hand
+            : CardZone.Deck;
+        return CardZoneRules.MoveCard(c.Actor, CardZone.Inspected, destination, instanceId)
+            ? EffectResolutionResult.Applied()
+            : EffectResolutionResult.Rejected("Could not return the revealed card to its destination.");
+    }
 
     private static EffectResolutionResult MoveTopCardsToTemporary(CardEffectData e, EffectExecutionContext c, bool publicReveal)
     {
