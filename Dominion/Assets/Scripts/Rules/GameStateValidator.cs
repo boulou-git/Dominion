@@ -330,6 +330,11 @@ public static class GameStateValidator
 
         ValidateKnownUniqueCardIds(decision.CandidateInstanceIds, "decision candidate card", cards, errors);
         ValidateUniqueDefinitionIds(decision.CandidateDefinitionIds, "decision candidate definition", errors);
+        ValidateUniqueDefinitionIds(decision.CandidateOptionLabels, "decision candidate option label", errors);
+        if (string.Equals(decision.Zone, "options", StringComparison.OrdinalIgnoreCase) &&
+            decision.CandidateDefinitionIds != null && decision.CandidateOptionLabels != null &&
+            decision.CandidateDefinitionIds.Count != decision.CandidateOptionLabels.Count)
+            errors.Add("Option decision candidate ids and labels must have matching counts.");
         ValidateKnownUniquePlayerIds(decision.RemainingPlayerIds, "remaining decision player", players, errors);
     }
 

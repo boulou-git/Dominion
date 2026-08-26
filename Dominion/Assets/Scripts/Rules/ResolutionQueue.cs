@@ -60,6 +60,7 @@ public sealed class PendingDecisionSnapshot
     public int MaxSelections;
     public List<int> CandidateInstanceIds = new List<int>();
     public List<string> CandidateDefinitionIds = new List<string>();
+    public List<string> CandidateOptionLabels = new List<string>();
     public List<string> RemainingPlayerIds = new List<string>();
     public int TargetHandSize;
     public GameEventSnapshot TriggerEvent;
@@ -72,7 +73,7 @@ public sealed class PendingDecisionSnapshot
     {
         IsPending = false; DecisionId = string.Empty; PlayerId = string.Empty; Operation = string.Empty;
         Zone = string.Empty; Prompt = string.Empty; SourceCardInstanceId = 0; MinSelections = 0; MaxSelections = 0;
-        CandidateInstanceIds.Clear(); CandidateDefinitionIds.Clear(); RemainingPlayerIds.Clear(); TargetHandSize = 0;
+        CandidateInstanceIds.Clear(); CandidateDefinitionIds.Clear(); CandidateOptionLabels.Clear(); RemainingPlayerIds.Clear(); TargetHandSize = 0;
         TriggerEvent = null; Timing = string.Empty; ListenerCardInstanceId = 0; AbilityIndex = -1; EffectIndex = -1;
     }
 }
@@ -130,6 +131,24 @@ public sealed class ResolutionQueue
         if (!PrepareDecision(playerId, operation, "supply", prompt, sourceCardInstanceId, minSelections, maxSelections, triggerEvent, timing,
                 listenerCardInstanceId, abilityIndex, effectIndex, out PendingDecisionSnapshot decision, out error)) return false;
         if (candidateDefinitionIds != null) decision.CandidateDefinitionIds.AddRange(candidateDefinitionIds); return true;
+    }
+
+    public bool TrySuspendForOptionDecision(string playerId, string operation, string prompt, int sourceCardInstanceId,
+        int minSelections, int maxSelections, IEnumerable<string> candidateOptionIds, IEnumerable<string> candidateOptionLabels,
+        GameEvent triggerEvent, string timing, int listenerCardInstanceId, int abilityIndex, int effectIndex, out string error)
+    {
+        List<string> ids = candidateOptionIds != null ? new List<string>(candidateOptionIds) : new List<string>();
+        List<string> labels = candidateOptionLabels != null ? new List<string>(candidateOptionLabels) : new List<string>();
+        if (ids.Count == 0 || ids.Count != labels.Count)
+        {
+            error = "Option decision requires matching option ids and labels.";
+            return false;
+        }
+        if (!PrepareDecision(playerId, operation, "options", prompt, sourceCardInstanceId, minSelections, maxSelections, triggerEvent, timing,
+                listenerCardInstanceId, abilityIndex, effectIndex, out PendingDecisionSnapshot decision, out error)) return false;
+        decision.CandidateDefinitionIds.AddRange(ids);
+        decision.CandidateOptionLabels.AddRange(labels);
+        return true;
     }
 
     public bool TrySuspendForDiscardDownDecision(string playerId, string prompt, int sourceCardInstanceId, int targetHandSize,
@@ -198,6 +217,20 @@ public sealed class ResolutionQueue
         _snapshot.SelectedInstanceIds.Clear(); _snapshot.LastSelectionCount = selected.Count; decision.Clear(); return true;
     }
 
+    public bool TrySubmitOptionDecision(string playerId, string decisionId, IEnumerable<string> selectedIds, out PendingDecisionSnapshot continuation, out string error)
+    {
+        continuation = null; if (!ValidateDecisionIdentity(playerId, decisionId, out PendingDecisionSnapshot decision, out error)) return false;
+        if (!string.Equals(decision.Zone, "options", StringComparison.OrdinalIgnoreCase)) { error = "Decision is not an option choice."; return false; }
+        List<string> selected = selectedIds != null ? new List<string>(selectedIds) : new List<string>();
+        if (!ValidateSelectionCount(selected.Count, decision, out error)) return false;
+        HashSet<string> candidates = new HashSet<string>(decision.CandidateDefinitionIds, StringComparer.OrdinalIgnoreCase);
+        HashSet<string> unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string id in selected)
+            if (string.IsNullOrEmpty(id) || !candidates.Contains(id) || !unique.Add(id)) { error = "Selection contains an invalid or duplicate option."; return false; }
+        continuation = CloneDecision(decision); _snapshot.SelectedDefinitionIds.Clear(); _snapshot.SelectedDefinitionIds.AddRange(selected);
+        _snapshot.SelectedInstanceIds.Clear(); _snapshot.LastSelectionCount = selected.Count; decision.Clear(); return true;
+    }
+
     private bool ValidateDecisionIdentity(string playerId, string decisionId, out PendingDecisionSnapshot decision, out string error)
     {
         decision = _snapshot.PendingDecision; error = string.Empty;
@@ -235,6 +268,7 @@ public sealed class ResolutionQueue
             TriggerEvent = source.TriggerEvent, Timing = source.Timing, ListenerCardInstanceId = source.ListenerCardInstanceId,
             AbilityIndex = source.AbilityIndex, EffectIndex = source.EffectIndex };
         clone.CandidateInstanceIds.AddRange(source.CandidateInstanceIds); clone.CandidateDefinitionIds.AddRange(source.CandidateDefinitionIds);
+        clone.CandidateOptionLabels.AddRange(source.CandidateOptionLabels);
         clone.RemainingPlayerIds.AddRange(source.RemainingPlayerIds); return clone;
     }
 
@@ -246,6 +280,7 @@ public sealed class ResolutionQueue
         if (state.Resolution.PendingDecision == null) state.Resolution.PendingDecision = new PendingDecisionSnapshot();
         if (state.Resolution.PendingDecision.CandidateInstanceIds == null) state.Resolution.PendingDecision.CandidateInstanceIds = new List<int>();
         if (state.Resolution.PendingDecision.CandidateDefinitionIds == null) state.Resolution.PendingDecision.CandidateDefinitionIds = new List<string>();
+        if (state.Resolution.PendingDecision.CandidateOptionLabels == null) state.Resolution.PendingDecision.CandidateOptionLabels = new List<string>();
         if (state.Resolution.PendingDecision.RemainingPlayerIds == null) state.Resolution.PendingDecision.RemainingPlayerIds = new List<string>();
         if (state.Resolution.SelectedInstanceIds == null) state.Resolution.SelectedInstanceIds = new List<int>();
         if (state.Resolution.SelectedDefinitionIds == null) state.Resolution.SelectedDefinitionIds = new List<string>();

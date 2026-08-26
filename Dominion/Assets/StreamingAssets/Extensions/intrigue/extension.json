@@ -42,6 +42,38 @@
           ]
         }
       ]
+    },
+    {
+      "id": "pion",
+      "name": "Pion",
+      "cost": 2,
+      "types": ["Action"],
+      "image": "pion.png",
+      "text": "Choisissez deux options différentes :\n+1 Carte\n+1 Action\n+1 Achat\n+1 🪙",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            {
+              "op": "choose_options",
+              "target": "self",
+              "min": 2,
+              "max": 2,
+              "prompt": "Choisissez deux options différentes.",
+              "options": [
+                { "id": "card", "label": "+1 Carte" },
+                { "id": "action", "label": "+1 Action" },
+                { "id": "buy", "label": "+1 Achat" },
+                { "id": "coin", "label": "+1 🪙" }
+              ]
+            },
+            { "op": "draw", "target": "self", "amount": 1, "requiresSelectedOption": "card" },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1, "requiresSelectedOption": "action" },
+            { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1, "requiresSelectedOption": "buy" },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1, "requiresSelectedOption": "coin" }
+          ]
+        }
+      ]
     }
   ]
 }

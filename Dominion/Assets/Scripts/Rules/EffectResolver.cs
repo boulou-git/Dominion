@@ -46,7 +46,7 @@ public static class EffectResolver
     {
         {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection},
         {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount}, {"draw_to_hand_size_skipping_type", DrawToHandSizeSkippingType},
-        {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile},
+        {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile}, {"choose_options", ChooseOptions},
         {"choose_each_other_cards", ChooseEachOtherCards}, {"reveal_each_other_cards", RevealEachOtherCards},
         {"reveal_each_other_top_trash_type_except", RevealEachOtherTopTrashTypeExcept},
         {"inspect_top_cards", InspectTopCards}, {"reveal_top_cards", RevealTopCards}, {"move_all_ordered", MoveAllOrdered},
@@ -72,6 +72,14 @@ public static class EffectResolver
         {
             if (c.Resolution == null) return EffectResolutionResult.Rejected("Conditional effect requires an active ResolutionQueue.");
             if (c.Resolution.LastSelectionCount > 0) return EffectResolutionResult.Applied();
+        }
+        if (!string.IsNullOrWhiteSpace(e.requiresSelectedOption))
+        {
+            if (c.Resolution == null) return EffectResolutionResult.Rejected("Option-conditional effect requires an active ResolutionQueue.");
+            bool selected = false;
+            foreach (string optionId in c.Resolution.SelectedDefinitionIds)
+                if (string.Equals(optionId, e.requiresSelectedOption, StringComparison.OrdinalIgnoreCase)) { selected = true; break; }
+            if (!selected) return EffectResolutionResult.Applied();
         }
         return H.TryGetValue(e.op, out Handler h) ? h(e, c) : EffectResolutionResult.Rejected("Unsupported effect operation: " + e.op);
     }
@@ -147,6 +155,28 @@ public static class EffectResolver
         int required = Math.Min(empty, c.Actor.Hand != null ? c.Actor.Hand.Count : 0); if (required <= 0) return EffectResolutionResult.Applied();
         return c.Resolution.TrySuspendForDecision(c.Actor.PlayerId, "choose_cards_per_empty_pile", "hand", e.prompt, c.SourceCardInstanceId,
             required, required, c.Actor.Hand, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)
+            ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(err);
+    }
+
+    private static EffectResolutionResult ChooseOptions(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || !Cursor(c) || e.options == null || e.options.Count == 0)
+            return EffectResolutionResult.Rejected("Invalid choose_options effect.");
+        int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : min;
+        List<string> ids = new List<string>();
+        List<string> labels = new List<string>();
+        HashSet<string> unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (CardChoiceOptionData option in e.options)
+        {
+            if (option == null || string.IsNullOrWhiteSpace(option.id) || string.IsNullOrWhiteSpace(option.label) || !unique.Add(option.id))
+                return EffectResolutionResult.Rejected("choose_options contains an invalid or duplicate option.");
+            ids.Add(option.id);
+            labels.Add(option.label);
+        }
+        max = Math.Min(max, ids.Count);
+        if (min > max) return EffectResolutionResult.Rejected("choose_options does not have enough distinct options.");
+        return c.Resolution.TrySuspendForOptionDecision(c.Actor.PlayerId, "choose_options", e.prompt, c.SourceCardInstanceId,
+            min, max, ids, labels, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)
             ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(err);
     }
 

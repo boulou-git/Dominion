@@ -84,6 +84,18 @@ public sealed class ExtensionCatalogValidationTests
         StringAssert.Contains("cannot require both", error);
     }
 
+    [Test]
+    public void UnknownSelectedOptionCondition_IsRejected()
+    {
+        ExtensionPackageData package = CreatePackage("play", "draw", "self");
+        package.cards[0].abilities[0].effects[0].requiresSelectedOption = "missing";
+
+        bool valid = ExtensionCatalog.TryValidatePackage(package, out string error);
+
+        Assert.That(valid, Is.False);
+        StringAssert.Contains("unknown or not-yet-selected option", error);
+    }
+
     private static ExtensionPackageData CreatePackage(string timing, string operation, string target)
     {
         ExtensionPackageData package = new ExtensionPackageData

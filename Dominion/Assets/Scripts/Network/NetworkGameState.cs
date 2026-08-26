@@ -230,6 +230,16 @@ public static class NetworkGameState
         return CommitState(next);
     }
 
+    public static bool TrySubmitOptionDecision(string requesterPlayerId, string decisionId, string[] selectedOptionIds,
+        int expectedVersion, int expectedAuthorityEpoch)
+    {
+        if (!ValidateDecisionCommand(requesterPlayerId, decisionId, expectedVersion, expectedAuthorityEpoch)) return false;
+        GameStateSnapshot next = Clone(_state);
+        GameRuleResult result = GameRules.TrySubmitOptionDecision(next, requesterPlayerId, decisionId, selectedOptionIds, ResolveCardDefinition, NewRandom());
+        if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning("Rejected SubmitOptionDecision command: " + result.Error); return false; }
+        return CommitState(next);
+    }
+
     private static void CreateSupply(GameStateSnapshot state, int playerCount)
     {
         if (state == null) return;

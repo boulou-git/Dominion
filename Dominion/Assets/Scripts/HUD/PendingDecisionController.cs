@@ -11,6 +11,8 @@ public sealed class PendingDecisionController : MonoBehaviour
 {
     private readonly HashSet<int> _selected = new HashSet<int>();
     private readonly HashSet<string> _selectedSupply = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _selectedOptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Image> _optionButtons = new Dictionary<string, Image>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<CardPointerInteraction, Action> _selectionHandlers = new Dictionary<CardPointerInteraction, Action>();
     private readonly Dictionary<Image, Color> _originalImageColors = new Dictionary<Image, Color>();
     private readonly List<CardSelectionHalo> _selectionHalos = new List<CardSelectionHalo>();
@@ -54,6 +56,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             ClearSupplyDecisionVisuals();
             _selected.Clear();
             _selectedSupply.Clear();
+            _selectedOptions.Clear();
             _submitPending = false;
             _boundDecisionId = decision.DecisionId;
         }
@@ -62,10 +65,17 @@ public sealed class PendingDecisionController : MonoBehaviour
         if (_promptText != null) _promptText.text = string.IsNullOrWhiteSpace(decision.Prompt) ? "Faites un choix." : decision.Prompt;
 
         bool supplyChoice = IsSupplyDecision(decision);
+        bool optionChoice = IsOptionDecision(decision);
         CardZone choiceZone = ResolveDecisionZone(decision);
-        ConfigurePanel(choiceZone, supplyChoice);
+        ConfigurePanel(choiceZone, supplyChoice, optionChoice);
 
-        if (supplyChoice)
+        if (optionChoice)
+        {
+            ClearSupplyDecisionVisuals();
+            if (newDecision) BuildOptionButtons(decision);
+            else RefreshOptionButtons();
+        }
+        else if (supplyChoice)
         {
             if (_externalCardsRoot != null) _externalCardsRoot.gameObject.SetActive(false);
             BindSupplyPiles(decision);
@@ -86,9 +96,12 @@ public sealed class PendingDecisionController : MonoBehaviour
     private static bool IsSupplyDecision(PendingDecisionSnapshot decision) =>
         decision != null && string.Equals(decision.Zone, "supply", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsOptionDecision(PendingDecisionSnapshot decision) =>
+        decision != null && string.Equals(decision.Zone, "options", StringComparison.OrdinalIgnoreCase);
+
     private static CardZone ResolveDecisionZone(PendingDecisionSnapshot decision)
     {
-        if (decision == null || string.IsNullOrWhiteSpace(decision.Zone) || IsSupplyDecision(decision)) return CardZone.Hand;
+        if (decision == null || string.IsNullOrWhiteSpace(decision.Zone) || IsSupplyDecision(decision) || IsOptionDecision(decision)) return CardZone.Hand;
         return CardZoneRules.TryParseZone(decision.Zone, out CardZone zone) ? zone : CardZone.Hand;
     }
 
@@ -165,6 +178,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         ClearExternalCards();
         if (_externalCardsRoot == null || state == null || decision == null) return;
         _externalCardsRoot.gameObject.SetActive(true);
+        ConfigureExternalGrid(new Vector2(82f, 127f), 7);
 
         foreach (int instanceId in decision.CandidateInstanceIds ?? new List<int>())
         {
@@ -188,6 +202,77 @@ public sealed class PendingDecisionController : MonoBehaviour
         LayoutRebuilder.ForceRebuildLayoutImmediate(_externalCardsRoot);
     }
 
+    private void BuildOptionButtons(PendingDecisionSnapshot decision)
+    {
+        ClearExternalCards();
+        if (_externalCardsRoot == null || decision == null) return;
+        _externalCardsRoot.gameObject.SetActive(true);
+        ConfigureExternalGrid(new Vector2(185f, 62f), 4);
+        List<string> ids = decision.CandidateDefinitionIds ?? new List<string>();
+        List<string> labels = decision.CandidateOptionLabels ?? new List<string>();
+        for (int index = 0; index < ids.Count; index++)
+        {
+            string optionId = ids[index];
+            if (string.IsNullOrWhiteSpace(optionId)) continue;
+            string label = index < labels.Count && !string.IsNullOrWhiteSpace(labels[index]) ? labels[index] : optionId;
+            GameObject optionObject = new GameObject("DecisionOption_" + optionId, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+            optionObject.transform.SetParent(_externalCardsRoot, false);
+            Image image = optionObject.GetComponent<Image>();
+            image.color = new Color(0.25f, 0.22f, 0.15f, 1f);
+            Button button = optionObject.GetComponent<Button>();
+            button.targetGraphic = image;
+            string capturedId = optionId;
+            button.onClick.AddListener(() => ToggleOptionSelection(capturedId));
+            LayoutElement layout = optionObject.GetComponent<LayoutElement>();
+            layout.preferredWidth = 185f; layout.preferredHeight = 62f;
+
+            GameObject labelObject = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            labelObject.transform.SetParent(optionObject.transform, false);
+            Text text = labelObject.GetComponent<Text>();
+            ConfigureText(text, 17, TextAnchor.MiddleCenter);
+            text.fontStyle = FontStyle.Bold; text.text = label; text.raycastTarget = false;
+            SetAnchors(labelObject.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
+
+            _optionButtons[optionId] = image;
+            _externalCards.Add(optionObject);
+        }
+        RefreshOptionButtons();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_externalCardsRoot);
+    }
+
+    private void ConfigureExternalGrid(Vector2 cellSize, int columns)
+    {
+        if (_externalCardsRoot == null) return;
+        GridLayoutGroup grid = _externalCardsRoot.GetComponent<GridLayoutGroup>();
+        if (grid == null) return;
+        grid.cellSize = cellSize;
+        grid.constraintCount = Math.Max(1, columns);
+    }
+
+    private void ToggleOptionSelection(string optionId)
+    {
+        PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
+        if (decision == null || _submitPending || !IsOptionDecision(decision) ||
+            decision.CandidateDefinitionIds == null || !decision.CandidateDefinitionIds.Contains(optionId)) return;
+        if (_selectedOptions.Contains(optionId)) _selectedOptions.Remove(optionId);
+        else
+        {
+            int max = Math.Max(decision.MinSelections, decision.MaxSelections);
+            if (_selectedOptions.Count >= max) return;
+            _selectedOptions.Add(optionId);
+        }
+        RefreshOptionButtons();
+        RefreshSelectionUi(decision);
+    }
+
+    private void RefreshOptionButtons()
+    {
+        foreach (KeyValuePair<string, Image> pair in _optionButtons)
+            if (pair.Value != null) pair.Value.color = _selectedOptions.Contains(pair.Key)
+                ? new Color(0.51f, 0.40f, 0.18f, 1f)
+                : new Color(0.25f, 0.22f, 0.15f, 1f);
+    }
+
     private void ToggleSelection(int instanceId)
     {
         PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
@@ -205,14 +290,14 @@ public sealed class PendingDecisionController : MonoBehaviour
     private void RefreshSelectionUi(PendingDecisionSnapshot decision)
     {
         if (decision == null) return;
-        int selectedCount = IsSupplyDecision(decision) ? _selectedSupply.Count : _selected.Count;
+        int selectedCount = IsOptionDecision(decision) ? _selectedOptions.Count : IsSupplyDecision(decision) ? _selectedSupply.Count : _selected.Count;
         if (_countText != null)
             _countText.text = decision.MinSelections == decision.MaxSelections
                 ? selectedCount + " / " + decision.MaxSelections
                 : selectedCount + " sélectionnée(s) — " + decision.MinSelections + " à " + decision.MaxSelections;
         if (_confirmButton != null)
             _confirmButton.interactable = selectedCount >= decision.MinSelections && selectedCount <= decision.MaxSelections && !_submitPending;
-        if (!IsSupplyDecision(decision)) RefreshSelectionMarkers();
+        if (!IsSupplyDecision(decision) && !IsOptionDecision(decision)) RefreshSelectionMarkers();
     }
 
     private void RefreshSelectionMarkers()
@@ -257,7 +342,7 @@ public sealed class PendingDecisionController : MonoBehaviour
     {
         PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
         if (decision == null || _submitPending) return;
-        int selectedCount = IsSupplyDecision(decision) ? _selectedSupply.Count : _selected.Count;
+        int selectedCount = IsOptionDecision(decision) ? _selectedOptions.Count : IsSupplyDecision(decision) ? _selectedSupply.Count : _selected.Count;
         if (selectedCount < decision.MinSelections || selectedCount > decision.MaxSelections) return;
 
         PlayersTurnsHandler handler = PlayersTurnsHandler.Instance;
@@ -265,7 +350,12 @@ public sealed class PendingDecisionController : MonoBehaviour
         _submitPending = true;
         if (_confirmButton != null) _confirmButton.interactable = false;
 
-        if (IsSupplyDecision(decision))
+        if (IsOptionDecision(decision))
+        {
+            string[] selected = new string[_selectedOptions.Count]; _selectedOptions.CopyTo(selected);
+            handler.SubmitOptionDecision(decision.DecisionId, selected);
+        }
+        else if (IsSupplyDecision(decision))
         {
             string[] selected = new string[_selectedSupply.Count]; _selectedSupply.CopyTo(selected);
             handler.SubmitSupplyDecision(decision.DecisionId, selected);
@@ -280,7 +370,7 @@ public sealed class PendingDecisionController : MonoBehaviour
     private void HideDecision()
     {
         ClearCardBindings(); ClearExternalCards(); ClearSupplyDecisionVisuals();
-        _selected.Clear(); _selectedSupply.Clear(); _boundDecisionId = string.Empty; _submitPending = false;
+        _selected.Clear(); _selectedSupply.Clear(); _selectedOptions.Clear(); _boundDecisionId = string.Empty; _submitPending = false;
         if (_panel != null) _panel.gameObject.SetActive(false);
     }
 
@@ -307,6 +397,7 @@ public sealed class PendingDecisionController : MonoBehaviour
     {
         foreach (GameObject card in _externalCards) if (card != null) Destroy(card);
         _externalCards.Clear();
+        _optionButtons.Clear();
     }
 
     private void EnsurePanel()
@@ -336,13 +427,13 @@ public sealed class PendingDecisionController : MonoBehaviour
         ConfigureText(_confirmText, 16, TextAnchor.MiddleCenter); _confirmText.fontStyle = FontStyle.Bold; _confirmText.text = "VALIDER"; _confirmText.raycastTarget = false;
         SetAnchors(buttonTextObject.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
         _panel.gameObject.SetActive(false);
-        ConfigurePanel(CardZone.Hand, false);
+        ConfigurePanel(CardZone.Hand, false, false);
     }
 
-    private void ConfigurePanel(CardZone zone, bool supplyChoice)
+    private void ConfigurePanel(CardZone zone, bool supplyChoice, bool optionChoice)
     {
         if (_panel == null) return;
-        bool compact = zone == CardZone.Hand || supplyChoice;
+        bool compact = (zone == CardZone.Hand || supplyChoice) && !optionChoice;
         SetAnchors(_panel, compact ? new Vector2(0.30f, 0.245f) : new Vector2(0.12f, 0.20f), compact ? new Vector2(0.70f, 0.34f) : new Vector2(0.88f, 0.66f));
         SetAnchors(_promptText.rectTransform, compact ? new Vector2(0.03f, 0.40f) : new Vector2(0.03f, 0.82f), compact ? new Vector2(0.70f, 0.94f) : new Vector2(0.78f, 0.97f));
         SetAnchors(_countText.rectTransform, new Vector2(0.03f, 0.06f), compact ? new Vector2(0.70f, 0.42f) : new Vector2(0.62f, 0.16f));

@@ -95,6 +95,15 @@ public static class GameRules
         return ResumeDecision(s, q, c, resolve, random);
     }
 
+    public static GameRuleResult TrySubmitOptionDecision(GameStateSnapshot s, string playerId, string decisionId,
+        string[] selected, Func<string, ExtensionCardData> resolve, System.Random random)
+    {
+        if (!PrepareResume(s, playerId, decisionId, resolve, out ResolutionQueue q, out GameRuleResult rejected)) return rejected;
+        if (!q.TrySubmitOptionDecision(playerId, decisionId, selected, out PendingDecisionSnapshot c, out string err))
+            return GameRuleResult.Rejected(err, q.Events.SnapshotHistory());
+        return ResumeDecision(s, q, c, resolve, random);
+    }
+
     internal static GameRuleResult TryStartAttackReactions(GameStateSnapshot s, PlayerStateSnapshot attacker, CardInstance attack,
         ExtensionCardData definition, ResolutionQueue q, Func<string, ExtensionCardData> resolve, GameEvent triggerEvent = null,
         string timing = null, int listenerCardInstanceId = 0, int abilityIndex = -1, int effectIndex = -1)

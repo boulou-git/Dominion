@@ -47,6 +47,13 @@ public sealed class CardTriggerFilterData
 }
 
 [Serializable]
+public sealed class CardChoiceOptionData
+{
+    public string id;
+    public string label;
+}
+
+[Serializable]
 public sealed class CardEffectData
 {
     public string op;
@@ -72,6 +79,8 @@ public sealed class CardEffectData
     public bool useLastSelectionCost;
     public int costOffset;
     public bool allowNoEligible;
+    public List<CardChoiceOptionData> options = new List<CardChoiceOptionData>();
+    public string requiresSelectedOption;
 }
 
 public static class ExtensionCatalog
@@ -296,6 +305,15 @@ public static class ExtensionCatalog
                     effect.cardId = (effect.cardId ?? string.Empty).Trim();
                     effect.cardType = (effect.cardType ?? string.Empty).Trim();
                     effect.prompt = (effect.prompt ?? string.Empty).Trim();
+                    effect.requiresSelectedOption = (effect.requiresSelectedOption ?? string.Empty).Trim();
+                    if (effect.options == null)
+                        effect.options = new List<CardChoiceOptionData>();
+                    foreach (CardChoiceOptionData option in effect.options)
+                    {
+                        if (option == null) continue;
+                        option.id = (option.id ?? string.Empty).Trim();
+                        option.label = (option.label ?? string.Empty).Trim();
+                    }
                 }
             }
         }
@@ -392,6 +410,7 @@ public static class ExtensionCatalog
                     return false;
                 }
 
+                HashSet<string> availableOptionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 for (int effectIndex = 0; effectIndex < ability.effects.Count; effectIndex++)
                 {
                     CardEffectData effect = ability.effects[effectIndex];
@@ -403,6 +422,18 @@ public static class ExtensionCatalog
 
                     if (!ValidateEffect(card.id, abilityIndex, effectIndex, timing, effect, out error))
                         return false;
+
+                    if (!string.IsNullOrWhiteSpace(effect.requiresSelectedOption) &&
+                        !availableOptionIds.Contains(effect.requiresSelectedOption))
+                    {
+                        error = "Card '" + card.id + "' ability[" + abilityIndex + "] effect[" + effectIndex +
+                                "] references unknown or not-yet-selected option '" + effect.requiresSelectedOption + "'.";
+                        return false;
+                    }
+
+                    if (string.Equals(effect.op, "choose_options", StringComparison.OrdinalIgnoreCase) && effect.options != null)
+                        foreach (CardChoiceOptionData option in effect.options)
+                            if (option != null && !string.IsNullOrWhiteSpace(option.id)) availableOptionIds.Add(option.id);
                 }
             }
         }
@@ -489,6 +520,38 @@ public static class ExtensionCatalog
         {
             error = prefix + " cannot require both an empty and a non-empty previous selection.";
             return false;
+        }
+
+        if (string.Equals(op, "choose_options", StringComparison.OrdinalIgnoreCase))
+        {
+            if (effect.options == null || effect.options.Count == 0)
+            {
+                error = prefix + " requires at least one choice option.";
+                return false;
+            }
+
+            HashSet<string> optionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (CardChoiceOptionData option in effect.options)
+            {
+                if (option == null || string.IsNullOrWhiteSpace(option.id) || string.IsNullOrWhiteSpace(option.label))
+                {
+                    error = prefix + " contains an option with a missing id or label.";
+                    return false;
+                }
+                if (!optionIds.Add(option.id))
+                {
+                    error = prefix + " contains duplicate option id '" + option.id + "'.";
+                    return false;
+                }
+            }
+
+            int optionMin = Math.Max(0, effect.min);
+            int optionMax = effect.max > 0 ? effect.max : optionMin;
+            if (optionMin > optionMax || optionMax > effect.options.Count)
+            {
+                error = prefix + " has option-selection bounds outside its available options.";
+                return false;
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(effect.cardId) && !CardDefinitionReference.IsValid(effect.cardId))
