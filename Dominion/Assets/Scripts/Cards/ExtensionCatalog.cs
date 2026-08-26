@@ -35,6 +35,7 @@ public sealed class CardAbilityData
     public string scope;
     public CardTriggerFilterData filter;
     public bool oncePerTurn;
+    public int minHandSize;
     public List<CardEffectData> effects = new List<CardEffectData>();
 }
 
@@ -86,6 +87,11 @@ public sealed class CardEffectData
     public string requiresSelectedOption;
     public string requiresNoCardType;
     public string conditionZone;
+    public int requiresMinActionsPlayedThisTurn;
+    public int requiresMaxHandSize = -1;
+    public string requiresLastMovedCardType;
+    public bool exactCost;
+    public int minHandSize;
 }
 
 public static class ExtensionCatalog
@@ -411,6 +417,12 @@ public static class ExtensionCatalog
                 if (!ValidateTriggerFilter(card.id, abilityIndex, ability.filter, out error))
                     return false;
 
+                if (ability.minHandSize < 0)
+                {
+                    error = "Card '" + card.id + "' ability[" + abilityIndex + "] has a negative minimum hand size.";
+                    return false;
+                }
+
                 if (ability.effects == null)
                 {
                     error = "Card '" + card.id + "' ability[" + abilityIndex + "] has a null effects list.";
@@ -438,7 +450,8 @@ public static class ExtensionCatalog
                         return false;
                     }
 
-                    if (string.Equals(effect.op, "choose_options", StringComparison.OrdinalIgnoreCase) && effect.options != null)
+                    if ((string.Equals(effect.op, "choose_options", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(effect.op, "choose_options_per_selected_card_types", StringComparison.OrdinalIgnoreCase)) && effect.options != null)
                         foreach (CardChoiceOptionData option in effect.options)
                             if (option != null && !string.IsNullOrWhiteSpace(option.id)) availableOptionIds.Add(option.id);
                 }
@@ -482,6 +495,7 @@ public static class ExtensionCatalog
 
         string op = effect.op.Trim();
         bool isBlockAttack = string.Equals(op, ReactionRules.BlockAttackOperation, StringComparison.OrdinalIgnoreCase);
+        bool isDrawDiscardReaction = string.Equals(op, ReactionRules.DrawDiscardOperation, StringComparison.OrdinalIgnoreCase);
         if (!DeclarativeRuleVocabulary.IsSupportedOperation(op))
         {
             error = prefix + " uses unsupported operation '" + effect.op + "'.";
@@ -489,14 +503,19 @@ public static class ExtensionCatalog
         }
 
         bool isAttackReaction = string.Equals(timing, ReactionRules.AttackReactionTiming, StringComparison.OrdinalIgnoreCase);
-        if (isAttackReaction && !isBlockAttack)
+        if (isAttackReaction && !isBlockAttack && !isDrawDiscardReaction)
         {
-            error = prefix + " uses operation '" + effect.op + "', but attack_reaction currently supports only '" + ReactionRules.BlockAttackOperation + "'.";
+            error = prefix + " uses operation '" + effect.op + "', but attack_reaction does not support it.";
             return false;
         }
         if (isBlockAttack && !isAttackReaction)
         {
             error = prefix + " uses '" + ReactionRules.BlockAttackOperation + "' outside attack_reaction timing.";
+            return false;
+        }
+        if (isDrawDiscardReaction && !isAttackReaction)
+        {
+            error = prefix + " uses '" + ReactionRules.DrawDiscardOperation + "' outside attack_reaction timing.";
             return false;
         }
 
@@ -535,11 +554,18 @@ public static class ExtensionCatalog
             return false;
         }
 
+        if (effect.requiresMinActionsPlayedThisTurn < 0 || effect.requiresMaxHandSize < -1 || effect.minHandSize < 0)
+        {
+            error = prefix + " has an invalid turn/hand-size condition.";
+            return false;
+        }
+
         if (!string.IsNullOrWhiteSpace(effect.requiresNoCardType) &&
             !ValidateOptionalZone(prefix, "conditionZone", effect.conditionZone, out error))
             return false;
 
-        if (string.Equals(op, "choose_options", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(op, "choose_options", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(op, "choose_options_per_selected_card_types", StringComparison.OrdinalIgnoreCase))
         {
             if (effect.options == null || effect.options.Count == 0)
             {

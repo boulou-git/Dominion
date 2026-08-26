@@ -18,6 +18,7 @@ public sealed class GameRuleResult
 public static class GameRules
 {
     public const string ActionPhase = "Action", BuyPhase = "Buy", CleanupPhase = "Cleanup";
+    private const string AttackReactionDrawDiscardPrefix = "attack_reaction_draw_discard|";
 
     public static GameRuleResult TryPlayCard(GameStateSnapshot s, string playerId, int instanceId,
         Func<string, ExtensionCardData> resolve, System.Random random)
@@ -31,6 +32,7 @@ public static class GameRules
         if (!ResolutionQueue.TryBegin(s, playerId, out ResolutionQueue q, out string err)) return GameRuleResult.Rejected(err);
         if (!CardZoneRules.MoveCard(p, CardZone.Hand, CardZone.InPlay, instanceId)) return GameRuleResult.Rejected("Could not move card into play.");
         if (consumesAction) p.Actions--;
+        if (CardDefinitionRules.HasType(d, "Action")) p.ActionsPlayedThisTurn++;
         if (CardDefinitionRules.HasType(d, "Attaque"))
         {
             GameRuleResult rr = TryStartAttackReactions(s, p, i, d, q, resolve); if (rr != null) return rr;
@@ -63,6 +65,8 @@ public static class GameRules
         if (!PrepareResume(s, playerId, decisionId, resolve, out ResolutionQueue q, out GameRuleResult rejected)) return rejected;
         if (!q.TrySubmitDecision(playerId, decisionId, selected, out PendingDecisionSnapshot c, out string err)) return GameRuleResult.Rejected(err, q.Events.SnapshotHistory());
         PlayerStateSnapshot p = Player(s, playerId);
+        if ((c.Operation ?? string.Empty).StartsWith(AttackReactionDrawDiscardPrefix, StringComparison.OrdinalIgnoreCase))
+            return ResolveAttackReactionDrawDiscardDecision(s, p, q, c, resolve, random);
         if (AdvancedActionRules.IsContinuation(c.Operation))
         {
             GameRuleResult advanced = AdvancedActionRules.ResolveContinuation(s, p, q, c, resolve, random);
@@ -109,6 +113,12 @@ public static class GameRules
         if (!PrepareResume(s, playerId, decisionId, resolve, out ResolutionQueue q, out GameRuleResult rejected)) return rejected;
         if (!q.TrySubmitOptionDecision(playerId, decisionId, selected, out PendingDecisionSnapshot c, out string err))
             return GameRuleResult.Rejected(err, q.Events.SnapshotHistory());
+        if (AdvancedActionRules.IsOptionContinuation(c.Operation))
+        {
+            PlayerStateSnapshot responder = Player(s, playerId);
+            GameRuleResult advanced = AdvancedActionRules.ResolveOptionContinuation(s, responder, q, c, resolve, random);
+            if (advanced.Status != GameRuleStatus.Applied) return advanced;
+        }
         return ResumeDecision(s, q, c, resolve, random);
     }
 
@@ -121,12 +131,12 @@ public static class GameRules
         foreach (PlayerStateSnapshot p in s.Players)
         {
             if (p == null || p.PlayerId == attacker.PlayerId) continue;
-            List<int> c = ReactionRules.FindBlockAttackCandidates(s, p, definition, resolve); if (c.Count == 0) continue;
+            List<int> c = ReactionRules.FindAttackReactionCandidates(s, p, definition, resolve); if (c.Count == 0) continue;
             targets.Add(p); candidates.Add(c);
         }
         if (targets.Count == 0) return null;
         List<string> remaining = new List<string>(); for (int i = 1; i < targets.Count; i++) remaining.Add(targets[i].PlayerId);
-        if (!q.TrySuspendForAttackReaction(targets[0].PlayerId, "Vous pouvez révéler une Réaction pour ne pas être affecté par cette Attaque.",
+        if (!q.TrySuspendForAttackReaction(targets[0].PlayerId, "Vous pouvez révéler une Réaction à cette Attaque.",
             attack.InstanceId, candidates[0], remaining, triggerEvent, timing, listenerCardInstanceId > 0 ? listenerCardInstanceId : attack.InstanceId,
             abilityIndex, effectIndex, out string err)) return GameRuleResult.Rejected(err, q.Events.SnapshotHistory());
         return GameRuleResult.WaitingForChoice(q.Events.SnapshotHistory());
@@ -152,16 +162,59 @@ public static class GameRules
         if (selected.Count > 0)
         {
             foreach (int id in selected) JournalRules.RecordReveal(s, responder, id);
-            q.MarkAttackProtected(responder.PlayerId);
+            CardInstance reaction = Card(s, selected[0]); CardInstance attackCard = Card(s, c.SourceCardInstanceId);
+            ExtensionCardData reactionDefinition = reaction != null ? resolve(reaction.DefinitionId) : null;
+            ExtensionCardData attackDefinition = attackCard != null ? resolve(attackCard.DefinitionId) : null;
+            if (!ReactionRules.TryGetAttackReactionEffect(reactionDefinition, attackDefinition, responder.Hand.Count, out CardEffectData effect))
+                return GameRuleResult.Rejected("Selected Attack reaction is no longer valid.", q.Events.SnapshotHistory());
+            if (string.Equals(effect.op, ReactionRules.BlockAttackOperation, StringComparison.OrdinalIgnoreCase))
+                q.MarkAttackProtected(responder.PlayerId);
+            else
+            {
+                if (effect.amount < 0 || effect.max < 0)
+                    return GameRuleResult.Rejected("Invalid draw/discard reaction.", q.Events.SnapshotHistory());
+                if (!CardZoneRules.DrawCards(responder, effect.amount, random, out string drawError))
+                    return GameRuleResult.Rejected(drawError, q.Events.SnapshotHistory());
+                List<string> remainingForReaction = c.RemainingPlayerIds != null ? new List<string>(c.RemainingPlayerIds) : new List<string>();
+                int required = Math.Min(effect.max, responder.Hand != null ? responder.Hand.Count : 0);
+                string operation = AttackReactionDrawDiscardPrefix + c.SourceCardInstanceId;
+                if (!q.TrySuspendForDecision(responder.PlayerId, operation, "hand", "Défaussez " + required + " cartes.",
+                        c.SourceCardInstanceId, required, required, responder.Hand, RestoreEvent(c), c.Timing,
+                        c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string suspendError))
+                    return GameRuleResult.Rejected(suspendError, q.Events.SnapshotHistory());
+                q.PendingDecision.RemainingPlayerIds.AddRange(remainingForReaction);
+                return GameRuleResult.WaitingForChoice(q.Events.SnapshotHistory());
+            }
         }
         CardInstance attack = Card(s, c.SourceCardInstanceId); if (attack == null) return GameRuleResult.Rejected("Attack card was not found while resuming reactions.", q.Events.SnapshotHistory());
         PlayerStateSnapshot attacker = Player(s, attack.OwnerPlayerId); ExtensionCardData d = resolve(attack.DefinitionId);
         if (attacker == null || d == null || !CardDefinitionRules.HasType(d, "Attaque")) return GameRuleResult.Rejected("Attack continuation is invalid.", q.Events.SnapshotHistory());
         List<string> remaining = c.RemainingPlayerIds != null ? new List<string>(c.RemainingPlayerIds) : new List<string>();
+        return ContinueAttackReactions(s, q, c, attack, attacker, d, remaining, resolve, random);
+    }
+
+    private static GameRuleResult ResolveAttackReactionDrawDiscardDecision(GameStateSnapshot s, PlayerStateSnapshot responder,
+        ResolutionQueue q, PendingDecisionSnapshot c, Func<string, ExtensionCardData> resolve, System.Random random)
+    {
+        if (!DiscardRules.TryDiscardSelectedFromHand(s, responder, q.TakeSelectedInstanceIds(), c.SourceCardInstanceId,
+                q.Events, out string discardError)) return GameRuleResult.Rejected(discardError, q.Events.SnapshotHistory());
+        if (!int.TryParse((c.Operation ?? string.Empty).Substring(AttackReactionDrawDiscardPrefix.Length), out int attackId))
+            return GameRuleResult.Rejected("Attack reaction continuation is invalid.", q.Events.SnapshotHistory());
+        CardInstance attack = Card(s, attackId); PlayerStateSnapshot attacker = attack != null ? Player(s, attack.OwnerPlayerId) : null;
+        ExtensionCardData definition = attack != null ? resolve(attack.DefinitionId) : null;
+        if (attack == null || attacker == null || definition == null) return GameRuleResult.Rejected("Attack could not resume after reaction.", q.Events.SnapshotHistory());
+        List<string> remaining = c.RemainingPlayerIds != null ? new List<string>(c.RemainingPlayerIds) : new List<string>();
+        return ContinueAttackReactions(s, q, c, attack, attacker, definition, remaining, resolve, random);
+    }
+
+    private static GameRuleResult ContinueAttackReactions(GameStateSnapshot s, ResolutionQueue q, PendingDecisionSnapshot c,
+        CardInstance attack, PlayerStateSnapshot attacker, ExtensionCardData d, List<string> remaining,
+        Func<string, ExtensionCardData> resolve, System.Random random)
+    {
         while (remaining.Count > 0)
         {
             string id = remaining[0]; remaining.RemoveAt(0); PlayerStateSnapshot p = Player(s, id); if (p == null) continue;
-            List<int> cand = ReactionRules.FindBlockAttackCandidates(s, p, d, resolve); if (cand.Count == 0) continue;
+            List<int> cand = ReactionRules.FindAttackReactionCandidates(s, p, d, resolve); if (cand.Count == 0) continue;
             if (!q.TrySuspendForAttackReaction(p.PlayerId, c.Prompt, attack.InstanceId, cand, remaining, RestoreEvent(c), c.Timing,
                 c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)) return GameRuleResult.Rejected(err, q.Events.SnapshotHistory());
             return GameRuleResult.WaitingForChoice(q.Events.SnapshotHistory());

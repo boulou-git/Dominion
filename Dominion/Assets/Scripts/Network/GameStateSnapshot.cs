@@ -145,4 +145,5 @@ public class PlayerStateSnapshot
     // Additive reduction applied to every card cost during this player's current turn.
     // CostRules clamps effective costs at zero.
     public int CostReductionThisTurn;
+    public int ActionsPlayedThisTurn;
 }

@@ -11,14 +11,23 @@ public static class AdvancedActionRules
     private const string MoveAllOrderedPrefix = "move_all_ordered|";
     private const string SimultaneousPassLeftOperation = "simultaneous_pass_left";
     private const string ReplaceEachOtherTopPrefix = "replace_each_other_top_card|";
+    private const string InsertSelectedIntoDeckPrefix = "insert_selected_into_deck|";
+    private const string EachOtherOptionPrefix = "each_other_discard_or_gain|";
+    private const string EachOtherDiscardPrefix = "each_other_discard_cards|";
 
     public static bool IsContinuation(string operation)
     {
         if (string.IsNullOrEmpty(operation)) return false;
         return operation.StartsWith(DrawToSizePrefix, StringComparison.OrdinalIgnoreCase) ||
                operation.StartsWith(MoveAllOrderedPrefix, StringComparison.OrdinalIgnoreCase) ||
+               operation.StartsWith(EachOtherDiscardPrefix, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(operation, SimultaneousPassLeftOperation, StringComparison.OrdinalIgnoreCase);
     }
+
+    public static bool IsOptionContinuation(string operation) =>
+        !string.IsNullOrEmpty(operation) &&
+        (operation.StartsWith(InsertSelectedIntoDeckPrefix, StringComparison.OrdinalIgnoreCase) ||
+         operation.StartsWith(EachOtherOptionPrefix, StringComparison.OrdinalIgnoreCase));
 
     public static bool IsSupplyContinuation(string operation) =>
         !string.IsNullOrEmpty(operation) && operation.StartsWith(ReplaceEachOtherTopPrefix, StringComparison.OrdinalIgnoreCase);
@@ -123,6 +132,67 @@ public static class AdvancedActionRules
             triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, resolve, random);
     }
 
+    public static GameRuleResult TryStartInsertSelectedIntoDeck(
+        GameStateSnapshot state, PlayerStateSnapshot player, ResolutionQueue resolution, string prompt,
+        int sourceCardInstanceId, GameEvent triggerEvent, string timing, int listenerCardInstanceId,
+        int abilityIndex, int effectIndex)
+    {
+        if (state == null || player == null || resolution == null || player.Hand == null || player.Deck == null)
+            return GameRuleResult.Rejected("Invalid deck-insertion effect.", resolution != null ? resolution.Events.SnapshotHistory() : null);
+        List<int> selected = resolution.TakeSelectedInstanceIds();
+        if (selected.Count != 1 || !player.Hand.Contains(selected[0]) ||
+            !CardZoneRules.MoveCard(player, CardZone.Hand, CardZone.Inspected, selected[0]))
+            return GameRuleResult.Rejected("Deck-insertion selection is invalid.", resolution.Events.SnapshotHistory());
+        List<string> ids = new List<string>(); List<string> labels = new List<string>();
+        for (int position = 0; position <= player.Deck.Count; position++)
+        {
+            ids.Add(position.ToString());
+            labels.Add(position == 0 ? "Tout en dessous" : position == player.Deck.Count ? "Tout au-dessus" : "Position " + (position + 1));
+        }
+        string operation = InsertSelectedIntoDeckPrefix + selected[0];
+        if (!resolution.TrySuspendForOptionDecision(player.PlayerId, operation,
+                string.IsNullOrWhiteSpace(prompt) ? "Choisissez la position dans votre pioche." : prompt,
+                sourceCardInstanceId, 1, 1, ids, labels, triggerEvent, timing, listenerCardInstanceId,
+                abilityIndex, effectIndex, out string error))
+            return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
+        return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+    }
+
+    public static GameRuleResult TryStartEachOtherChooseDiscardOrGain(
+        GameStateSnapshot state, PlayerStateSnapshot actor, ResolutionQueue resolution, int discardCount,
+        string gainCardId, CardZone gainDestination, string prompt, int sourceCardInstanceId,
+        GameEvent triggerEvent, string timing, int listenerCardInstanceId, int abilityIndex, int effectIndex)
+    {
+        if (state == null || actor == null || resolution == null || discardCount < 0 || string.IsNullOrWhiteSpace(gainCardId))
+            return GameRuleResult.Rejected("Invalid opponent discard-or-gain effect.", resolution != null ? resolution.Events.SnapshotHistory() : null);
+        return ContinueEachOtherDiscardOrGain(state, resolution, OtherPlayersFromActorToLeft(state, actor, resolution),
+            discardCount, gainCardId, gainDestination, prompt, sourceCardInstanceId, triggerEvent, timing,
+            listenerCardInstanceId, abilityIndex, effectIndex);
+    }
+
+    public static GameRuleResult ResolveOptionContinuation(
+        GameStateSnapshot state, PlayerStateSnapshot responder, ResolutionQueue resolution,
+        PendingDecisionSnapshot continuation, Func<string, ExtensionCardData> resolve, System.Random random)
+    {
+        if (state == null || responder == null || resolution == null || continuation == null)
+            return GameRuleResult.Rejected("Option continuation is invalid.", resolution != null ? resolution.Events.SnapshotHistory() : null);
+        string operation = continuation.Operation ?? string.Empty;
+        if (operation.StartsWith(InsertSelectedIntoDeckPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!int.TryParse(operation.Substring(InsertSelectedIntoDeckPrefix.Length), out int instanceId))
+                return GameRuleResult.Rejected("Deck-insertion card id is invalid.", resolution.Events.SnapshotHistory());
+            List<string> selected = resolution.TakeSelectedOptionIds();
+            if (selected.Count != 1 || !int.TryParse(selected[0], out int position) || responder.Deck == null ||
+                responder.Inspected == null || !responder.Inspected.Remove(instanceId) || position < 0 || position > responder.Deck.Count)
+                return GameRuleResult.Rejected("Deck-insertion position is invalid.", resolution.Events.SnapshotHistory());
+            responder.Deck.Insert(position, instanceId);
+            return GameRuleResult.Applied(resolution.Events.SnapshotHistory());
+        }
+        if (operation.StartsWith(EachOtherOptionPrefix, StringComparison.OrdinalIgnoreCase))
+            return ResolveEachOtherOption(state, responder, resolution, continuation);
+        return GameRuleResult.Rejected("Unsupported option continuation: " + operation, resolution.Events.SnapshotHistory());
+    }
+
     public static GameRuleResult ResolveSupplyContinuation(
         GameStateSnapshot state,
         PlayerStateSnapshot actor,
@@ -168,10 +238,91 @@ public static class AdvancedActionRules
             return ResolveDrawToHandSizeDecision(state, player, resolution, continuation, resolve, random);
         if (operation.StartsWith(MoveAllOrderedPrefix, StringComparison.OrdinalIgnoreCase))
             return ResolveMoveAllOrderedDecision(player, resolution, continuation);
+        if (operation.StartsWith(EachOtherDiscardPrefix, StringComparison.OrdinalIgnoreCase))
+            return ResolveEachOtherDiscardDecision(state, player, resolution, continuation);
         if (string.Equals(operation, SimultaneousPassLeftOperation, StringComparison.OrdinalIgnoreCase))
             return ResolveSimultaneousPassLeftDecision(state, player, resolution, continuation);
 
         return GameRuleResult.Rejected("Unsupported advanced action continuation: " + operation, resolution.Events.SnapshotHistory());
+    }
+
+    private static GameRuleResult ResolveEachOtherOption(GameStateSnapshot state, PlayerStateSnapshot responder,
+        ResolutionQueue resolution, PendingDecisionSnapshot continuation)
+    {
+        if (!TryParseEachOtherOperation(continuation.Operation, EachOtherOptionPrefix, out int discardCount,
+                out string cardId, out CardZone destination, out string targetId) || responder.PlayerId != targetId)
+            return GameRuleResult.Rejected("Opponent option metadata is invalid.", resolution.Events.SnapshotHistory());
+        List<string> selected = resolution.TakeSelectedOptionIds();
+        if (selected.Count != 1) return GameRuleResult.Rejected("Opponent option selection is invalid.", resolution.Events.SnapshotHistory());
+        List<string> remaining = continuation.RemainingPlayerIds != null ? new List<string>(continuation.RemainingPlayerIds) : new List<string>();
+        if (string.Equals(selected[0], "gain", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!GainRules.TryGainFromSupply(state, responder, cardId, destination, continuation.SourceCardInstanceId,
+                    resolution.Events, out _, out string gainError))
+                return GameRuleResult.Rejected(gainError, resolution.Events.SnapshotHistory());
+            return ContinueEachOtherDiscardOrGain(state, resolution, remaining, discardCount, cardId, destination,
+                continuation.Prompt, continuation.SourceCardInstanceId, RestoreEvent(continuation), continuation.Timing,
+                continuation.ListenerCardInstanceId, continuation.AbilityIndex, continuation.EffectIndex);
+        }
+        if (!string.Equals(selected[0], "discard", StringComparison.OrdinalIgnoreCase) || responder.Hand == null || responder.Hand.Count < discardCount)
+            return GameRuleResult.Rejected("Opponent discard option is no longer valid.", resolution.Events.SnapshotHistory());
+        string operation = EachOtherDiscardPrefix + discardCount + "|" + cardId + "|" + destination.ToString().ToLowerInvariant() + "|" + responder.PlayerId;
+        if (!resolution.TrySuspendForDecision(responder.PlayerId, operation, "hand", "Défaussez " + discardCount + " cartes.",
+                continuation.SourceCardInstanceId, discardCount, discardCount, responder.Hand, RestoreEvent(continuation), continuation.Timing,
+                continuation.ListenerCardInstanceId, continuation.AbilityIndex, continuation.EffectIndex, out string error))
+            return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
+        resolution.PendingDecision.RemainingPlayerIds.AddRange(remaining);
+        return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+    }
+
+    private static GameRuleResult ResolveEachOtherDiscardDecision(GameStateSnapshot state, PlayerStateSnapshot responder,
+        ResolutionQueue resolution, PendingDecisionSnapshot continuation)
+    {
+        if (!TryParseEachOtherOperation(continuation.Operation, EachOtherDiscardPrefix, out int discardCount,
+                out string cardId, out CardZone destination, out string targetId) || responder.PlayerId != targetId)
+            return GameRuleResult.Rejected("Opponent discard metadata is invalid.", resolution.Events.SnapshotHistory());
+        if (!DiscardRules.TryDiscardSelectedFromHand(state, responder, resolution.TakeSelectedInstanceIds(),
+                continuation.SourceCardInstanceId, resolution.Events, out string error))
+            return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
+        List<string> remaining = continuation.RemainingPlayerIds != null ? new List<string>(continuation.RemainingPlayerIds) : new List<string>();
+        return ContinueEachOtherDiscardOrGain(state, resolution, remaining, discardCount, cardId, destination,
+            continuation.Prompt, continuation.SourceCardInstanceId, RestoreEvent(continuation), continuation.Timing,
+            continuation.ListenerCardInstanceId, continuation.AbilityIndex, continuation.EffectIndex);
+    }
+
+    private static GameRuleResult ContinueEachOtherDiscardOrGain(GameStateSnapshot state, ResolutionQueue resolution,
+        List<string> playerIds, int discardCount, string cardId, CardZone destination, string prompt,
+        int sourceCardInstanceId, GameEvent triggerEvent, string timing, int listenerCardInstanceId,
+        int abilityIndex, int effectIndex)
+    {
+        List<string> remaining = playerIds != null ? new List<string>(playerIds) : new List<string>();
+        while (remaining.Count > 0)
+        {
+            string targetId = remaining[0]; remaining.RemoveAt(0);
+            PlayerStateSnapshot target = FindPlayer(state, targetId); if (target == null) continue;
+            List<string> ids = new List<string>(); List<string> labels = new List<string>();
+            if (target.Hand != null && target.Hand.Count >= discardCount) { ids.Add("discard"); labels.Add("Défausser " + discardCount + " cartes"); }
+            ids.Add("gain"); labels.Add("Recevoir " + cardId);
+            string operation = EachOtherOptionPrefix + discardCount + "|" + cardId + "|" + destination.ToString().ToLowerInvariant() + "|" + target.PlayerId;
+            if (!resolution.TrySuspendForOptionDecision(target.PlayerId, operation,
+                    string.IsNullOrWhiteSpace(prompt) ? "Choisissez une option." : prompt, sourceCardInstanceId,
+                    1, 1, ids, labels, triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex, out string error))
+                return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
+            resolution.PendingDecision.RemainingPlayerIds.AddRange(remaining);
+            return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+        }
+        return GameRuleResult.Applied(resolution.Events.SnapshotHistory());
+    }
+
+    private static bool TryParseEachOtherOperation(string operation, string prefix, out int discardCount,
+        out string cardId, out CardZone destination, out string targetId)
+    {
+        discardCount = 0; cardId = string.Empty; destination = CardZone.None; targetId = string.Empty;
+        if (string.IsNullOrEmpty(operation) || !operation.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+        string[] parts = operation.Substring(prefix.Length).Split('|');
+        if (parts.Length != 4 || !int.TryParse(parts[0], out discardCount) || discardCount < 0 ||
+            string.IsNullOrWhiteSpace(parts[1]) || !CardZoneRules.TryParseZone(parts[2], out destination) || string.IsNullOrEmpty(parts[3])) return false;
+        cardId = parts[1]; targetId = parts[3]; return true;
     }
 
     private static GameRuleResult ResolveSimultaneousPassLeftDecision(

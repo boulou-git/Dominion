@@ -19,4 +19,13 @@ public static class CardDefinitionRules
 
         return false;
     }
+
+    public static bool HasAnyType(ExtensionCardData definition, string types)
+    {
+        if (string.IsNullOrWhiteSpace(types)) return false;
+        string[] candidates = types.Split('|');
+        foreach (string candidate in candidates)
+            if (HasType(definition, candidate.Trim())) return true;
+        return false;
+    }
 }

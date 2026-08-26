@@ -2,16 +2,16 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Rules for preventive reactions that must resolve before an Attack's normal CardPlayed effects.
-/// This stays separate from post-event TriggerResolver listeners because prevention must be known
-/// before any target-facing effect is applied.
+/// Rules for reactions that resolve before an Attack's normal CardPlayed effects, including
+/// both preventive reactions and reactions that draw/discard cards.
 /// </summary>
 public static class ReactionRules
 {
     public const string AttackReactionTiming = "attack_reaction";
     public const string BlockAttackOperation = "block_attack";
+    public const string DrawDiscardOperation = "attack_reaction_draw_discard";
 
-    public static List<int> FindBlockAttackCandidates(
+    public static List<int> FindAttackReactionCandidates(
         GameStateSnapshot state,
         PlayerStateSnapshot defender,
         ExtensionCardData attackDefinition,
@@ -28,14 +28,16 @@ public static class ReactionRules
             CardInstance instance = FindCardInstance(state, instanceId);
             if (instance == null) continue;
             ExtensionCardData reactionDefinition = resolveCardDefinition(instance.DefinitionId);
-            if (!CanBlockAttack(reactionDefinition, attackDefinition)) continue;
+            if (!CanReactToAttack(reactionDefinition, attackDefinition, defender.Hand.Count)) continue;
             result.Add(instanceId);
         }
         return result;
     }
 
-    private static bool CanBlockAttack(ExtensionCardData reactionDefinition, ExtensionCardData attackDefinition)
+    public static bool TryGetAttackReactionEffect(ExtensionCardData reactionDefinition, ExtensionCardData attackDefinition,
+        int handSize, out CardEffectData reactionEffect)
     {
+        reactionEffect = null;
         if (reactionDefinition == null || reactionDefinition.abilities == null) return false;
         foreach (CardAbilityData ability in reactionDefinition.abilities)
         {
@@ -43,14 +45,19 @@ public static class ReactionRules
                 continue;
             if (!string.IsNullOrWhiteSpace(ability.scope) && !string.Equals(ability.scope, "in_hand", StringComparison.OrdinalIgnoreCase))
                 continue;
+            if (ability.minHandSize > 0 && handSize < ability.minHandSize) continue;
             if (!FilterMatches(ability.filter, attackDefinition)) continue;
             if (ability.effects == null) continue;
             foreach (CardEffectData effect in ability.effects)
-                if (effect != null && string.Equals(effect.op, BlockAttackOperation, StringComparison.OrdinalIgnoreCase))
-                    return true;
+                if (effect != null && (string.Equals(effect.op, BlockAttackOperation, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(effect.op, DrawDiscardOperation, StringComparison.OrdinalIgnoreCase)))
+                { reactionEffect = effect; return true; }
         }
         return false;
     }
+
+    private static bool CanReactToAttack(ExtensionCardData reactionDefinition, ExtensionCardData attackDefinition, int handSize) =>
+        TryGetAttackReactionEffect(reactionDefinition, attackDefinition, handSize, out _);
 
     private static bool FilterMatches(CardTriggerFilterData filter, ExtensionCardData attackDefinition)
     {

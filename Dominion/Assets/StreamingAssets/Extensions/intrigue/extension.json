@@ -328,6 +328,122 @@
           ]
         }
       ]
+    },
+    {
+      "id": "conspirateur", "name": "Conspirateur", "cost": 4, "types": ["Action"], "image": "conspirateur.png",
+      "text": "+2 🪙\n\nSi vous avez joué au moins 3 cartes Action pendant ce tour, celle-ci comprise : +1 Carte et +1 Action.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
+        { "op": "draw", "target": "self", "amount": 1, "requiresMinActionsPlayedThisTurn": 3 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1, "requiresMinActionsPlayedThisTurn": 3 }
+      ] } ]
+    },
+    {
+      "id": "diplomate", "name": "Diplomate", "cost": 4, "types": ["Action", "Réaction"], "image": "diplomate.png",
+      "text": "+2 Cartes\n\nSi vous avez 5 cartes ou moins en main après avoir pioché, +2 Actions.\n\n———\n\nLorsqu’un autre joueur joue une carte Attaque, vous pouvez révéler cette carte d’une main d’au moins 5 cartes pour piocher 2 cartes, puis défausser 3 cartes.",
+      "abilities": [
+        { "when": "play", "effects": [
+          { "op": "draw", "target": "self", "amount": 2 },
+          { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2, "requiresMaxHandSize": 5 }
+        ] },
+        { "when": "attack_reaction", "scope": "in_hand", "minHandSize": 5, "filter": { "cardType": "Attaque" }, "effects": [
+          { "op": "attack_reaction_draw_discard", "target": "self", "amount": 2, "max": 3 }
+        ] }
+      ]
+    },
+    {
+      "id": "ferronnerie", "name": "Ferronnerie", "cost": 4, "types": ["Action"], "image": "ferronerie.png",
+      "text": "Recevez une carte coûtant jusqu’à 4 🪙.\n\nSi la carte reçue est une Action : +1 Action ; un Trésor : +1 🪙 ; une Victoire : +1 Carte.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "maxCost": 4, "prompt": "Recevez une carte coûtant jusqu’à 4 🪙." },
+        { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1, "requiresLastMovedCardType": "Action" },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1, "requiresLastMovedCardType": "Trésor" },
+        { "op": "draw", "target": "self", "amount": 1, "requiresLastMovedCardType": "Victoire" }
+      ] } ]
+    },
+    {
+      "id": "passage_secret", "name": "Passage secret", "cost": 4, "types": ["Action"], "image": "passage_secret.png",
+      "text": "+2 Cartes\n+1 Action\n\nPrenez une carte de votre main et placez-la où vous le souhaitez dans votre pioche.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 2 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Choisissez une carte à placer dans votre pioche." },
+        { "op": "insert_selected_into_deck", "target": "self", "prompt": "Choisissez sa position dans votre pioche." }
+      ] } ]
+    },
+    {
+      "id": "courtisan", "name": "Courtisan", "cost": 5, "types": ["Action"], "image": "courtisans.png",
+      "text": "Révélez une carte de votre main. Pour chaque type qu’elle possède, choisissez une option différente : +1 Action ; +1 Achat ; +3 🪙 ; recevez un Or.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Révélez une carte de votre main." },
+        { "op": "reveal_selected", "target": "self" },
+        { "op": "choose_options_per_selected_card_types", "target": "self", "prompt": "Choisissez une option différente par type de la carte révélée.", "options": [
+          { "id": "action", "label": "+1 Action" }, { "id": "buy", "label": "+1 Achat" },
+          { "id": "coins", "label": "+3 🪙" }, { "id": "gold", "label": "Recevoir un Or" }
+        ] },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1, "requiresSelectedOption": "action" },
+        { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1, "requiresSelectedOption": "buy" },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 3, "requiresSelectedOption": "coins" },
+        { "op": "gain_card", "target": "self", "cardId": "base:or", "amount": 1, "destinationZone": "discard", "requiresSelectedOption": "gold" }
+      ] } ]
+    },
+    {
+      "id": "larbin", "name": "Larbin", "cost": 5, "types": ["Action", "Attaque"], "image": "larbin.png",
+      "text": "+1 Action\n\nChoisissez : +2 🪙 ; ou défaussez votre main et piochez 4 cartes. Chaque autre joueur ayant au moins 5 cartes en main défausse sa main et pioche 4 cartes.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "choose_options", "target": "self", "min": 1, "max": 1, "prompt": "Choisissez une option.", "options": [
+          { "id": "coins", "label": "+2 🪙" }, { "id": "redraw", "label": "Défausser votre main et piocher 4 cartes" }
+        ] },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "coins" },
+        { "op": "discard_hand_draw", "target": "self", "amount": 4, "requiresSelectedOption": "redraw" },
+        { "op": "discard_hand_draw", "target": "others", "amount": 4, "minHandSize": 5, "requiresSelectedOption": "redraw" }
+      ] } ]
+    },
+    {
+      "id": "patrouille", "name": "Patrouille", "cost": 5, "types": ["Action"], "image": "patrouille.png",
+      "text": "+3 Cartes\n\nRévélez les 4 premières cartes de votre pioche. Prenez en main les cartes Victoire et Malédiction révélées. Replacez les autres dans l’ordre de votre choix.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 3 },
+        { "op": "reveal_top_cards", "target": "self", "amount": 4 },
+        { "op": "move_all_matching_types", "target": "self", "sourceZone": "inspected", "destinationZone": "hand", "cardType": "Victoire|Malédiction" },
+        { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "deck", "prompt": "Replacez les autres cartes sur votre pioche dans l’ordre de votre choix." }
+      ] } ]
+    },
+    {
+      "id": "remplacement", "name": "Remplacement", "cost": 5, "types": ["Action", "Attaque"], "image": "remplacement.png",
+      "text": "Écartez une carte de votre main. Recevez une carte coûtant jusqu’à 2 🪙 de plus. Action ou Trésor : placez-la sur votre pioche. Victoire : chaque autre joueur reçoit une Malédiction.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Écartez une carte de votre main." },
+        { "op": "remember_selected_card_cost", "target": "self" },
+        { "op": "trash_selected", "target": "self" },
+        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "useLastSelectionCost": true, "costOffset": 2, "prompt": "Recevez une carte coûtant jusqu’à 2 🪙 de plus." },
+        { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" },
+        { "op": "move_last_moved", "target": "self", "sourceZone": "discard", "destinationZone": "deck", "requiresLastMovedCardType": "Action|Trésor" },
+        { "op": "gain_card", "target": "others", "cardId": "base:malediction", "amount": 1, "destinationZone": "discard", "requiresLastMovedCardType": "Victoire" }
+      ] } ]
+    },
+    {
+      "id": "bourreau", "name": "Bourreau", "cost": 5, "types": ["Action", "Attaque"], "image": "bourreau.png",
+      "text": "+3 Cartes\n\nChaque autre joueur choisit : défausser 2 cartes ; ou recevoir une Malédiction dans sa main.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 3 },
+        { "op": "each_other_choose_discard_or_gain", "target": "others", "amount": 2, "cardId": "base:malediction", "destinationZone": "hand", "prompt": "Choisissez : défausser 2 cartes, ou recevoir une Malédiction dans votre main." }
+      ] } ]
+    },
+    {
+      "id": "amelioration", "name": "Amélioration", "cost": 5, "types": ["Action"], "image": "amelioration.png",
+      "text": "+1 Carte\n+1 Action\n\nÉcartez une carte de votre main. Recevez une carte coûtant exactement 1 🪙 de plus.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Écartez une carte de votre main." },
+        { "op": "remember_selected_card_cost", "target": "self" },
+        { "op": "trash_selected", "target": "self" },
+        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "useLastSelectionCost": true, "costOffset": 1, "exactCost": true, "allowNoEligible": true, "prompt": "Recevez une carte coûtant exactement 1 🪙 de plus." },
+        { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" }
+      ] } ]
     }
   ]
 }

@@ -46,18 +46,21 @@ public static class EffectResolver
     {
         {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection}, {"reduce_costs_this_turn", ReduceCostsThisTurn},
         {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount}, {"draw_to_hand_size_skipping_type", DrawToHandSizeSkippingType},
-        {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile}, {"choose_options", ChooseOptions}, {"name_card", NameCard},
+        {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile}, {"choose_options", ChooseOptions},
+        {"choose_options_per_selected_card_types", ChooseOptionsPerSelectedCardTypes}, {"name_card", NameCard},
         {"choose_each_other_cards", ChooseEachOtherCards}, {"reveal_each_other_cards", RevealEachOtherCards},
         {"reveal_each_other_top_trash_type_except", RevealEachOtherTopTrashTypeExcept},
         {"inspect_top_cards", InspectTopCards}, {"reveal_top_cards", RevealTopCards}, {"reveal_top_if_named", RevealTopIfNamed}, {"move_all_ordered", MoveAllOrdered},
-        {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard},
+        {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard}, {"reveal_selected", RevealSelected},
         {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_others_down_to", DiscardOthersDownTo},
-        {"move_selected", MoveSelected}, {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected},
+        {"move_selected", MoveSelected}, {"move_last_moved", MoveLastMoved}, {"move_all_matching_types", MoveAllMatchingTypes},
+        {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected}, {"insert_selected_into_deck", InsertSelectedIntoDeck},
         {"choose_supply", ChooseSupply}, {"gain_card", GainCard}, {"gain_selected_supply", GainSelectedSupply},
         {"gain_selected_trash", GainSelectedTrash}, {"trash_selected_supply", TrashSelectedSupply},
         {"reveal_zone", RevealZone}, {"trash_source_card", TrashSourceCard},
-        {"simultaneous_pass_left", SimultaneousPassLeft},
-        {"replace_each_other_top_card", ReplaceEachOtherTopCard}
+        {"simultaneous_pass_left", SimultaneousPassLeft}, {"discard_hand_draw", DiscardHandDraw},
+        {"replace_each_other_top_card", ReplaceEachOtherTopCard}, {"each_other_choose_discard_or_gain", EachOtherChooseDiscardOrGain},
+        {ReactionRules.DrawDiscardOperation, AttackReactionDrawDiscard}
     };
 
     public static bool IsSupported(string op) => !string.IsNullOrWhiteSpace(op) && H.ContainsKey(op);
@@ -96,6 +99,16 @@ public static class EffectResolver
                 return EffectResolutionResult.Rejected("Conditional zone is invalid.");
             if (Eligible(c.State, c.Actor, zone, string.Empty, e.requiresNoCardType, 0).Count > 0)
                 return EffectResolutionResult.Applied();
+        }
+        if (e.requiresMinActionsPlayedThisTurn > 0 && c.Actor.ActionsPlayedThisTurn < e.requiresMinActionsPlayedThisTurn)
+            return EffectResolutionResult.Applied();
+        if (e.requiresMaxHandSize >= 0 && (c.Actor.Hand == null || c.Actor.Hand.Count > e.requiresMaxHandSize))
+            return EffectResolutionResult.Applied();
+        if (!string.IsNullOrWhiteSpace(e.requiresLastMovedCardType))
+        {
+            CardInstance moved = Find(c.State, c.Resolution != null ? c.Resolution.LastMovedCardInstanceId : 0);
+            ExtensionCardData movedDefinition = moved != null ? Def(moved.DefinitionId) : null;
+            if (!CardDefinitionRules.HasAnyType(movedDefinition, e.requiresLastMovedCardType)) return EffectResolutionResult.Applied();
         }
         return H.TryGetValue(e.op, out Handler h) ? h(e, c) : EffectResolutionResult.Rejected("Unsupported effect operation: " + e.op);
     }
@@ -204,6 +217,24 @@ public static class EffectResolver
         return c.Resolution.TrySuspendForOptionDecision(c.Actor.PlayerId, "choose_options", e.prompt, c.SourceCardInstanceId,
             min, max, ids, labels, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)
             ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(err);
+    }
+
+    private static EffectResolutionResult ChooseOptionsPerSelectedCardTypes(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || !Cursor(c) || c.Resolution.SelectedInstanceIds.Count != 1 ||
+            e.options == null || e.options.Count == 0)
+            return EffectResolutionResult.Rejected("Invalid choose_options_per_selected_card_types effect.");
+        CardInstance selected = Find(c.State, c.Resolution.SelectedInstanceIds[0]);
+        ExtensionCardData definition = selected != null ? Def(selected.DefinitionId) : null;
+        int required = definition != null && definition.types != null ? definition.types.Count : 0;
+        if (required <= 0 || required > e.options.Count)
+            return EffectResolutionResult.Rejected("Selected card has an unsupported number of types.");
+        List<string> ids = new List<string>(); List<string> labels = new List<string>();
+        foreach (CardChoiceOptionData option in e.options) { ids.Add(option.id); labels.Add(option.label); }
+        return c.Resolution.TrySuspendForOptionDecision(c.Actor.PlayerId, "choose_options_per_selected_card_types", e.prompt,
+            c.SourceCardInstanceId, required, required, ids, labels, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId,
+            c.AbilityIndex, c.EffectIndex, out string error)
+            ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(error);
     }
 
     private static EffectResolutionResult NameCard(CardEffectData e, EffectExecutionContext c)
@@ -356,20 +387,28 @@ public static class EffectResolver
         c.Resolution.SetLastMovedCardInstanceId(c.Resolution.SelectedInstanceIds[0]); return EffectResolutionResult.Applied();
     }
 
+    private static EffectResolutionResult RevealSelected(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("Invalid reveal_selected effect.");
+        foreach (int id in c.Resolution.SelectedInstanceIds) JournalRules.RecordReveal(c.State, c.Actor, id);
+        return EffectResolutionResult.Applied();
+    }
+
     private static EffectResolutionResult ChooseSupply(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null || !Cursor(c)) return EffectResolutionResult.Rejected("Invalid choose_supply effect.");
-        int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : Math.Max(1, min), ceiling = e.maxCost;
+        int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : Math.Max(1, min), ceiling = e.maxCost, exact = -1;
         if (e.useLastSelectionCost)
         {
             if (c.Resolution.LastSelectedCardCost < 0) return min == 0 ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected("choose_supply requires a remembered selected-card cost.");
             int dyn = c.Resolution.LastSelectedCardCost + e.costOffset; ceiling = ceiling >= 0 ? Math.Min(ceiling, dyn) : dyn;
+            if (e.exactCost) exact = dyn;
         }
         List<string> candidates = new List<string>(); if (c.State.SupplyPiles != null) foreach (SupplyPileSnapshot p in c.State.SupplyPiles)
         {
             if (p == null || p.RemainingCount <= 0 || string.IsNullOrEmpty(p.DefinitionId)) continue; ExtensionCardData d = Def(p.DefinitionId); if (d == null) continue;
             int effectiveCost = CostRules.GetEffectiveCost(c.State, d);
-            if (effectiveCost < 0 || (ceiling >= 0 && effectiveCost > ceiling)) continue; if (!string.IsNullOrWhiteSpace(e.cardId) && !string.Equals(p.DefinitionId, e.cardId, StringComparison.OrdinalIgnoreCase)) continue;
+            if (effectiveCost < 0 || (ceiling >= 0 && effectiveCost > ceiling) || (exact >= 0 && effectiveCost != exact)) continue; if (!string.IsNullOrWhiteSpace(e.cardId) && !string.Equals(p.DefinitionId, e.cardId, StringComparison.OrdinalIgnoreCase)) continue;
             if (!string.IsNullOrWhiteSpace(e.cardType) && !CardDefinitionRules.HasType(d, e.cardType)) continue; candidates.Add(p.DefinitionId);
         }
         max = Math.Min(max, candidates.Count); if (candidates.Count == 0) return (min == 0 || e.allowNoEligible) ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected("choose_supply has no eligible pile.");
@@ -420,6 +459,33 @@ public static class EffectResolver
         return EffectResolutionResult.Applied();
     }
 
+    private static EffectResolutionResult MoveLastMoved(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || c.Resolution.LastMovedCardInstanceId <= 0 ||
+            !CardZoneRules.TryParseZone(e.sourceZone, out CardZone source) ||
+            !CardZoneRules.TryParseZone(e.destinationZone, out CardZone destination) || source == destination)
+            return EffectResolutionResult.Rejected("Invalid move_last_moved effect.");
+        return CardZoneRules.MoveCard(c.Actor, source, destination, c.Resolution.LastMovedCardInstanceId)
+            ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected("Last moved card could not be moved.");
+    }
+
+    private static EffectResolutionResult MoveAllMatchingTypes(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || string.IsNullOrWhiteSpace(e.cardType) ||
+            !CardZoneRules.TryParseZone(e.sourceZone, out CardZone source) ||
+            !CardZoneRules.TryParseZone(e.destinationZone, out CardZone destination) || source == destination)
+            return EffectResolutionResult.Rejected("Invalid move_all_matching_types effect.");
+        List<int> sourceCards = CardZoneRules.ResolveZone(c.Actor, source);
+        if (sourceCards == null) return EffectResolutionResult.Rejected("Matching-type source zone is unavailable.");
+        foreach (int id in new List<int>(sourceCards))
+        {
+            CardInstance card = Find(c.State, id); ExtensionCardData definition = card != null ? Def(card.DefinitionId) : null;
+            if (CardDefinitionRules.HasAnyType(definition, e.cardType) && !CardZoneRules.MoveCard(c.Actor, source, destination, id))
+                return EffectResolutionResult.Rejected("Matching card could not be moved.");
+        }
+        return EffectResolutionResult.Applied();
+    }
+
     private static EffectResolutionResult MoveTopCard(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null || !CardZoneRules.TryParseZone(e.destinationZone, out CardZone d)) return EffectResolutionResult.Rejected("Invalid move_top_card effect.");
@@ -447,6 +513,7 @@ public static class EffectResolver
         if (id <= 0) return EffectResolutionResult.Applied(); List<int> zone = CardZoneRules.ResolveZone(c.Actor, s); if (zone == null || !zone.Contains(id)) return EffectResolutionResult.Rejected("Selected card is no longer in source zone.");
         CardInstance i = Find(c.State, id); ExtensionCardData d = i != null ? Def(i.DefinitionId) : null; if (d == null) return EffectResolutionResult.Rejected("Selected card definition could not be resolved.");
         if (s != CardZone.InPlay && !CardZoneRules.MoveCard(c.Actor, s, CardZone.InPlay, id)) return EffectResolutionResult.Rejected("Selected card could not be moved into play.");
+        if (CardDefinitionRules.HasType(d, "Action")) c.Actor.ActionsPlayedThisTurn++;
         if (CardDefinitionRules.HasType(d, "Attaque"))
         {
             c.Resolution.ClearAttackProtection();
@@ -476,7 +543,12 @@ public static class EffectResolver
     {
         if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("Invalid gain_selected_supply effect.");
         CardZone d = CardZone.Discard; if (!string.IsNullOrWhiteSpace(e.destinationZone) && !CardZoneRules.TryParseZone(e.destinationZone, out d)) return EffectResolutionResult.Rejected("Invalid gain destination.");
-        foreach (string id in c.Resolution.TakeSelectedDefinitionIds()) if (!GainRules.TryGainFromSupply(c.State, c.Actor, id, d, c.SourceCardInstanceId, c.EventBus, out _, out string err)) return EffectResolutionResult.Rejected(err);
+        foreach (string id in c.Resolution.TakeSelectedDefinitionIds())
+        {
+            if (!GainRules.TryGainFromSupply(c.State, c.Actor, id, d, c.SourceCardInstanceId, c.EventBus, out int gainedId, out string err))
+                return EffectResolutionResult.Rejected(err);
+            c.Resolution.SetLastMovedCardInstanceId(gainedId);
+        }
         return EffectResolutionResult.Applied();
     }
 
@@ -529,6 +601,34 @@ public static class EffectResolver
             c.AbilityIndex, c.EffectIndex));
     }
 
+    private static EffectResolutionResult InsertSelectedIntoDeck(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || !Cursor(c))
+            return EffectResolutionResult.Rejected("Invalid insert_selected_into_deck effect.");
+        return FromGameRuleResult(AdvancedActionRules.TryStartInsertSelectedIntoDeck(c.State, c.Actor, c.Resolution,
+            e.prompt, c.SourceCardInstanceId, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId,
+            c.AbilityIndex, c.EffectIndex));
+    }
+
+    private static EffectResolutionResult DiscardHandDraw(CardEffectData e, EffectExecutionContext c)
+    {
+        if ((!Self(e) && !Others(e)) || e.amount < 0 || c.EventBus == null)
+            return EffectResolutionResult.Rejected("Invalid discard_hand_draw effect.");
+        List<PlayerStateSnapshot> targets = new List<PlayerStateSnapshot>();
+        if (Self(e)) targets.Add(c.Actor);
+        else if (c.State.Players != null) foreach (PlayerStateSnapshot player in c.State.Players)
+            if (player != null && player.PlayerId != c.Actor.PlayerId && !SkipAttackTarget(c, player) &&
+                player.Hand != null && player.Hand.Count >= e.minHandSize) targets.Add(player);
+        foreach (PlayerStateSnapshot target in targets)
+        {
+            List<int> cards = target.Hand != null ? new List<int>(target.Hand) : new List<int>();
+            if (!DiscardRules.TryDiscardSelectedFromHand(c.State, target, cards, c.SourceCardInstanceId, c.EventBus, out string discardError))
+                return EffectResolutionResult.Rejected(discardError);
+            if (!CardZoneRules.DrawCards(target, e.amount, c.Random, out string drawError)) return EffectResolutionResult.Rejected(drawError);
+        }
+        return EffectResolutionResult.Applied();
+    }
+
     private static EffectResolutionResult ReplaceEachOtherTopCard(CardEffectData e, EffectExecutionContext c)
     {
         if (!Others(e) || c.Resolution == null || !Cursor(c))
@@ -537,6 +637,21 @@ public static class EffectResolver
             e.prompt, c.SourceCardInstanceId, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId,
             c.AbilityIndex, c.EffectIndex, Def, c.Random));
     }
+
+    private static EffectResolutionResult EachOtherChooseDiscardOrGain(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Others(e) || c.Resolution == null || !Cursor(c) || e.amount < 0 || string.IsNullOrWhiteSpace(e.cardId))
+            return EffectResolutionResult.Rejected("Invalid each_other_choose_discard_or_gain effect.");
+        CardZone destination = CardZone.Discard;
+        if (!string.IsNullOrWhiteSpace(e.destinationZone) && !CardZoneRules.TryParseZone(e.destinationZone, out destination))
+            return EffectResolutionResult.Rejected("Invalid alternate-gain destination.");
+        return FromGameRuleResult(AdvancedActionRules.TryStartEachOtherChooseDiscardOrGain(c.State, c.Actor, c.Resolution,
+            e.amount, e.cardId, destination, e.prompt, c.SourceCardInstanceId, c.TriggerEvent, c.Timing,
+            c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex));
+    }
+
+    private static EffectResolutionResult AttackReactionDrawDiscard(CardEffectData e, EffectExecutionContext c) =>
+        EffectResolutionResult.Rejected("attack_reaction_draw_discard is resolved by the pre-Attack reaction pipeline.");
 
     private static EffectResolutionResult FromGameRuleResult(GameRuleResult result)
     {
