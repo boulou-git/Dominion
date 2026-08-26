@@ -57,6 +57,9 @@ public sealed class GameScreenController : MonoBehaviour
 
     private void Awake()
     {
+        if (GetComponent<TrashPileViewController>() == null)
+            gameObject.AddComponent<TrashPileViewController>();
+
         ResolveDynamicRoots();
 
         if (_nextPhaseButton != null)
