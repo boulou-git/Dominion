@@ -3,7 +3,8 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Stable zone vocabulary used by the deterministic rules layer.
-/// None is reserved for events/operations that do not target a player card zone.
+/// None is reserved for events/operations that do not target a card zone.
+/// Trash is match-wide/public and therefore requires a GameStateSnapshot to resolve.
 /// </summary>
 public enum CardZone
 {
@@ -13,6 +14,7 @@ public enum CardZone
     Discard,
     InPlay,
     Inspected,
+    Trash,
 
     // Compatibility alias for in-progress snapshots/effects created before the
     // private inspected zone was named correctly. This does NOT imply public reveal.
@@ -37,9 +39,16 @@ public static class CardZoneRules
         if (string.Equals(normalized, "inspected", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(normalized, "revealed", StringComparison.OrdinalIgnoreCase))
         { zone = CardZone.Inspected; return true; }
+        if (string.Equals(normalized, "trash", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalized, "trashed", StringComparison.OrdinalIgnoreCase))
+        { zone = CardZone.Trash; return true; }
         return false;
     }
 
+    /// <summary>
+    /// Resolves player-owned zones only. Match-wide zones such as Trash intentionally
+    /// return null here so callers cannot accidentally treat them as owned by a player.
+    /// </summary>
     public static List<int> ResolveZone(PlayerStateSnapshot player, CardZone zone)
     {
         if (player == null) return null;
@@ -56,6 +65,22 @@ public static class CardZoneRules
         }
     }
 
+    /// <summary>
+    /// Resolves both player-owned zones and match-wide public zones.
+    /// Trash belongs to the match, not to any individual player.
+    /// </summary>
+    public static List<int> ResolveZone(GameStateSnapshot state, PlayerStateSnapshot player, CardZone zone)
+    {
+        if (zone == CardZone.Trash)
+        {
+            if (state == null) return null;
+            if (state.TrashedCards == null) state.TrashedCards = new List<int>();
+            return state.TrashedCards;
+        }
+
+        return ResolveZone(player, zone);
+    }
+
     public static bool MoveCard(List<int> source, List<int> destination, int instanceId)
     {
         if (source == null || destination == null || instanceId <= 0) return false;
@@ -69,6 +94,16 @@ public static class CardZoneRules
     public static bool MoveCard(PlayerStateSnapshot player, CardZone source, CardZone destination, int instanceId)
     {
         return MoveCard(ResolveZone(player, source), ResolveZone(player, destination), instanceId);
+    }
+
+    /// <summary>
+    /// Moves a card between any resolvable zones, including the match-wide Trash.
+    /// This only moves the physical instance id; ownership changes are a separate
+    /// semantic operation and must be performed by the rule that gains/transfers it.
+    /// </summary>
+    public static bool MoveCard(GameStateSnapshot state, PlayerStateSnapshot player, CardZone source, CardZone destination, int instanceId)
+    {
+        return MoveCard(ResolveZone(state, player, source), ResolveZone(state, player, destination), instanceId);
     }
 
     public static bool MoveAll(List<int> source, List<int> destination, bool reverseOrder = false)
@@ -88,6 +123,11 @@ public static class CardZoneRules
         return MoveAll(ResolveZone(player, source), ResolveZone(player, destination), reverseOrder);
     }
 
+    public static bool MoveAll(GameStateSnapshot state, PlayerStateSnapshot player, CardZone source, CardZone destination, bool reverseOrder = false)
+    {
+        return MoveAll(ResolveZone(state, player, source), ResolveZone(state, player, destination), reverseOrder);
+    }
+
     public static bool Shuffle(List<int> cards, System.Random random)
     {
         if (cards == null || random == null) return false;
@@ -100,7 +140,7 @@ public static class CardZoneRules
     }
 
     /// <summary>
-    /// Moves the top card of a player's deck to another zone. If the deck is empty,
+    /// Moves the top card of a player's deck to another player-owned zone. If the deck is empty,
     /// the discard pile is reshuffled first, exactly like drawing a card.
     /// Returns instanceId = 0 when no card is available in either deck or discard.
     /// </summary>
@@ -110,8 +150,8 @@ public static class CardZoneRules
         instanceId = 0;
         error = string.Empty;
         if (player == null) { error = "Player is null."; return false; }
-        if (destination == CardZone.None || destination == CardZone.Deck)
-        { error = "Top-deck movement requires a destination other than deck."; return false; }
+        if (destination == CardZone.None || destination == CardZone.Deck || destination == CardZone.Trash)
+        { error = "Top-deck movement requires a player-owned destination other than deck."; return false; }
 
         List<int> destinationZone = ResolveZone(player, destination);
         if (destinationZone == null)
