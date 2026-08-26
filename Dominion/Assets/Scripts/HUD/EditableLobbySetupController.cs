@@ -33,6 +33,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private readonly List<GameObject> _spawnedExtensions = new List<GameObject>();
     private readonly List<GameObject> _spawnedCards = new List<GameObject>();
     private readonly List<GameObject> _spawnedRevealCards = new List<GameObject>();
+    private readonly Dictionary<RectTransform, float> _extensionTileAspectRatios = new Dictionary<RectTransform, float>();
 
     private GameSetupConfig _config;
     private string _viewedExtensionId;
@@ -208,6 +209,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private void RebuildExtensions()
     {
         Clear(_spawnedExtensions);
+        _extensionTileAspectRatios.Clear();
         if (_extensionsRoot == null || _extensionTilePrefab == null)
             return;
 
@@ -233,7 +235,10 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
                 value => SetExtensionEnabled(extensionId, value));
 
             _spawnedExtensions.Add(tile.gameObject);
+            RememberExtensionTileAspectRatio(tile);
         }
+
+        ApplyExtensionTileAspectRatios();
     }
 
     private void RebuildCards()
@@ -559,6 +564,51 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         if (ExtensionCatalog.All.Count > 0)
             _viewedExtensionId = ExtensionCatalog.All[0].id;
+    }
+
+    private void OnRectTransformDimensionsChange()
+    {
+        ApplyExtensionTileAspectRatios();
+    }
+
+    // Width is assigned by the scroll view's VerticalLayoutGroup. Height follows the
+    // aspect ratio authored on ExtensionTile.prefab's LayoutElement, so visual sizing
+    // remains editable in one place in the Inspector.
+    private void RememberExtensionTileAspectRatio(ExtensionTileView tile)
+    {
+        if (tile == null)
+            return;
+
+        LayoutElement layout = tile.GetComponent<LayoutElement>();
+        RectTransform rect = tile.GetComponent<RectTransform>();
+        if (layout == null || rect == null || layout.preferredWidth <= 0f || layout.preferredHeight <= 0f)
+            return;
+
+        _extensionTileAspectRatios[rect] = layout.preferredWidth / layout.preferredHeight;
+    }
+
+    private void ApplyExtensionTileAspectRatios()
+    {
+        if (_extensionsRoot == null || _extensionTileAspectRatios.Count == 0)
+            return;
+
+        VerticalLayoutGroup listLayout = _extensionsRoot.GetComponent<VerticalLayoutGroup>();
+        float width = _extensionsRoot.rect.width;
+        if (listLayout != null)
+            width -= listLayout.padding.left + listLayout.padding.right;
+        if (width <= 0f)
+            return;
+
+        foreach (KeyValuePair<RectTransform, float> pair in _extensionTileAspectRatios)
+        {
+            if (pair.Key == null || pair.Value <= 0f)
+                continue;
+            LayoutElement layout = pair.Key.GetComponent<LayoutElement>();
+            if (layout != null)
+                layout.preferredHeight = width / pair.Value;
+        }
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_extensionsRoot);
     }
 
     /// <summary>
