@@ -10,8 +10,8 @@ public sealed class StartupSplashController : MonoBehaviour
     private const string PrefabPath = "UI/StartupSplash";
 
     [SerializeField] private CanvasGroup _canvasGroup;
-    [SerializeField, Min(0f)] private float _displayDuration = 4f;
-    [SerializeField, Min(0.01f)] private float _fadeDuration = 0.3f;
+    [SerializeField, Min(0f)] private float _displayDuration = 5.5f;
+    [SerializeField, Min(0.01f)] private float _fadeDuration = 0.8f;
 
     private static StartupSplashController _instance;
     private float _shownAt;
