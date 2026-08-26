@@ -17,14 +17,11 @@ public sealed class ConnectionScreenController : MonoBehaviourPunCallbacks
     [SerializeField] private Button _joinButton;
     [SerializeField] private Text _statusText;
 
-    private GameObject _connectionCurtain;
     private bool _joinRequested;
     private string _lastError;
 
     private void Awake()
     {
-        CreateConnectionCurtain();
-
         if (_pseudoInput != null)
         {
             _pseudoInput.characterLimit = 20;
@@ -66,25 +63,6 @@ public sealed class ConnectionScreenController : MonoBehaviourPunCallbacks
             RequestJoin();
     }
 
-    private void CreateConnectionCurtain()
-    {
-        GameObject curtain = new GameObject("PhotonConnectionCurtain", typeof(RectTransform), typeof(Image));
-        curtain.transform.SetParent(transform, false);
-
-        RectTransform rect = curtain.GetComponent<RectTransform>();
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-
-        Image image = curtain.GetComponent<Image>();
-        image.color = Color.black;
-        image.raycastTarget = true;
-
-        curtain.transform.SetAsLastSibling();
-        _connectionCurtain = curtain;
-    }
-
     private void OnPseudoChanged(string value)
     {
         _lastError = string.Empty;
@@ -121,9 +99,6 @@ public sealed class ConnectionScreenController : MonoBehaviourPunCallbacks
     {
         bool inRoom = PhotonNetwork.InRoom;
         bool networkReady = PhotonNetwork.IsConnectedAndReady;
-
-        if (_connectionCurtain != null)
-            _connectionCurtain.SetActive(!networkReady && !inRoom);
 
         if (_visualRoot != null)
             _visualRoot.SetActive(!inRoom);
