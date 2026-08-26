@@ -71,6 +71,19 @@ public sealed class ExtensionCatalogValidationTests
         StringAssert.Contains("outside attack_reaction", error);
     }
 
+    [Test]
+    public void ContradictorySelectionConditions_AreRejected()
+    {
+        ExtensionPackageData package = CreatePackage("play", "draw", "self");
+        package.cards[0].abilities[0].effects[0].requiresLastSelection = true;
+        package.cards[0].abilities[0].effects[0].requiresNoLastSelection = true;
+
+        bool valid = ExtensionCatalog.TryValidatePackage(package, out string error);
+
+        Assert.That(valid, Is.False);
+        StringAssert.Contains("cannot require both", error);
+    }
+
     private static ExtensionPackageData CreatePackage(string timing, string operation, string target)
     {
         ExtensionPackageData package = new ExtensionPackageData

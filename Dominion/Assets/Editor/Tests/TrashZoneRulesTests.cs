@@ -1,5 +1,7 @@
 #if UNITY_INCLUDE_TESTS
 using NUnit.Framework;
+using System;
+using System.Linq;
 
 public sealed class TrashZoneRulesTests
 {
@@ -69,6 +71,105 @@ public sealed class TrashZoneRulesTests
         Assert.That(player.Discard, Is.Empty);
         Assert.That(state.TrashedCards, Is.Empty);
         Assert.That(card.OwnerPlayerId, Is.EqualTo(player.PlayerId));
+    }
+
+    [Test]
+    public void TrashFromSupply_CreatesPhysicalInstanceAndDecrementsPile()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        state.SupplyPiles.Add(new SupplyPileSnapshot("base:village", 2));
+
+        bool trashed = TrashRules.TryTrashFromSupply(
+            state,
+            player,
+            "base:village",
+            0,
+            null,
+            out int instanceId,
+            out string error);
+
+        Assert.That(trashed, Is.True, error);
+        Assert.That(state.SupplyPiles.Single().RemainingCount, Is.EqualTo(1));
+        CollectionAssert.AreEqual(new[] { instanceId }, state.TrashedCards);
+        CardInstance instance = state.CardInstances.Single(card => card.InstanceId == instanceId);
+        Assert.That(instance.DefinitionId, Is.EqualTo("base:village"));
+        Assert.That(instance.OwnerPlayerId, Is.EqualTo(player.PlayerId));
+        Assert.That(GameStateValidator.TryValidate(state, out string validationError), Is.True, validationError);
+    }
+
+    [Test]
+    public void Rodeuse_CanGainActionFromPublicTrashThroughDeclarativeEffects()
+    {
+        ExtensionCatalog.Reload();
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        Assert.That(CardInstanceRules.TryCreateOwnedCard(state, player, "intrigue:rodeuse", CardZone.Hand,
+            out int rodeuseId, out string rodeuseError), Is.True, rodeuseError);
+        Assert.That(CardInstanceRules.TryCreateOwnedCard(state, player, "base:village", CardZone.Hand,
+            out int villageId, out string villageError), Is.True, villageError);
+        Assert.That(TrashRules.TryTrashFromHand(state, player, villageId, 0, null, out string trashError), Is.True, trashError);
+        state.SupplyPiles.Add(new SupplyPileSnapshot("base:village", 10));
+
+        GameRuleResult played = GameRules.TryPlayCard(state, player.PlayerId, rodeuseId, ResolveDefinition, new Random(1));
+
+        Assert.That(played.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), played.Error);
+        Assert.That(state.Resolution.PendingDecision.Zone, Is.EqualTo("supply"));
+        string supplyDecisionId = state.Resolution.PendingDecision.DecisionId;
+
+        GameRuleResult choseTrashGain = GameRules.TrySubmitSupplyDecision(
+            state, player.PlayerId, supplyDecisionId, Array.Empty<string>(), ResolveDefinition, new Random(1));
+
+        Assert.That(choseTrashGain.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), choseTrashGain.Error);
+        Assert.That(state.Resolution.PendingDecision.Zone, Is.EqualTo("trash"));
+        CollectionAssert.AreEqual(new[] { villageId }, state.Resolution.PendingDecision.CandidateInstanceIds);
+        string trashDecisionId = state.Resolution.PendingDecision.DecisionId;
+
+        GameRuleResult gained = GameRules.TrySubmitDecision(
+            state, player.PlayerId, trashDecisionId, new[] { villageId }, ResolveDefinition, new Random(1));
+
+        Assert.That(gained.Status, Is.EqualTo(GameRuleStatus.Applied), gained.Error);
+        Assert.That(state.TrashedCards, Is.Empty);
+        CollectionAssert.AreEqual(new[] { villageId }, player.Discard);
+        Assert.That(state.CardInstances.Single(card => card.InstanceId == villageId).OwnerPlayerId, Is.EqualTo(player.PlayerId));
+        Assert.That(player.Actions, Is.EqualTo(1));
+        Assert.That(state.Resolution.IsActive, Is.False);
+        Assert.That(GameStateValidator.TryValidate(state, out string validationError), Is.True, validationError);
+    }
+
+    [Test]
+    public void Rodeuse_CanTrashActionFromSupplyThroughDeclarativeEffects()
+    {
+        ExtensionCatalog.Reload();
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        Assert.That(CardInstanceRules.TryCreateOwnedCard(state, player, "intrigue:rodeuse", CardZone.Hand,
+            out int rodeuseId, out string rodeuseError), Is.True, rodeuseError);
+        state.SupplyPiles.Add(new SupplyPileSnapshot("base:village", 2));
+
+        GameRuleResult played = GameRules.TryPlayCard(state, player.PlayerId, rodeuseId, ResolveDefinition, new Random(1));
+
+        Assert.That(played.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), played.Error);
+        CollectionAssert.Contains(state.Resolution.PendingDecision.CandidateDefinitionIds, "base:village");
+        string decisionId = state.Resolution.PendingDecision.DecisionId;
+
+        GameRuleResult trashed = GameRules.TrySubmitSupplyDecision(
+            state, player.PlayerId, decisionId, new[] { "base:village" }, ResolveDefinition, new Random(1));
+
+        Assert.That(trashed.Status, Is.EqualTo(GameRuleStatus.Applied), trashed.Error);
+        Assert.That(state.SupplyPiles.Single().RemainingCount, Is.EqualTo(1));
+        Assert.That(state.TrashedCards.Count, Is.EqualTo(1));
+        int trashedId = state.TrashedCards.Single();
+        Assert.That(state.CardInstances.Single(card => card.InstanceId == trashedId).DefinitionId, Is.EqualTo("base:village"));
+        Assert.That(player.Discard, Is.Empty);
+        Assert.That(player.Actions, Is.EqualTo(1));
+        Assert.That(state.Resolution.IsActive, Is.False);
+        Assert.That(GameStateValidator.TryValidate(state, out string validationError), Is.True, validationError);
+    }
+
+    private static ExtensionCardData ResolveDefinition(string definitionId)
+    {
+        if (string.IsNullOrWhiteSpace(definitionId)) return null;
+        int separator = definitionId.IndexOf(':');
+        if (separator <= 0 || separator >= definitionId.Length - 1) return null;
+        return ExtensionCatalog.FindCard(definitionId.Substring(0, separator), definitionId.Substring(separator + 1));
     }
 
     private static GameStateSnapshot NewState(out PlayerStateSnapshot player)

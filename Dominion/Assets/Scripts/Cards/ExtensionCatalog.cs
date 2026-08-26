@@ -67,6 +67,7 @@ public sealed class CardEffectData
 
     public bool lastMovedOnly;
     public bool requiresLastSelection;
+    public bool requiresNoLastSelection;
     public int maxCost = -1;
     public bool useLastSelectionCost;
     public int costOffset;
@@ -481,6 +482,12 @@ public static class ExtensionCatalog
         if (effect.min < 0 || effect.max < 0)
         {
             error = prefix + " has negative selection bounds.";
+            return false;
+        }
+
+        if (effect.requiresLastSelection && effect.requiresNoLastSelection)
+        {
+            error = prefix + " cannot require both an empty and a non-empty previous selection.";
             return false;
         }
 

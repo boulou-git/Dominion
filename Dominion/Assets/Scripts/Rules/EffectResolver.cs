@@ -53,7 +53,8 @@ public static class EffectResolver
         {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard},
         {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_others_down_to", DiscardOthersDownTo},
         {"move_selected", MoveSelected}, {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected},
-        {"choose_supply", ChooseSupply}, {"gain_card", GainCard}, {"gain_selected_supply", GainSelectedSupply}
+        {"choose_supply", ChooseSupply}, {"gain_card", GainCard}, {"gain_selected_supply", GainSelectedSupply},
+        {"gain_selected_trash", GainSelectedTrash}, {"trash_selected_supply", TrashSelectedSupply}
     };
 
     public static bool IsSupported(string op) => !string.IsNullOrWhiteSpace(op) && H.ContainsKey(op);
@@ -66,6 +67,11 @@ public static class EffectResolver
         {
             if (c.Resolution == null) return EffectResolutionResult.Rejected("Conditional effect requires an active ResolutionQueue.");
             if (c.Resolution.LastSelectionCount <= 0) return EffectResolutionResult.Applied();
+        }
+        if (e.requiresNoLastSelection)
+        {
+            if (c.Resolution == null) return EffectResolutionResult.Rejected("Conditional effect requires an active ResolutionQueue.");
+            if (c.Resolution.LastSelectionCount > 0) return EffectResolutionResult.Applied();
         }
         return H.TryGetValue(e.op, out Handler h) ? h(e, c) : EffectResolutionResult.Rejected("Unsupported effect operation: " + e.op);
     }
@@ -120,11 +126,13 @@ public static class EffectResolver
     private static EffectResolutionResult ChooseCards(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null || !Cursor(c)) return EffectResolutionResult.Rejected("Invalid choose_cards effect.");
-        if (!CardZoneRules.TryParseZone(e.zone, out CardZone z) || (z != CardZone.Hand && z != CardZone.Discard && z != CardZone.Revealed))
-            return EffectResolutionResult.Rejected("choose_cards currently supports hand, discard and inspected zones.");
+        if (!CardZoneRules.TryParseZone(e.zone, out CardZone z) ||
+            (z != CardZone.Hand && z != CardZone.Discard && z != CardZone.Inspected && z != CardZone.Trash))
+            return EffectResolutionResult.Rejected("choose_cards currently supports hand, discard, inspected and trash zones.");
         int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : min;
         List<int> candidates = Eligible(c.State, c.Actor, z, e.cardId, e.cardType, e.lastMovedOnly ? c.Resolution.LastMovedCardInstanceId : 0);
         max = Math.Min(max, candidates.Count);
+        if (candidates.Count == 0 && e.allowNoEligible) { c.Resolution.ClearSelection(); return EffectResolutionResult.Applied(); }
         if (min > candidates.Count) return EffectResolutionResult.Rejected("choose_cards does not have enough eligible cards for its minimum.");
         if (candidates.Count == 0 && min == 0) { c.Resolution.ClearSelection(); return EffectResolutionResult.Applied(); }
         return c.Resolution.TrySuspendForDecision(c.Actor.PlayerId, "choose_cards", e.zone, e.prompt, c.SourceCardInstanceId,
@@ -357,6 +365,27 @@ public static class EffectResolver
         return EffectResolutionResult.Applied();
     }
 
+    private static EffectResolutionResult GainSelectedTrash(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("Invalid gain_selected_trash effect.");
+        CardZone d = CardZone.Discard;
+        if (!string.IsNullOrWhiteSpace(e.destinationZone) && !CardZoneRules.TryParseZone(e.destinationZone, out d))
+            return EffectResolutionResult.Rejected("Invalid gain-from-trash destination.");
+        foreach (int id in c.Resolution.TakeSelectedInstanceIds())
+            if (!GainRules.TryGainFromTrash(c.State, c.Actor, id, d, c.SourceCardInstanceId, c.EventBus, out string err))
+                return EffectResolutionResult.Rejected(err);
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult TrashSelectedSupply(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("Invalid trash_selected_supply effect.");
+        foreach (string id in c.Resolution.TakeSelectedDefinitionIds())
+            if (!TrashRules.TryTrashFromSupply(c.State, c.Actor, id, c.SourceCardInstanceId, c.EventBus, out _, out string err))
+                return EffectResolutionResult.Rejected(err);
+        return EffectResolutionResult.Applied();
+    }
+
     private static EffectResolutionResult FromGameRuleResult(GameRuleResult result)
     {
         if (result == null || result.Status == GameRuleStatus.Applied) return EffectResolutionResult.Applied();
@@ -367,7 +396,7 @@ public static class EffectResolver
 
     private static List<int> Eligible(GameStateSnapshot state, PlayerStateSnapshot p, CardZone z, string cardId, string cardType, int onlyId)
     {
-        List<int> r = new List<int>(); List<int> source = CardZoneRules.ResolveZone(p, z); if (source == null) return r;
+        List<int> r = new List<int>(); List<int> source = CardZoneRules.ResolveZone(state, p, z); if (source == null) return r;
         foreach (int id in source)
         {
             if (onlyId > 0 && id != onlyId) continue; CardInstance i = Find(state, id); if (i == null) continue;

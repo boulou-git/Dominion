@@ -72,7 +72,7 @@ public static class GameRules
         if (operation.StartsWith("reveal_each_other_top_trash_type_except|", StringComparison.OrdinalIgnoreCase))
             return ResolveRevealTrashDecision(s, p, q, c, resolve, random);
         if (!CardZoneRules.TryParseZone(c.Zone, out CardZone choiceZone)) return GameRuleResult.Rejected("Decision source zone is invalid.", q.Events.SnapshotHistory());
-        List<int> source = CardZoneRules.ResolveZone(p, choiceZone); if (source == null) return GameRuleResult.Rejected("Decision source zone is unavailable.", q.Events.SnapshotHistory());
+        List<int> source = CardZoneRules.ResolveZone(s, p, choiceZone); if (source == null) return GameRuleResult.Rejected("Decision source zone is unavailable.", q.Events.SnapshotHistory());
         foreach (int id in q.SelectedInstanceIds) if (!source.Contains(id)) return GameRuleResult.Rejected("Selected card is no longer in the decision source zone.", q.Events.SnapshotHistory());
         if (Eq(c.Operation, "block_attack_reaction")) return ResolveAttackReactionDecision(s, p, q, c, resolve, random);
         if (Eq(c.Operation, "discard_down_to")) return ResolveDiscardDownDecision(s, p, q, c, resolve, random);

@@ -22,6 +22,26 @@
           ]
         }
       ]
+    },
+    {
+      "id": "rodeuse",
+      "name": "Rôdeuse",
+      "cost": 2,
+      "types": ["Action"],
+      "image": "rodeuse.png",
+      "text": "+1 Action\n\nChoisissez : écartez une carte Action de la Réserve ; ou recevez une carte Action parmi les cartes écartées.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+            { "op": "choose_supply", "target": "self", "min": 0, "max": 1, "cardType": "Action", "prompt": "Choisissez une carte Action de la Réserve à écarter, ou passez pour recevoir une carte Action parmi les cartes écartées." },
+            { "op": "trash_selected_supply", "target": "self", "requiresLastSelection": true },
+            { "op": "choose_cards", "target": "self", "zone": "trash", "min": 1, "max": 1, "cardType": "Action", "allowNoEligible": true, "requiresNoLastSelection": true, "prompt": "Recevez une carte Action parmi les cartes écartées." },
+            { "op": "gain_selected_trash", "target": "self", "destinationZone": "discard" }
+          ]
+        }
+      ]
     }
   ]
 }

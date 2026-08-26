@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Pure card-instance creation rules. This is the only place that allocates a new
-/// CardInstance id and attaches the new instance to one of its owner's card zones.
+/// CardInstance id and attaches the new instance to a resolvable player or match zone.
 /// It deliberately does not decide why the card exists (setup, gain, reward, etc.).
 /// </summary>
 public static class CardInstanceRules
@@ -43,7 +43,7 @@ public static class CardInstanceRules
             return false;
         }
 
-        List<int> destinationZone = CardZoneRules.ResolveZone(owner, destination);
+        List<int> destinationZone = CardZoneRules.ResolveZone(state, owner, destination);
         if (destinationZone == null)
         {
             error = "Unsupported destination zone: " + destination;

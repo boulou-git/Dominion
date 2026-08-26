@@ -59,6 +59,12 @@ public static class GainRules
             return false;
         }
 
+        if (destination == CardZone.None || destination == CardZone.Trash)
+        {
+            error = "Supply gain requires a player-owned destination zone.";
+            return false;
+        }
+
         if (!CanGainFromSupply(state, definitionId, out error))
             return false;
 
