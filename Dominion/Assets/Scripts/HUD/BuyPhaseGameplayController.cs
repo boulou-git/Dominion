@@ -160,61 +160,20 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         if (oldViewport != null)
             Destroy(oldViewport.gameObject);
 
-        // Labels share the same row, matching their card groups below.
-        if (baseLabel is RectTransform baseLabelRect)
-            SetAnchors(baseLabelRect, new Vector2(0.025f, 0.82f), new Vector2(0.405f, 0.89f));
-        if (kingdomLabel is RectTransform kingdomLabelRect)
-            SetAnchors(kingdomLabelRect, new Vector2(0.43f, 0.82f), new Vector2(0.975f, 0.89f));
-
-        // 38% for 7 base piles (4 + 3), 54.5% for 10 Kingdom piles (5 + 5).
-        SetAnchors(_baseSupplyRoot, new Vector2(0.025f, 0.055f), new Vector2(0.405f, 0.81f));
-        SetAnchors(_kingdomSupplyRoot, new Vector2(0.43f, 0.055f), new Vector2(0.975f, 0.81f));
-
-        ConfigureReserveGrid(_baseSupplyRoot, 4);
-        ConfigureReserveGrid(_kingdomSupplyRoot, 5);
+        // Layout is authored entirely in GameScreen.prefab. Runtime code only checks
+        // that the required components exist and never overwrites Inspector values.
+        if (_baseSupplyRoot.GetComponent<GridLayoutGroup>() == null ||
+            _kingdomSupplyRoot.GetComponent<GridLayoutGroup>() == null)
+        {
+            Debug.LogError("BaseSupply and KingdomSupply must each define a GridLayoutGroup in GameScreen.prefab.");
+            return;
+        }
 
         _reserveLayoutReady = true;
         LayoutRebuilder.ForceRebuildLayoutImmediate(_baseSupplyRoot);
         LayoutRebuilder.ForceRebuildLayoutImmediate(_kingdomSupplyRoot);
         LayoutRebuilder.ForceRebuildLayoutImmediate(supplyPanel);
         Canvas.ForceUpdateCanvases();
-    }
-
-    private static void ConfigureReserveGrid(RectTransform root, int columns)
-    {
-        if (root == null)
-            return;
-
-        // Only one LayoutGroup may drive a RectTransform. The bootstrap removes the
-        // legacy BaseSupply HorizontalLayoutGroup before this controller is attached.
-        GridLayoutGroup grid = root.GetComponent<GridLayoutGroup>();
-        if (grid == null)
-        {
-            LayoutGroup incompatible = root.GetComponent<LayoutGroup>();
-            if (incompatible != null)
-                incompatible.enabled = false;
-
-            grid = root.gameObject.AddComponent<GridLayoutGroup>();
-        }
-
-        if (grid == null)
-        {
-            Debug.LogError("Could not configure Reserve grid on " + root.name + ".");
-            return;
-        }
-
-        grid.enabled = true;
-        grid.cellSize = new Vector2(96f, 148f);
-        grid.spacing = new Vector2(8f, 8f);
-        grid.padding = new RectOffset(4, 4, 4, 4);
-        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        grid.constraintCount = columns;
-        grid.childAlignment = TextAnchor.MiddleCenter;
-        grid.startAxis = GridLayoutGroup.Axis.Horizontal;
-
-        LayoutElement oldElement = root.GetComponent<LayoutElement>();
-        if (oldElement != null)
-            oldElement.enabled = false;
     }
 
     private void HookCleanupButton()

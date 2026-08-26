@@ -80,6 +80,15 @@ public sealed class BaseSupplyController : MonoBehaviour
 
         foreach (string definitionId in BasePileIds)
         {
+            // Keep the fourth cell of the first row empty so Victory cards start on
+            // row two. The GridLayoutGroup in GameScreen.prefab owns its dimensions.
+            if (string.Equals(definitionId, "base:domaine", StringComparison.OrdinalIgnoreCase))
+            {
+                GameObject gap = new GameObject("BaseRowGap", typeof(RectTransform));
+                gap.transform.SetParent(_baseSupplyRoot, false);
+                _pileObjects.Add(gap);
+            }
+
             ExtensionPackageData extension;
             ExtensionCardData card;
             if (!RoomGameSetup.TryResolveCard(definitionId, out extension, out card))
@@ -92,12 +101,8 @@ public sealed class BaseSupplyController : MonoBehaviour
             GameObject pileObject = new GameObject(
                 "BaseSupply_" + card.id,
                 typeof(RectTransform),
-                typeof(Image),
-                typeof(LayoutElement));
+                typeof(Image));
             pileObject.transform.SetParent(_baseSupplyRoot, false);
-
-            RectTransform cardRect = pileObject.GetComponent<RectTransform>();
-            cardRect.sizeDelta = new Vector2(104f, 160f);
 
             Image image = pileObject.GetComponent<Image>();
             image.sprite = sprite;
@@ -105,20 +110,12 @@ public sealed class BaseSupplyController : MonoBehaviour
             image.preserveAspect = true;
             image.raycastTarget = false;
 
-            LayoutElement layout = pileObject.GetComponent<LayoutElement>();
-            layout.preferredWidth = 104f;
-            layout.minWidth = 104f;
-            layout.preferredHeight = 160f;
-            layout.minHeight = 160f;
-            layout.flexibleWidth = 0f;
-            layout.flexibleHeight = 0f;
-
             Text count = CreateCountBadge(pileObject.transform);
             _countLabels[definitionId] = count;
             _pileObjects.Add(pileObject);
         }
 
-        _built = _pileObjects.Count > 0;
+        _built = _countLabels.Count > 0;
         LayoutRebuilder.ForceRebuildLayoutImmediate(_baseSupplyRoot);
         Canvas.ForceUpdateCanvases();
 

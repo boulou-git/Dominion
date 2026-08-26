@@ -523,9 +523,6 @@ public sealed class GameScreenController : MonoBehaviour
                 typeof(CardPointerInteraction));
             cardObject.transform.SetParent(_kingdomSupplyRoot, false);
 
-            RectTransform cardRect = cardObject.GetComponent<RectTransform>();
-            cardRect.sizeDelta = new Vector2(104f, 160f);
-
             Image image = cardObject.GetComponent<Image>();
             image.sprite = sprite;
             image.color = sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);

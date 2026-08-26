@@ -746,8 +746,8 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 3524281935965480367}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.03, y: 0.045}
-  m_AnchorMax: {x: 0.97, y: 0.63}
+  m_AnchorMin: {x: 0.43, y: 0.055}
+  m_AnchorMax: {x: 0.975, y: 0.81}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -764,15 +764,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.GridLayoutGroup
   m_Padding:
-    m_Left: 0
-    m_Right: 0
-    m_Top: 0
-    m_Bottom: 0
-  m_ChildAlignment: 4
+    m_Left: 4
+    m_Right: 4
+    m_Top: 4
+    m_Bottom: 4
+  m_ChildAlignment: 0
   m_StartCorner: 0
   m_StartAxis: 0
-  m_CellSize: {x: 104, y: 160}
-  m_Spacing: {x: 12, y: 10}
+  m_CellSize: {x: 82, y: 127}
+  m_Spacing: {x: 7, y: 7}
   m_Constraint: 1
   m_ConstraintCount: 5
 --- !u!1 &2237033888325535558
@@ -1416,8 +1416,8 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 3524281935965480367}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.03, y: 0.82}
-  m_AnchorMax: {x: 0.97, y: 0.89}
+  m_AnchorMin: {x: 0.025, y: 0.82}
+  m_AnchorMax: {x: 0.405, y: 0.89}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -2551,8 +2551,8 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 3524281935965480367}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.03, y: 0.635}
-  m_AnchorMax: {x: 0.97, y: 0.7}
+  m_AnchorMin: {x: 0.43, y: 0.82}
+  m_AnchorMax: {x: 0.975, y: 0.89}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -2704,8 +2704,8 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 3524281935965480367}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.03, y: 0.7}
-  m_AnchorMax: {x: 0.97, y: 0.82}
+  m_AnchorMin: {x: 0.025, y: 0.055}
+  m_AnchorMax: {x: 0.405, y: 0.81}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -2718,23 +2718,21 @@ MonoBehaviour:
   m_GameObject: {fileID: 7236052088294007365}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 30649d3a9faa99c48a7b1166b86bf2a0, type: 3}
+  m_Script: {fileID: 11500000, guid: 8a8695521f0d02e499659fee002a26c2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.HorizontalLayoutGroup
   m_Padding:
-    m_Left: 0
-    m_Right: 0
-    m_Top: 0
-    m_Bottom: 0
-  m_ChildAlignment: 4
-  m_Spacing: 8
-  m_ChildForceExpandWidth: 0
-  m_ChildForceExpandHeight: 1
-  m_ChildControlWidth: 0
-  m_ChildControlHeight: 1
-  m_ChildScaleWidth: 0
-  m_ChildScaleHeight: 0
-  m_ReverseArrangement: 0
+    m_Left: 4
+    m_Right: 4
+    m_Top: 4
+    m_Bottom: 4
+  m_ChildAlignment: 0
+  m_StartCorner: 0
+  m_StartAxis: 0
+  m_CellSize: {x: 82, y: 127}
+  m_Spacing: {x: 7, y: 7}
+  m_Constraint: 1
+  m_ConstraintCount: 4
 --- !u!1 &7434371659438631070
 GameObject:
   m_ObjectHideFlags: 0

@@ -65,26 +65,17 @@ public static class DominionGamePrefabBuilder
         RectTransform supplyPanel = PanelRect(center, "SupplyPanel", new Vector2(0f, 0.38f), Vector2.one, Panel);
         ChildText(supplyPanel, "Header", "RÉSERVE", 21, TextAnchor.MiddleLeft, new Vector2(0.025f, 0.90f), new Vector2(0.975f, 0.99f)).fontStyle = FontStyle.Bold;
 
-        Text baseLabel = ChildText(supplyPanel, "BaseSupplyLabel", "CARTES DE BASE", 13, TextAnchor.MiddleLeft, new Vector2(0.03f, 0.82f), new Vector2(0.97f, 0.89f));
+        Text baseLabel = ChildText(supplyPanel, "BaseSupplyLabel", "CARTES DE BASE", 13, TextAnchor.MiddleLeft, new Vector2(0.025f, 0.82f), new Vector2(0.405f, 0.89f));
         baseLabel.color = Muted;
-        RectTransform baseSupply = EmptyRect(supplyPanel, "BaseSupply", new Vector2(0.03f, 0.70f), new Vector2(0.97f, 0.82f));
-        HorizontalLayoutGroup baseLayout = baseSupply.gameObject.AddComponent<HorizontalLayoutGroup>();
-        baseLayout.spacing = 8f;
-        baseLayout.childAlignment = TextAnchor.MiddleCenter;
-        baseLayout.childControlWidth = false;
-        baseLayout.childControlHeight = true;
-        baseLayout.childForceExpandWidth = false;
+        RectTransform baseSupply = EmptyRect(supplyPanel, "BaseSupply", new Vector2(0.025f, 0.055f), new Vector2(0.405f, 0.81f));
+        GridLayoutGroup baseGrid = baseSupply.gameObject.AddComponent<GridLayoutGroup>();
+        ConfigureSupplyGrid(baseGrid, 4);
 
-        Text kingdomLabel = ChildText(supplyPanel, "KingdomLabel", "ROYAUME", 13, TextAnchor.MiddleLeft, new Vector2(0.03f, 0.635f), new Vector2(0.97f, 0.70f));
+        Text kingdomLabel = ChildText(supplyPanel, "KingdomLabel", "ROYAUME", 13, TextAnchor.MiddleLeft, new Vector2(0.43f, 0.82f), new Vector2(0.975f, 0.89f));
         kingdomLabel.color = Muted;
-        RectTransform kingdomSupply = EmptyRect(supplyPanel, "KingdomSupply", new Vector2(0.03f, 0.045f), new Vector2(0.97f, 0.63f));
+        RectTransform kingdomSupply = EmptyRect(supplyPanel, "KingdomSupply", new Vector2(0.43f, 0.055f), new Vector2(0.975f, 0.81f));
         GridLayoutGroup kingdomGrid = kingdomSupply.gameObject.AddComponent<GridLayoutGroup>();
-        kingdomGrid.cellSize = new Vector2(104f, 160f);
-        kingdomGrid.spacing = new Vector2(12f, 10f);
-        kingdomGrid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        kingdomGrid.constraintCount = 5;
-        kingdomGrid.childAlignment = TextAnchor.MiddleCenter;
-        kingdomGrid.startAxis = GridLayoutGroup.Axis.Horizontal;
+        ConfigureSupplyGrid(kingdomGrid, 5);
 
         RectTransform inPlayPanel = PanelRect(center, "InPlayPanel", new Vector2(0f, 0f), new Vector2(1f, 0.355f), Panel);
         Text boardTitle = ChildText(inPlayPanel, "Header", "PLATEAU", 20, TextAnchor.MiddleLeft, new Vector2(0.025f, 0.80f), new Vector2(0.975f, 0.97f));
@@ -192,6 +183,17 @@ public static class DominionGamePrefabBuilder
         all[0] = typeof(RectTransform);
         components.CopyTo(all, 1);
         return new GameObject(name, all);
+    }
+
+    private static void ConfigureSupplyGrid(GridLayoutGroup grid, int columns)
+    {
+        grid.cellSize = new Vector2(82f, 127f);
+        grid.spacing = new Vector2(7f, 7f);
+        grid.padding = new RectOffset(4, 4, 4, 4);
+        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = columns;
+        grid.childAlignment = TextAnchor.UpperLeft;
+        grid.startAxis = GridLayoutGroup.Axis.Horizontal;
     }
 
     private static RectTransform EmptyRect(Transform parent, string name, Vector2 min, Vector2 max)
