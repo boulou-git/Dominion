@@ -25,6 +25,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     private ExtensionCardData _definition;
     private bool _buyable;
     private bool _hasCards = true;
+    private bool _quantityKnown;
     private bool _purchaseAnimationRunning;
 
     private bool _decisionActive;
@@ -84,9 +85,18 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         RefreshAvailabilityVisual();
     }
 
-    public void SetRemaining(int remaining)
+    public void SetRemaining(int? remaining)
     {
-        int value = Mathf.Max(0, remaining);
+        _quantityKnown = remaining.HasValue;
+        if (!remaining.HasValue)
+        {
+            if (_countText != null) _countText.text = "—";
+            EnsureCountBadgeVisible();
+            RefreshAvailabilityVisual();
+            return;
+        }
+
+        int value = Mathf.Max(0, remaining.Value);
         _hasCards = value > 0;
         if (_countText != null) _countText.text = value.ToString();
         EnsureCountBadgeVisible();
@@ -124,6 +134,12 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     {
         if (_image != null)
         {
+            if (!_quantityKnown)
+            {
+                _image.color = AvailableColor;
+                return;
+            }
+
             if (_decisionActive)
                 _image.color = !_hasCards ? EmptyColor : (_decisionCandidate ? AvailableColor : UnavailableColor);
             else

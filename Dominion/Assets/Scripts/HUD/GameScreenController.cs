@@ -78,6 +78,16 @@ public sealed class GameScreenController : MonoBehaviour
         Refresh(NetworkGameState.State);
     }
 
+    private void Start()
+    {
+        // The Game scene can be opened by the room's "game started" property one
+        // network update before the replicated snapshot reaches this client. Retry
+        // once after all scene bootstraps have run, so the Reserve is never left in
+        // the temporary empty state created during that race.
+        NetworkGameState.HydrateFromRoom(true);
+        Refresh(NetworkGameState.State);
+    }
+
     private void OnDestroy()
     {
         NetworkGameState.StateChanged -= Refresh;

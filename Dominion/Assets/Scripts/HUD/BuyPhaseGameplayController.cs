@@ -245,6 +245,10 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
 
     private void RefreshSupplyStates(GameStateSnapshot state, PlayerStateSnapshot localPlayer)
     {
+        // A missing snapshot is a network synchronisation state, not an empty
+        // Reserve. In particular this happens briefly when the game scene is opened.
+        // Keep the piles visually neutral until their authoritative quantities arrive.
+        bool supplyKnown = state != null && state.SupplyPiles != null && state.SupplyPiles.Count > 0;
         bool localTurn = state != null && localPlayer != null && state.ActivePlayerId == localPlayer.PlayerId;
         bool buyPhase = state != null && string.Equals(state.Phase, NetworkGameState.BuyPhase, StringComparison.Ordinal);
 
@@ -257,8 +261,8 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
                 continue;
             }
 
-            SupplyPileSnapshot pile = NetworkGameState.FindSupplyPile(state, pair.Key);
-            int remaining = pile != null ? Mathf.Max(0, pile.RemainingCount) : 0;
+            SupplyPileSnapshot pile = supplyKnown ? NetworkGameState.FindSupplyPile(state, pair.Key) : null;
+            int? remaining = pile != null ? Mathf.Max(0, pile.RemainingCount) : (int?)null;
             binding.SetRemaining(remaining);
 
             ExtensionPackageData extension;
@@ -266,7 +270,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             bool resolved = RoomGameSetup.TryResolveCard(pair.Key, out extension, out definition);
             int effectiveCost = resolved ? CostRules.GetEffectiveCost(state, definition) : -1;
             bool buyable = resolved &&
-                           remaining > 0 &&
+                           remaining.HasValue && remaining.Value > 0 &&
                            localTurn &&
                            buyPhase &&
                            state != null && !state.IsPaused &&
