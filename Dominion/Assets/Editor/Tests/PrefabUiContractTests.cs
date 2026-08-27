@@ -41,6 +41,17 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(decisionOptions?.GetComponent<DecisionScrollGrid>());
         Assert.NotNull(decision.transform.Find("ConfirmDecision")?.GetComponent<Button>());
         Assert.NotNull(Load("DecisionOption").transform.Find("Label")?.GetComponent<Text>());
+
+        GameObject deckPosition = Load("DeckPositionDecision");
+        Assert.NotNull(deckPosition.GetComponent<DeckPositionDecisionView>());
+        Assert.NotNull(deckPosition.transform.Find("Track/Handle")?.GetComponent<Image>());
+        Assert.NotNull(deckPosition.transform.Find("Value")?.GetComponent<Text>());
+
+        GameObject cardName = Load("CardNameDecision");
+        Assert.NotNull(cardName.GetComponent<CardNameDecisionView>());
+        Assert.NotNull(cardName.transform.Find("SearchField")?.GetComponent<InputField>());
+        Assert.NotNull(cardName.transform.Find("Suggestions")?.GetComponent<GridLayoutGroup>());
+        Assert.AreEqual(1, cardName.transform.Find("Suggestions")?.GetComponent<GridLayoutGroup>()?.constraintCount);
     }
 
     [Test]

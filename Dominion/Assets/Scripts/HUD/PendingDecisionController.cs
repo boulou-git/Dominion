@@ -11,6 +11,9 @@ public sealed class PendingDecisionController : MonoBehaviour
 {
     private const string PanelPrefabResourcePath = "UI/PendingDecisionPanel";
     private const string OptionPrefabResourcePath = "UI/DecisionOption";
+    private const string DeckPositionPrefabResourcePath = "UI/DeckPositionDecision";
+    private const string CardNamePrefabResourcePath = "UI/CardNameDecision";
+    private const int MaximumGenericOptions = 4;
     private readonly HashSet<int> _selected = new HashSet<int>();
     private readonly HashSet<string> _selectedSupply = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _selectedOptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -25,6 +28,8 @@ public sealed class PendingDecisionController : MonoBehaviour
     private RectTransform _optionsRoot;
     private DecisionScrollGrid _cardsScrollGrid;
     private DecisionScrollGrid _optionsScrollGrid;
+    private DeckPositionDecisionView _deckPositionView;
+    private CardNameDecisionView _cardNameView;
     private Text _promptText;
     private Text _countText;
     private Button _confirmButton;
@@ -72,14 +77,21 @@ public sealed class PendingDecisionController : MonoBehaviour
 
         bool supplyChoice = IsSupplyDecision(decision);
         bool optionChoice = IsOptionDecision(decision);
+        bool deckPositionChoice = IsDeckPositionDecision(decision);
+        bool cardNameChoice = IsCardNameDecision(decision);
         CardZone choiceZone = ResolveDecisionZone(decision);
-        ConfigurePanel(choiceZone, supplyChoice, optionChoice);
+        ConfigurePanel(choiceZone, supplyChoice, optionChoice, deckPositionChoice, cardNameChoice);
 
         if (optionChoice)
         {
             ClearSupplyDecisionVisuals();
-            if (newDecision) BuildOptionButtons(decision);
-            else RefreshOptionButtons();
+            if (newDecision)
+            {
+                if (deckPositionChoice) BuildDeckPositionChoice(decision);
+                else if (cardNameChoice) BuildCardNameChoice(decision);
+                else BuildOptionButtons(decision);
+            }
+            else if (!deckPositionChoice && !cardNameChoice) RefreshOptionButtons();
         }
         else if (supplyChoice)
         {
@@ -104,6 +116,13 @@ public sealed class PendingDecisionController : MonoBehaviour
 
     private static bool IsOptionDecision(PendingDecisionSnapshot decision) =>
         decision != null && string.Equals(decision.Zone, "options", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsDeckPositionDecision(PendingDecisionSnapshot decision) =>
+        IsOptionDecision(decision) && !string.IsNullOrEmpty(decision.Operation) &&
+        decision.Operation.StartsWith("insert_selected_into_deck|", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCardNameDecision(PendingDecisionSnapshot decision) =>
+        IsOptionDecision(decision) && string.Equals(decision.Operation, "name_card", StringComparison.OrdinalIgnoreCase);
 
     private static CardZone ResolveDecisionZone(PendingDecisionSnapshot decision)
     {
@@ -220,6 +239,12 @@ public sealed class PendingDecisionController : MonoBehaviour
         }
         List<string> ids = decision.CandidateDefinitionIds ?? new List<string>();
         List<string> labels = decision.CandidateOptionLabels ?? new List<string>();
+        if (ids.Count > MaximumGenericOptions)
+        {
+            Debug.LogError("Generic decisions support at most " + MaximumGenericOptions +
+                " options. Operation '" + decision.Operation + "' needs a dedicated prefab-backed control.", this);
+            return;
+        }
         for (int index = 0; index < ids.Count; index++)
         {
             string optionId = ids[index];
@@ -245,6 +270,58 @@ public sealed class PendingDecisionController : MonoBehaviour
         }
         RefreshOptionButtons();
         _optionsScrollGrid?.RefreshLayout(true);
+    }
+
+    private void BuildDeckPositionChoice(PendingDecisionSnapshot decision)
+    {
+        ClearExternalCards();
+        _deckPositionView = EnsureSpecialDecisionView(_deckPositionView, DeckPositionPrefabResourcePath);
+        if (_deckPositionView == null || !_deckPositionView.Configure(
+                decision.CandidateDefinitionIds, decision.CandidateOptionLabels, SelectSingleOption))
+            Debug.LogError("DeckPositionDecision prefab contract is incomplete.", this);
+    }
+
+    private void BuildCardNameChoice(PendingDecisionSnapshot decision)
+    {
+        ClearExternalCards();
+        _cardNameView = EnsureSpecialDecisionView(_cardNameView, CardNamePrefabResourcePath);
+        GameObject optionPrefab = Resources.Load<GameObject>(OptionPrefabResourcePath);
+        if (_cardNameView == null || !_cardNameView.Configure(
+                decision.CandidateDefinitionIds, decision.CandidateOptionLabels, optionPrefab, SelectSingleOption))
+            Debug.LogError("CardNameDecision prefab contract is incomplete.", this);
+    }
+
+    private T EnsureSpecialDecisionView<T>(T existing, string resourcePath) where T : Component
+    {
+        if (existing != null)
+            return existing;
+        GameObject prefab = Resources.Load<GameObject>(resourcePath);
+        if (prefab == null)
+        {
+            Debug.LogError(resourcePath + " prefab is missing.", this);
+            return null;
+        }
+        GameObject instance = Instantiate(prefab, _panel);
+        instance.name = prefab.name;
+        T view = instance.GetComponent<T>();
+        if (view == null)
+        {
+            Debug.LogError(resourcePath + " prefab has no " + typeof(T).Name + ".", instance);
+            Destroy(instance);
+        }
+        return view;
+    }
+
+    private void SelectSingleOption(string optionId)
+    {
+        PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
+        if (decision == null || _submitPending || !IsOptionDecision(decision))
+            return;
+        _selectedOptions.Clear();
+        if (!string.IsNullOrEmpty(optionId) && decision.CandidateDefinitionIds != null &&
+            decision.CandidateDefinitionIds.Contains(optionId))
+            _selectedOptions.Add(optionId);
+        RefreshSelectionUi(decision);
     }
 
     private void ToggleOptionSelection(string optionId)
@@ -398,6 +475,8 @@ public sealed class PendingDecisionController : MonoBehaviour
         foreach (GameObject card in _externalCards) if (card != null) Destroy(card);
         _externalCards.Clear();
         _optionButtons.Clear();
+        _deckPositionView?.ResetView();
+        _cardNameView?.ResetView();
     }
 
     private void EnsurePanel()
@@ -438,12 +517,15 @@ public sealed class PendingDecisionController : MonoBehaviour
         _panel.gameObject.SetActive(false);
     }
 
-    private void ConfigurePanel(CardZone zone, bool supplyChoice, bool optionChoice)
+    private void ConfigurePanel(CardZone zone, bool supplyChoice, bool optionChoice,
+        bool deckPositionChoice, bool cardNameChoice)
     {
         if (_panel == null) return;
         bool cardsVisible = zone != CardZone.Hand && !supplyChoice && !optionChoice;
         if (_cardsScrollGrid != null) _cardsScrollGrid.gameObject.SetActive(cardsVisible);
-        if (_optionsScrollGrid != null) _optionsScrollGrid.gameObject.SetActive(optionChoice);
+        if (_optionsScrollGrid != null) _optionsScrollGrid.gameObject.SetActive(optionChoice && !deckPositionChoice && !cardNameChoice);
+        if (_deckPositionView != null) _deckPositionView.gameObject.SetActive(deckPositionChoice);
+        if (_cardNameView != null) _cardNameView.gameObject.SetActive(cardNameChoice);
     }
 
     private Transform FindHandCardsRoot()

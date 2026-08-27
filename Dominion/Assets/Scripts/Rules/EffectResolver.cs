@@ -41,6 +41,7 @@ public sealed class EffectExecutionContext
 
 public static class EffectResolver
 {
+    private const int MaximumGenericOptionCount = 4;
     private delegate EffectResolutionResult Handler(CardEffectData e, EffectExecutionContext c);
     private static readonly Dictionary<string, Handler> H = new Dictionary<string, Handler>(StringComparer.OrdinalIgnoreCase)
     {
@@ -212,6 +213,9 @@ public static class EffectResolver
             ids.Add(option.id);
             labels.Add(option.label);
         }
+        if (ids.Count > MaximumGenericOptionCount)
+            return EffectResolutionResult.Rejected("choose_options supports at most " + MaximumGenericOptionCount +
+                " options; use a dedicated decision control for larger sets.");
         max = Math.Min(max, ids.Count);
         if (min > max) return EffectResolutionResult.Rejected("choose_options does not have enough distinct options.");
         return c.Resolution.TrySuspendForOptionDecision(c.Actor.PlayerId, "choose_options", e.prompt, c.SourceCardInstanceId,
@@ -229,6 +233,9 @@ public static class EffectResolver
         int required = definition != null && definition.types != null ? definition.types.Count : 0;
         if (required <= 0 || required > e.options.Count)
             return EffectResolutionResult.Rejected("Selected card has an unsupported number of types.");
+        if (e.options.Count > MaximumGenericOptionCount)
+            return EffectResolutionResult.Rejected("choose_options_per_selected_card_types supports at most " +
+                MaximumGenericOptionCount + " options; use a dedicated decision control for larger sets.");
         List<string> ids = new List<string>(); List<string> labels = new List<string>();
         foreach (CardChoiceOptionData option in e.options) { ids.Add(option.id); labels.Add(option.label); }
         return c.Resolution.TrySuspendForOptionDecision(c.Actor.PlayerId, "choose_options_per_selected_card_types", e.prompt,
