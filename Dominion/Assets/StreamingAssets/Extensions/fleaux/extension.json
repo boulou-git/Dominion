@@ -1,0 +1,449 @@
+{
+  "id": "intrigue",
+  "name": "Dominion — L'Intrigue",
+  "version": 1,
+  "schemaVersion": 2,
+  "baseCards": [],
+  "cards": [
+    {
+      "id": "cour",
+      "name": "Cour",
+      "cost": 2,
+      "types": ["Action"],
+      "image": "cour.png",
+      "text": "+3 Cartes\n\nPlacez une carte de votre main sur votre pioche.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 3 },
+            { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Placez une carte de votre main sur votre pioche." },
+            { "op": "move_selected", "target": "self", "sourceZone": "hand", "destinationZone": "deck" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rodeuse",
+      "name": "Rôdeuse",
+      "cost": 2,
+      "types": ["Action"],
+      "image": "rodeuse.png",
+      "text": "+1 Action\n\nChoisissez : écartez une carte Action de la Réserve ; ou recevez une carte Action parmi les cartes écartées.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+            { "op": "choose_supply", "target": "self", "min": 0, "max": 1, "cardType": "Action", "prompt": "Choisissez une carte Action de la Réserve à écarter, ou passez pour recevoir une carte Action parmi les cartes écartées." },
+            { "op": "trash_selected_supply", "target": "self", "requiresLastSelection": true },
+            { "op": "choose_cards", "target": "self", "zone": "trash", "min": 1, "max": 1, "cardType": "Action", "allowNoEligible": true, "requiresNoLastSelection": true, "prompt": "Recevez une carte Action parmi les cartes écartées." },
+            { "op": "gain_selected_trash", "target": "self", "destinationZone": "discard" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pion",
+      "name": "Pion",
+      "cost": 2,
+      "types": ["Action"],
+      "image": "pion.png",
+      "text": "Choisissez deux options différentes :\n+1 Carte\n+1 Action\n+1 Achat\n+1 🪙",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            {
+              "op": "choose_options",
+              "target": "self",
+              "min": 2,
+              "max": 2,
+              "prompt": "Choisissez deux options différentes.",
+              "options": [
+                { "id": "card", "label": "+1 Carte" },
+                { "id": "action", "label": "+1 Action" },
+                { "id": "buy", "label": "+1 Achat" },
+                { "id": "coin", "label": "+1 🪙" }
+              ]
+            },
+            { "op": "draw", "target": "self", "amount": 1, "requiresSelectedOption": "card" },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1, "requiresSelectedOption": "action" },
+            { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1, "requiresSelectedOption": "buy" },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1, "requiresSelectedOption": "coin" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mascarade",
+      "name": "Mascarade",
+      "cost": 3,
+      "types": ["Action"],
+      "image": "mascarade.png",
+      "text": "+2 Cartes\n\nChaque joueur ayant au moins une carte en main passe simultanément une carte au prochain joueur concerné à sa gauche.\n\nPuis, vous pouvez écarter une carte de votre main.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 2 },
+            { "op": "simultaneous_pass_left", "target": "self", "prompt": "Choisissez une carte à passer au prochain joueur concerné à votre gauche." },
+            { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "prompt": "Vous pouvez écarter une carte de votre main." },
+            { "op": "trash_selected", "target": "self" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "taudis",
+      "name": "Taudis",
+      "cost": 3,
+      "types": ["Action"],
+      "image": "taudis.png",
+      "text": "+2 Actions\n\nRévélez votre main.\n\nSi vous n’avez aucune carte Action en main, +2 Cartes.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 },
+            { "op": "reveal_zone", "target": "self", "zone": "hand" },
+            { "op": "draw", "target": "self", "amount": 2, "requiresNoCardType": "Action", "conditionZone": "hand" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "intendant",
+      "name": "Intendant",
+      "cost": 3,
+      "types": ["Action"],
+      "image": "intendant.png",
+      "text": "Choisissez une option :\n+2 Cartes\n+2 🪙\nÉcartez 2 cartes de votre main.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            {
+              "op": "choose_options",
+              "target": "self",
+              "min": 1,
+              "max": 1,
+              "prompt": "Choisissez une option.",
+              "options": [
+                { "id": "cards", "label": "+2 Cartes" },
+                { "id": "coins", "label": "+2 🪙" },
+                { "id": "trash", "label": "Écarter 2 cartes" }
+              ]
+            },
+            { "op": "draw", "target": "self", "amount": 2, "requiresSelectedOption": "cards" },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "coins" },
+            { "op": "choose_cards", "target": "self", "zone": "hand", "min": 2, "max": 2, "minUpToAvailable": true, "requiresSelectedOption": "trash", "prompt": "Écartez 2 cartes de votre main." },
+            { "op": "trash_selected", "target": "self", "requiresSelectedOption": "trash" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "magouille",
+      "name": "Magouille",
+      "cost": 3,
+      "types": ["Action", "Attaque"],
+      "image": "magouille.png",
+      "text": "+2 🪙\n\nChaque autre joueur écarte la première carte de sa pioche et reçoit une carte de même coût que vous choisissez.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
+            { "op": "replace_each_other_top_card", "target": "others", "prompt": "Choisissez une carte de même coût que la carte écartée pour cet adversaire." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "puits_aux_souhaits",
+      "name": "Puit aux souhaits",
+      "cost": 3,
+      "types": ["Action"],
+      "image": "puits_aux_souhaits.png",
+      "text": "+1 Carte\n+1 Action\n\nNommez une carte, puis révélez la première carte de votre pioche.\n\nS’il s’agit de la carte nommée, prenez-la en main.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+            { "op": "name_card", "target": "self", "prompt": "Nommez une carte." },
+            { "op": "reveal_top_if_named", "target": "self" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "baron",
+      "name": "Baron",
+      "cost": 4,
+      "types": ["Action"],
+      "image": "baron.png",
+      "text": "+1 Achat\n\nVous pouvez défausser un Domaine pour +4 🪙.\n\nSinon, recevez un Domaine.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
+            { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "cardId": "base:domaine", "prompt": "Vous pouvez défausser un Domaine pour +4 🪙." },
+            { "op": "discard_selected", "target": "self" },
+            { "op": "add_resource_per_last_selection", "target": "self", "resource": "coins", "amount": 4 },
+            { "op": "gain_card", "target": "self", "cardId": "base:domaine", "amount": 1, "destinationZone": "discard", "requiresNoLastSelection": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pont",
+      "name": "Pont",
+      "cost": 4,
+      "types": ["Action"],
+      "image": "pont.png",
+      "text": "+1 Achat\n+1 🪙\n\nPendant ce tour, les cartes coûtent 1 🪙 de moins, mais jamais moins de 0 🪙.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 },
+            { "op": "reduce_costs_this_turn", "target": "self", "amount": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "moulin",
+      "name": "Moulin",
+      "cost": 4,
+      "types": ["Action", "Victoire"],
+      "image": "moulin.png",
+      "text": "+1 Carte\n+1 Action\n\nVous pouvez défausser 2 cartes pour +2 🪙.\n\n———\n\n1 VP",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+            { "op": "choose_cards", "target": "self", "zone": "hand", "min": 2, "max": 2, "allowPass": true, "prompt": "Vous pouvez défausser exactement 2 cartes pour +2 🪙." },
+            { "op": "discard_selected", "target": "self" },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresLastSelectionCount": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "village_minier",
+      "name": "Village minier",
+      "cost": 4,
+      "types": ["Action"],
+      "image": "village_minier.png",
+      "text": "+1 Carte\n+2 Actions\n\nVous pouvez écarter cette carte pour +2 🪙.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "draw", "target": "self", "amount": 1 },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 },
+            {
+              "op": "choose_options",
+              "target": "self",
+              "min": 0,
+              "max": 1,
+              "prompt": "Vous pouvez écarter cette carte pour +2 🪙.",
+              "options": [ { "id": "trash", "label": "Écarter Village minier" } ]
+            },
+            { "op": "trash_source_card", "target": "self", "requiresSelectedOption": "trash" },
+            { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "trash" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "duc",
+      "name": "Duc",
+      "cost": 5,
+      "types": ["Victoire"],
+      "image": "duc.png",
+      "text": "Vaut 1 VP par Duché que vous possédez."
+    },
+    {
+      "id": "comptoir",
+      "name": "Comptoir",
+      "cost": 5,
+      "types": ["Action"],
+      "image": "comptoir.png",
+      "text": "Écartez 2 cartes de votre main.\n\nDans ce cas, recevez un Argent dans votre main.",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            { "op": "choose_cards", "target": "self", "zone": "hand", "min": 2, "max": 2, "minUpToAvailable": true, "prompt": "Écartez 2 cartes de votre main." },
+            { "op": "trash_selected", "target": "self" },
+            { "op": "gain_card", "target": "self", "cardId": "base:argent", "amount": 1, "destinationZone": "hand", "requiresLastSelectionCount": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "harem",
+      "name": "Harem",
+      "cost": 6,
+      "types": ["Trésor", "Victoire"],
+      "image": "harem.png",
+      "text": "+2 🪙\n\n———\n\n2 VP",
+      "abilities": [
+        { "when": "play", "effects": [ { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 } ] }
+      ]
+    },
+    {
+      "id": "nobles",
+      "name": "Nobles",
+      "cost": 6,
+      "types": ["Action", "Victoire"],
+      "image": "nobles.png",
+      "text": "Choisissez une option :\n+3 Cartes\nou\n+2 Actions\n\n———\n\n2 VP",
+      "abilities": [
+        {
+          "when": "play",
+          "effects": [
+            {
+              "op": "choose_options",
+              "target": "self",
+              "min": 1,
+              "max": 1,
+              "prompt": "Choisissez une option.",
+              "options": [
+                { "id": "cards", "label": "+3 Cartes" },
+                { "id": "actions", "label": "+2 Actions" }
+              ]
+            },
+            { "op": "draw", "target": "self", "amount": 3, "requiresSelectedOption": "cards" },
+            { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2, "requiresSelectedOption": "actions" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "conspirateur", "name": "Conspirateur", "cost": 4, "types": ["Action"], "image": "conspirateur.png",
+      "text": "+2 🪙\n\nSi vous avez joué au moins 3 cartes Action pendant ce tour, celle-ci comprise : +1 Carte et +1 Action.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
+        { "op": "draw", "target": "self", "amount": 1, "requiresMinActionsPlayedThisTurn": 3 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1, "requiresMinActionsPlayedThisTurn": 3 }
+      ] } ]
+    },
+    {
+      "id": "diplomate", "name": "Diplomate", "cost": 4, "types": ["Action", "Réaction"], "image": "diplomate.png",
+      "text": "+2 Cartes\n\nSi vous avez 5 cartes ou moins en main après avoir pioché, +2 Actions.\n\n———\n\nLorsqu’un autre joueur joue une carte Attaque, vous pouvez révéler cette carte d’une main d’au moins 5 cartes pour piocher 2 cartes, puis défausser 3 cartes.",
+      "abilities": [
+        { "when": "play", "effects": [
+          { "op": "draw", "target": "self", "amount": 2 },
+          { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2, "requiresMaxHandSize": 5 }
+        ] },
+        { "when": "attack_reaction", "scope": "in_hand", "minHandSize": 5, "filter": { "cardType": "Attaque" }, "effects": [
+          { "op": "attack_reaction_draw_discard", "target": "self", "amount": 2, "max": 3 }
+        ] }
+      ]
+    },
+    {
+      "id": "ferronnerie", "name": "Ferronnerie", "cost": 4, "types": ["Action"], "image": "ferronerie.png",
+      "text": "Recevez une carte coûtant jusqu’à 4 🪙.\n\nSi la carte reçue est une Action : +1 Action ; un Trésor : +1 🪙 ; une Victoire : +1 Carte.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "maxCost": 4, "prompt": "Recevez une carte coûtant jusqu’à 4 🪙." },
+        { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1, "requiresLastMovedCardType": "Action" },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1, "requiresLastMovedCardType": "Trésor" },
+        { "op": "draw", "target": "self", "amount": 1, "requiresLastMovedCardType": "Victoire" }
+      ] } ]
+    },
+    {
+      "id": "passage_secret", "name": "Passage secret", "cost": 4, "types": ["Action"], "image": "passage_secret.png",
+      "text": "+2 Cartes\n+1 Action\n\nPrenez une carte de votre main et placez-la où vous le souhaitez dans votre pioche.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 2 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Choisissez une carte à placer dans votre pioche." },
+        { "op": "insert_selected_into_deck", "target": "self", "prompt": "Choisissez sa position dans votre pioche." }
+      ] } ]
+    },
+    {
+      "id": "courtisan", "name": "Courtisan", "cost": 5, "types": ["Action"], "image": "courtisans.png",
+      "text": "Révélez une carte de votre main. Pour chaque type qu’elle possède, choisissez une option différente : +1 Action ; +1 Achat ; +3 🪙 ; recevez un Or.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Révélez une carte de votre main." },
+        { "op": "reveal_selected", "target": "self" },
+        { "op": "choose_options_per_selected_card_types", "target": "self", "prompt": "Choisissez une option différente par type de la carte révélée.", "options": [
+          { "id": "action", "label": "+1 Action" }, { "id": "buy", "label": "+1 Achat" },
+          { "id": "coins", "label": "+3 🪙" }, { "id": "gold", "label": "Recevoir un Or" }
+        ] },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1, "requiresSelectedOption": "action" },
+        { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1, "requiresSelectedOption": "buy" },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 3, "requiresSelectedOption": "coins" },
+        { "op": "gain_card", "target": "self", "cardId": "base:or", "amount": 1, "destinationZone": "discard", "requiresSelectedOption": "gold" }
+      ] } ]
+    },
+    {
+      "id": "larbin", "name": "Larbin", "cost": 5, "types": ["Action", "Attaque"], "image": "larbin.png",
+      "text": "+1 Action\n\nChoisissez : +2 🪙 ; ou défaussez votre main et piochez 4 cartes. Chaque autre joueur ayant au moins 5 cartes en main défausse sa main et pioche 4 cartes.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "choose_options", "target": "self", "min": 1, "max": 1, "prompt": "Choisissez une option.", "options": [
+          { "id": "coins", "label": "+2 🪙" }, { "id": "redraw", "label": "Défausser votre main et piocher 4 cartes" }
+        ] },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "coins" },
+        { "op": "discard_hand_draw", "target": "self", "amount": 4, "requiresSelectedOption": "redraw" },
+        { "op": "discard_hand_draw", "target": "others", "amount": 4, "minHandSize": 5, "requiresSelectedOption": "redraw" }
+      ] } ]
+    },
+    {
+      "id": "patrouille", "name": "Patrouille", "cost": 5, "types": ["Action"], "image": "patrouille.png",
+      "text": "+3 Cartes\n\nRévélez les 4 premières cartes de votre pioche. Prenez en main les cartes Victoire et Malédiction révélées. Replacez les autres dans l’ordre de votre choix.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 3 },
+        { "op": "reveal_top_cards", "target": "self", "amount": 4 },
+        { "op": "move_all_matching_types", "target": "self", "sourceZone": "inspected", "destinationZone": "hand", "cardType": "Victoire|Malédiction" },
+        { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "deck", "prompt": "Replacez les autres cartes sur votre pioche dans l’ordre de votre choix." }
+      ] } ]
+    },
+    {
+      "id": "remplacement", "name": "Remplacement", "cost": 5, "types": ["Action", "Attaque"], "image": "remplacement.png",
+      "text": "Écartez une carte de votre main. Recevez une carte coûtant jusqu’à 2 🪙 de plus. Action ou Trésor : placez-la sur votre pioche. Victoire : chaque autre joueur reçoit une Malédiction.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Écartez une carte de votre main." },
+        { "op": "remember_selected_card_cost", "target": "self" },
+        { "op": "trash_selected", "target": "self" },
+        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "useLastSelectionCost": true, "costOffset": 2, "prompt": "Recevez une carte coûtant jusqu’à 2 🪙 de plus." },
+        { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" },
+        { "op": "move_last_moved", "target": "self", "sourceZone": "discard", "destinationZone": "deck", "requiresLastMovedCardType": "Action|Trésor" },
+        { "op": "gain_card", "target": "others", "cardId": "base:malediction", "amount": 1, "destinationZone": "discard", "requiresLastMovedCardType": "Victoire" }
+      ] } ]
+    },
+    {
+      "id": "bourreau", "name": "Bourreau", "cost": 5, "types": ["Action", "Attaque"], "image": "bourreau.png",
+      "text": "+3 Cartes\n\nChaque autre joueur choisit : défausser 2 cartes ; ou recevoir une Malédiction dans sa main.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 3 },
+        { "op": "each_other_choose_discard_or_gain", "target": "others", "amount": 2, "cardId": "base:malediction", "destinationZone": "hand", "prompt": "Choisissez : défausser 2 cartes, ou recevoir une Malédiction dans votre main." }
+      ] } ]
+    },
+    {
+      "id": "amelioration", "name": "Amélioration", "cost": 5, "types": ["Action"], "image": "amelioration.png",
+      "text": "+1 Carte\n+1 Action\n\nÉcartez une carte de votre main. Recevez une carte coûtant exactement 1 🪙 de plus.",
+      "abilities": [ { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "prompt": "Écartez une carte de votre main." },
+        { "op": "remember_selected_card_cost", "target": "self" },
+        { "op": "trash_selected", "target": "self" },
+        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "useLastSelectionCost": true, "costOffset": 1, "exactCost": true, "allowNoEligible": true, "prompt": "Recevez une carte coûtant exactement 1 🪙 de plus." },
+        { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard" }
+      ] } ]
+    }
+  ]
+}

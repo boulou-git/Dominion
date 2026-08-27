@@ -1,0 +1,9 @@
+{
+  "extensionId": "intrigue",
+  "cards": [
+    { "cardId": "moulin", "fixedPoints": 1 },
+    { "cardId": "duc", "ownedCardId": "base:duche", "pointsPerOwnedCard": 1 },
+    { "cardId": "harem", "fixedPoints": 2 },
+    { "cardId": "nobles", "fixedPoints": 2 }
+  ]
+}
