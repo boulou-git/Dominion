@@ -190,7 +190,8 @@ public static class NetworkGameState
             case BuyPhase:
             case CleanupPhase:
                 if (!TryApplyRequestedHandOrder(next, requesterPlayerId, visualHandOrder)) return false;
-                PerformCleanupAndAdvance(next); return CommitState(next);
+                if (!PerformCleanupAndAdvance(next)) return false;
+                return CommitState(next);
             default: return false;
         }
     }
@@ -198,7 +199,9 @@ public static class NetworkGameState
     public static bool TryAdvanceTurn(string requesterPlayerId, int expectedVersion, int expectedAuthorityEpoch)
     {
         if (!ValidateActivePlayerCommand(requesterPlayerId, expectedVersion, expectedAuthorityEpoch)) return false;
-        GameStateSnapshot next = Clone(_state); PerformCleanupAndAdvance(next); return CommitState(next);
+        GameStateSnapshot next = Clone(_state);
+        if (!PerformCleanupAndAdvance(next)) return false;
+        return CommitState(next);
     }
 
     public static bool TryPlayCard(string requesterPlayerId, int instanceId, int expectedVersion, int expectedAuthorityEpoch)
@@ -361,11 +364,11 @@ public static class NetworkGameState
         player.Hand.Clear(); player.Hand.AddRange(requestedOrder); return true;
     }
 
-    private static void PerformCleanupAndAdvance(GameStateSnapshot state)
+    private static bool PerformCleanupAndAdvance(GameStateSnapshot state)
     {
-        if (state == null || state.Players == null || state.Players.Count == 0) return;
+        if (state == null || state.Players == null || state.Players.Count == 0) return false;
         PlayerStateSnapshot current = FindPlayer(state, state.ActivePlayerId);
-        if (current == null) return;
+        if (current == null) return false;
         CardZoneRules.MoveAll(current, CardZone.InPlay, CardZone.Discard);
         CardZoneRules.MoveAll(current, CardZone.Hand, CardZone.Discard, true);
         current.Actions = 1; current.Buys = 1; current.Coins = 0; current.ActionsPlayedThisTurn = 0; CostRules.ResetForTurn(current);
@@ -379,7 +382,7 @@ public static class NetworkGameState
 
         // Dominion end conditions never interrupt the current turn. Finalise only
         // after cleanup, before rotating the active player or incrementing TurnNumber.
-        if (GameEndRules.TryFinaliseAtTurnBoundary(state)) return;
+        if (GameEndRules.TryFinaliseAtTurnBoundary(state)) return true;
 
         int currentIndex = state.Players.FindIndex(player => player != null && player.PlayerId == state.ActivePlayerId);
         if (currentIndex < 0) currentIndex = 0;
@@ -387,6 +390,13 @@ public static class NetworkGameState
         PlayerStateSnapshot nextPlayer = state.Players[nextIndex];
         state.ActivePlayerId = nextPlayer.PlayerId; state.TurnNumber++; state.Phase = ActionPhase;
         nextPlayer.Actions = 1; nextPlayer.Buys = 1; nextPlayer.Coins = 0; nextPlayer.ActionsPlayedThisTurn = 0; CostRules.ResetForTurn(nextPlayer);
+        GameRuleResult start = TurnLifecycleRules.TryResolveTurnStarted(state, nextPlayer, ResolveCardDefinition, NewRandom());
+        if (start.Status == GameRuleStatus.Rejected)
+        {
+            Debug.LogError("Could not resolve start-of-turn effects: " + start.Error);
+            return false;
+        }
+        return true;
     }
 
     private static System.Random NewRandom() => new System.Random(Guid.NewGuid().GetHashCode());

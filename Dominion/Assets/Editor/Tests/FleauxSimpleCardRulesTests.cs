@@ -160,6 +160,25 @@ public sealed class FleauxSimpleCardRulesTests
             Does.Contain("base:or"));
     }
 
+    [Test]
+    public void TurnStarted_DentEnOrRewardsOnlyItsActiveOwner()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot active);
+        PlayerStateSnapshot other = new PlayerStateSnapshot { PlayerId = "p2", NickName = "P2" };
+        state.Players.Add(other);
+        CardInstance activeTooth = AddOwned(state, active, "fleaux:dent_en_or", CardZone.None);
+        active.Artifacts.Add(activeTooth.InstanceId);
+        CardInstance otherTooth = AddOwned(state, other, "fleaux:dent_en_or", CardZone.None);
+        other.Artifacts.Add(otherTooth.InstanceId);
+
+        GameRuleResult result = TurnLifecycleRules.TryResolveTurnStarted(state, active, Resolve, new Random(1));
+
+        Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
+        Assert.That(active.Coins, Is.EqualTo(1));
+        Assert.That(other.Coins, Is.EqualTo(0));
+        Assert.That(state.Resolution.IsActive, Is.False);
+    }
+
     private static GameStateSnapshot NewState(out PlayerStateSnapshot player)
     {
         GameStateSnapshot state = new GameStateSnapshot
@@ -178,7 +197,8 @@ public sealed class FleauxSimpleCardRulesTests
     {
         CardInstance instance = new CardInstance(state.NextCardInstanceId++, definitionId, player.PlayerId);
         state.CardInstances.Add(instance);
-        CardZoneRules.ResolveZone(player, zone).Add(instance.InstanceId);
+        if (zone != CardZone.None)
+            CardZoneRules.ResolveZone(player, zone).Add(instance.InstanceId);
         return instance;
     }
 

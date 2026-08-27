@@ -122,4 +122,9 @@ public sealed class GameEvent
         return new GameEvent(GameEventType.DiseaseGained, playerId, instanceId, definitionId,
             sourceCardInstanceId, destinationZone);
     }
+
+    public static GameEvent TurnStarted(string playerId)
+    {
+        return new GameEvent(GameEventType.TurnStarted, playerId);
+    }
 }
