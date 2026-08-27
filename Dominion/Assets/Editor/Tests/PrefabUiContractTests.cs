@@ -30,9 +30,15 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(trash.transform.Find("TrashPileOverlay/Panel/CardsScroll")?.GetComponent<ScrollRect>());
 
         GameObject decision = Load("PendingDecisionPanel");
-        Assert.NotNull(decision.transform.Find("Prompt")?.GetComponent<Text>());
-        Assert.NotNull(decision.transform.Find("DecisionCards")?.GetComponent<GridLayoutGroup>());
-        Assert.NotNull(decision.transform.Find("DecisionOptions")?.GetComponent<GridLayoutGroup>());
+        Transform prompt = decision.transform.Find("Prompt");
+        Assert.NotNull(prompt?.GetComponent<Text>());
+        Assert.NotNull(prompt?.GetComponent<DraggableDecisionPanel>());
+        Transform decisionCards = decision.transform.Find("DecisionCards");
+        Transform decisionOptions = decision.transform.Find("DecisionOptions");
+        Assert.NotNull(decisionCards?.GetComponent<GridLayoutGroup>());
+        Assert.NotNull(decisionCards?.GetComponent<DecisionScrollGrid>());
+        Assert.NotNull(decisionOptions?.GetComponent<GridLayoutGroup>());
+        Assert.NotNull(decisionOptions?.GetComponent<DecisionScrollGrid>());
         Assert.NotNull(decision.transform.Find("ConfirmDecision")?.GetComponent<Button>());
         Assert.NotNull(Load("DecisionOption").transform.Find("Label")?.GetComponent<Text>());
     }

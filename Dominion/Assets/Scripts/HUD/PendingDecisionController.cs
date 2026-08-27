@@ -23,6 +23,8 @@ public sealed class PendingDecisionController : MonoBehaviour
     private RectTransform _panel;
     private RectTransform _externalCardsRoot;
     private RectTransform _optionsRoot;
+    private DecisionScrollGrid _cardsScrollGrid;
+    private DecisionScrollGrid _optionsScrollGrid;
     private Text _promptText;
     private Text _countText;
     private Button _confirmButton;
@@ -202,7 +204,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             int capturedId = instanceId; Action handler = () => ToggleSelection(capturedId);
             pointer.PrimaryActionRequested += handler; _selectionHandlers.Add(pointer, handler); _externalCards.Add(card);
         }
-        LayoutRebuilder.ForceRebuildLayoutImmediate(_externalCardsRoot);
+        _cardsScrollGrid?.RefreshLayout(true);
     }
 
     private void BuildOptionButtons(PendingDecisionSnapshot decision)
@@ -242,7 +244,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             _externalCards.Add(optionObject);
         }
         RefreshOptionButtons();
-        LayoutRebuilder.ForceRebuildLayoutImmediate(_optionsRoot);
+        _optionsScrollGrid?.RefreshLayout(true);
     }
 
     private void ToggleOptionSelection(string optionId)
@@ -414,12 +416,17 @@ public sealed class PendingDecisionController : MonoBehaviour
         _panel = panelObject.GetComponent<RectTransform>();
         _promptText = panelObject.transform.Find("Prompt")?.GetComponent<Text>();
         _countText = panelObject.transform.Find("Count")?.GetComponent<Text>();
-        _externalCardsRoot = panelObject.transform.Find("DecisionCards") as RectTransform;
-        _optionsRoot = panelObject.transform.Find("DecisionOptions") as RectTransform;
+        Transform cardsViewport = panelObject.transform.Find("DecisionCards");
+        Transform optionsViewport = panelObject.transform.Find("DecisionOptions");
+        _cardsScrollGrid = cardsViewport != null ? cardsViewport.GetComponent<DecisionScrollGrid>() : null;
+        _optionsScrollGrid = optionsViewport != null ? optionsViewport.GetComponent<DecisionScrollGrid>() : null;
+        _externalCardsRoot = _cardsScrollGrid != null ? _cardsScrollGrid.Content : null;
+        _optionsRoot = _optionsScrollGrid != null ? _optionsScrollGrid.Content : null;
         _confirmButton = panelObject.transform.Find("ConfirmDecision")?.GetComponent<Button>();
         _confirmText = _confirmButton != null ? _confirmButton.transform.Find("Label")?.GetComponent<Text>() : null;
-        if (_panel == null || _promptText == null || _countText == null || _externalCardsRoot == null ||
-            _optionsRoot == null || _confirmButton == null || _confirmText == null)
+        if (_panel == null || _promptText == null || _countText == null || _cardsScrollGrid == null ||
+            _optionsScrollGrid == null || _externalCardsRoot == null || _optionsRoot == null ||
+            _confirmButton == null || _confirmText == null)
         {
             Debug.LogError("PendingDecisionPanel prefab contract is incomplete.", panelObject);
             Destroy(panelObject);
@@ -435,8 +442,8 @@ public sealed class PendingDecisionController : MonoBehaviour
     {
         if (_panel == null) return;
         bool cardsVisible = zone != CardZone.Hand && !supplyChoice && !optionChoice;
-        if (_externalCardsRoot != null) _externalCardsRoot.gameObject.SetActive(cardsVisible);
-        if (_optionsRoot != null) _optionsRoot.gameObject.SetActive(optionChoice);
+        if (_cardsScrollGrid != null) _cardsScrollGrid.gameObject.SetActive(cardsVisible);
+        if (_optionsScrollGrid != null) _optionsScrollGrid.gameObject.SetActive(optionChoice);
     }
 
     private Transform FindHandCardsRoot()
