@@ -49,6 +49,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private Coroutine _panelTransition;
     private bool _cardsPanelOpen;
     private bool _selectionFlowConfigured;
+    private bool _startWhenRevealIsPublished;
 
     private const float PanelSlideDuration = 0.24f;
 
@@ -146,6 +147,20 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         _config = RoomGameSetup.ReadCurrent();
         CapturePhotonState();
         RefreshAll();
+
+        // ValidateSelection publishes the chosen Kingdom asynchronously through
+        // Photon. Never initialise the match before that room property is visible,
+        // otherwise the authoritative Reserve is created without Kingdom piles.
+        if (_startWhenRevealIsPublished &&
+            PhotonNetwork.IsMasterClient &&
+            _config != null &&
+            string.Equals(_config.stage, RoomGameSetup.RevealStage, StringComparison.Ordinal) &&
+            _config.kingdomCardIds != null &&
+            _config.kingdomCardIds.Count == RoomGameSetup.KingdomCardCount)
+        {
+            _startWhenRevealIsPublished = false;
+            StartGame();
+        }
     }
 
     private void CapturePhotonState()
@@ -467,8 +482,10 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     private void ValidateSelection()
     {
-        if (PhotonNetwork.IsMasterClient)
-            RoomGameSetup.FinaliseKingdom(_config);
+        if (!PhotonNetwork.IsMasterClient)
+            return;
+
+        _startWhenRevealIsPublished = RoomGameSetup.FinaliseKingdom(_config);
     }
 
     private void StartGame()
@@ -539,9 +556,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         _extensionsPanel = FindDeepChild(_hostSelectionScreen.transform, "ExtensionsPanel") as RectTransform;
         _cardsPanel = FindDeepChild(_hostSelectionScreen.transform, "CardsPanel") as RectTransform;
-
-        _revealStartButton = _hostSelectionScreen.transform.Find("ValidateButton")?.GetComponent<Button>();
-        _revealStartButton.onClick.AddListener(StartGame);
 
         Transform existingBack = _cardsPanel != null ? FindDeepChild(_cardsPanel, "BackButton") : null;
         _cardsBackButton = existingBack != null ? existingBack.GetComponent<Button>() : null;

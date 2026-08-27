@@ -98,6 +98,14 @@ public static class NetworkGameState
         List<Player> roomPlayers = PhotonNetwork.CurrentRoom.Players.Values.OrderBy(player => player.ActorNumber).ToList();
         if (roomPlayers.Count == 0) return false;
 
+        GameSetupConfig setup = RoomGameSetup.ReadCurrent();
+        if (setup == null || setup.kingdomCardIds == null ||
+            setup.kingdomCardIds.Count != RoomGameSetup.KingdomCardCount)
+        {
+            Debug.LogError("Cannot initialise the match before the 10 Kingdom cards are published.");
+            return false;
+        }
+
         GameStateSnapshot state = new GameStateSnapshot
         {
             MatchId = Guid.NewGuid().ToString("N"), AuthorityEpoch = 1, IsStarted = true, IsInitialised = true,
