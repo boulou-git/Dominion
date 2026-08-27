@@ -78,7 +78,7 @@ public sealed class FleauxFoundationRulesTests
         Assert.That(ArtifactRules.TryTake(state, first, artifact.DefinitionId, 0, null, out _, out string firstError), Is.True, firstError);
         Assert.That(ArtifactRules.TryTake(state, second, artifact.DefinitionId, 0, null, out _, out string secondError), Is.True, secondError);
 
-        Assert.That(first.Artifacts, Does.Not.Contain(artifact.InstanceId));
+        Assert.That(first.Artifacts.Contains(artifact.InstanceId), Is.False);
         Assert.That(second.Artifacts, Does.Contain(artifact.InstanceId));
         Assert.That(artifact.OwnerPlayerId, Is.EqualTo(second.PlayerId));
     }

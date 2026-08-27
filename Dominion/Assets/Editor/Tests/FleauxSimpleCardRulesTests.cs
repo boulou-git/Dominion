@@ -154,7 +154,7 @@ public sealed class FleauxSimpleCardRulesTests
             queue.PendingDecision.DecisionId, new[] { "react" }, Resolve, new Random(1));
 
         Assert.That(reacted.Status, Is.EqualTo(GameRuleStatus.Applied), reacted.Error);
-        Assert.That(player.Hand, Does.Not.Contain(market.InstanceId));
+        Assert.That(player.Hand.Contains(market.InstanceId), Is.False);
         Assert.That(player.Discard, Does.Contain(market.InstanceId));
         Assert.That(player.Discard.Select(id => state.CardInstances.Find(card => card.InstanceId == id).DefinitionId),
             Does.Contain("base:or"));
@@ -189,7 +189,7 @@ public sealed class FleauxSimpleCardRulesTests
 
         DurationRules.MoveCleanupInPlayCards(state, player, Resolve);
         Assert.That(player.InPlay, Does.Contain(cultist.InstanceId));
-        Assert.That(player.Discard, Does.Not.Contain(cultist.InstanceId));
+        Assert.That(player.Discard.Contains(cultist.InstanceId), Is.False);
 
         GameRuleResult start = TurnLifecycleRules.TryResolveTurnStarted(state, player, Resolve, new Random(1));
 
@@ -197,9 +197,9 @@ public sealed class FleauxSimpleCardRulesTests
         Assert.That(player.Hand.Count, Is.EqualTo(2));
         Assert.That(player.ResolvedDurationCards, Does.Contain(cultist.InstanceId));
         DurationRules.MoveCleanupInPlayCards(state, player, Resolve);
-        Assert.That(player.InPlay, Does.Not.Contain(cultist.InstanceId));
+        Assert.That(player.InPlay.Contains(cultist.InstanceId), Is.False);
         Assert.That(player.Discard, Does.Contain(cultist.InstanceId));
-        Assert.That(player.ResolvedDurationCards, Does.Not.Contain(cultist.InstanceId));
+        Assert.That(player.ResolvedDurationCards.Contains(cultist.InstanceId), Is.False);
     }
 
     private static GameStateSnapshot NewState(out PlayerStateSnapshot player)
