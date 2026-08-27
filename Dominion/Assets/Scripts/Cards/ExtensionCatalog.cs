@@ -61,6 +61,7 @@ public sealed class CardTriggerFilterData
 {
     public string eventPlayer;
     public string cardId;
+    public string excludedCardId;
     public string cardType;
 }
 

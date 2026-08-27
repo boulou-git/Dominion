@@ -90,8 +90,8 @@ public static class TriggerResolver
             return RejectAndAbort(state, 0, 0, 0, "Decision continuation is incomplete.");
         if (!continuation.TriggerEvent.TryToRuntime(out GameEvent gameEvent))
             return RejectAndAbort(state, 0, 0, 0, "Decision trigger event is invalid.");
-        if (continuation.ListenerCardInstanceId <= 0 || continuation.ListenerCardInstanceId != gameEvent.CardInstanceId)
-            return RejectAndAbort(state, 0, 0, 0, "Only subject-card decision continuation is supported currently.");
+        if (continuation.ListenerCardInstanceId <= 0)
+            return RejectAndAbort(state, 0, 0, 0, "Decision listener card is missing.");
 
         CardInstance instance = FindCardInstance(state, continuation.ListenerCardInstanceId);
         if (instance == null)
@@ -103,26 +103,35 @@ public static class TriggerResolver
         if (definition == null)
             return RejectAndAbort(state, 0, 0, 0, "Decision source card definition was not found.");
 
+        bool subject = continuation.ListenerCardInstanceId == gameEvent.CardInstanceId &&
+            (string.IsNullOrEmpty(continuation.ListenerScope) ||
+             string.Equals(continuation.ListenerScope, DeclarativeRuleVocabulary.SubjectScope, StringComparison.OrdinalIgnoreCase));
+        string listenerScope = subject ? DeclarativeRuleVocabulary.SubjectScope : continuation.ListenerScope;
+        if (!subject && string.IsNullOrWhiteSpace(listenerScope))
+            return RejectAndAbort(state, 0, 0, 0, "External listener scope is missing from the decision continuation.");
+
         AbilityResolutionResult resumed = AbilityResolver.ResolveTimingFromCursor(
             definition,
             continuation.Timing,
             BuildContext(state, owner, instance.InstanceId, random, resolution, gameEvent),
-            ability => IsSubjectScope(ability) && FilterMatches(ability != null ? ability.filter : null, gameEvent, owner, resolveCardDefinition),
+            ability => (subject ? IsSubjectScope(ability) : ScopeEquals(ability, listenerScope)) &&
+                FilterMatches(ability != null ? ability.filter : null, gameEvent, owner, resolveCardDefinition),
             continuation.AbilityIndex,
             continuation.EffectIndex + 1);
 
         if (resumed.Status == EffectResolutionStatus.Rejected)
             return RejectAndAbort(state, 0, resumed.AbilitiesMatched, resumed.EffectsResolved, resumed.Error);
         if (resumed.Status == EffectResolutionStatus.WaitingForChoice)
+        {
+            PreserveListenerContinuation(resolution.PendingDecision, listenerScope,
+                continuation.RemainingListenerInstanceIds, continuation.RemainingListenerScopes);
             return TriggerResolutionResult.WaitingForChoice(0, resumed.AbilitiesMatched, resumed.EffectsResolved);
+        }
 
-        AbilityResolutionResult listeners = ResolveExternalListeners(
-            gameEvent,
-            continuation.Timing,
-            resolution,
-            state,
-            resolveCardDefinition,
-            random);
+        AbilityResolutionResult listeners = subject
+            ? ResolveExternalListeners(gameEvent, continuation.Timing, resolution, state, resolveCardDefinition, random)
+            : ResolveRemainingListeners(gameEvent, continuation.Timing, resolution, state, resolveCardDefinition, random,
+                continuation.RemainingListenerInstanceIds, continuation.RemainingListenerScopes);
 
         int matched = resumed.AbilitiesMatched + listeners.AbilitiesMatched;
         int resolved = resumed.EffectsResolved + listeners.EffectsResolved;
@@ -212,48 +221,46 @@ public static class TriggerResolver
         Func<string, ExtensionCardData> resolveCardDefinition,
         System.Random random)
     {
-        int matched = 0;
-        int resolved = 0;
         if (gameEvent == null || state.Players == null)
             return AbilityResolutionResult.Applied(0, 0);
 
+        List<ListenerEntry> listeners = new List<ListenerEntry>();
         foreach (PlayerStateSnapshot owner in state.Players)
         {
             if (owner == null)
                 continue;
-
-            AbilityResolutionResult handResult = ResolveZoneListeners(owner, owner.Hand, DeclarativeRuleVocabulary.InHandScope, gameEvent, timing, resolution, state, resolveCardDefinition, random);
-            matched += handResult.AbilitiesMatched;
-            resolved += handResult.EffectsResolved;
-            if (handResult.Status == EffectResolutionStatus.Rejected)
-                return AbilityResolutionResult.Rejected(matched, resolved, handResult.Error);
-            if (handResult.Status == EffectResolutionStatus.WaitingForChoice)
-                return AbilityResolutionResult.WaitingForChoice(matched, resolved);
-
-            AbilityResolutionResult inPlayResult = ResolveZoneListeners(owner, owner.InPlay, DeclarativeRuleVocabulary.InPlayScope, gameEvent, timing, resolution, state, resolveCardDefinition, random);
-            matched += inPlayResult.AbilitiesMatched;
-            resolved += inPlayResult.EffectsResolved;
-            if (inPlayResult.Status == EffectResolutionStatus.Rejected)
-                return AbilityResolutionResult.Rejected(matched, resolved, inPlayResult.Error);
-            if (inPlayResult.Status == EffectResolutionStatus.WaitingForChoice)
-                return AbilityResolutionResult.WaitingForChoice(matched, resolved);
-
-            AbilityResolutionResult artifactResult = ResolveZoneListeners(owner, owner.Artifacts, DeclarativeRuleVocabulary.ArtifactScope, gameEvent, timing, resolution, state, resolveCardDefinition, random);
-            matched += artifactResult.AbilitiesMatched;
-            resolved += artifactResult.EffectsResolved;
-            if (artifactResult.Status == EffectResolutionStatus.Rejected)
-                return AbilityResolutionResult.Rejected(matched, resolved, artifactResult.Error);
-            if (artifactResult.Status == EffectResolutionStatus.WaitingForChoice)
-                return AbilityResolutionResult.WaitingForChoice(matched, resolved);
+            AddListeners(listeners, owner, owner.Hand, DeclarativeRuleVocabulary.InHandScope);
+            AddListeners(listeners, owner, owner.InPlay, DeclarativeRuleVocabulary.InPlayScope);
+            AddListeners(listeners, owner, owner.Artifacts, DeclarativeRuleVocabulary.ArtifactScope);
         }
-
-        return AbilityResolutionResult.Applied(matched, resolved);
+        return ResolveListenerEntries(listeners, gameEvent, timing, resolution, state, resolveCardDefinition, random);
     }
 
-    private static AbilityResolutionResult ResolveZoneListeners(
-        PlayerStateSnapshot owner,
-        List<int> zone,
-        string requiredScope,
+    private static AbilityResolutionResult ResolveRemainingListeners(
+        GameEvent gameEvent,
+        string timing,
+        ResolutionQueue resolution,
+        GameStateSnapshot state,
+        Func<string, ExtensionCardData> resolveCardDefinition,
+        System.Random random,
+        List<int> listenerInstanceIds,
+        List<string> listenerScopes)
+    {
+        if (listenerInstanceIds == null || listenerScopes == null || listenerInstanceIds.Count != listenerScopes.Count)
+            return AbilityResolutionResult.Rejected(0, 0, "External listener continuation is malformed.");
+        List<ListenerEntry> listeners = new List<ListenerEntry>();
+        for (int index = 0; index < listenerInstanceIds.Count; index++)
+        {
+            CardInstance instance = FindCardInstance(state, listenerInstanceIds[index]);
+            PlayerStateSnapshot owner = instance != null ? FindPlayer(state, instance.OwnerPlayerId) : null;
+            if (owner != null)
+                listeners.Add(new ListenerEntry(owner, listenerInstanceIds[index], listenerScopes[index]));
+        }
+        return ResolveListenerEntries(listeners, gameEvent, timing, resolution, state, resolveCardDefinition, random);
+    }
+
+    private static AbilityResolutionResult ResolveListenerEntries(
+        List<ListenerEntry> listeners,
         GameEvent gameEvent,
         string timing,
         ResolutionQueue resolution,
@@ -263,18 +270,17 @@ public static class TriggerResolver
     {
         int matched = 0;
         int resolved = 0;
-        if (zone == null || zone.Count == 0)
+        if (listeners == null || listeners.Count == 0)
             return AbilityResolutionResult.Applied(0, 0);
-
-        int[] listenerIds = zone.ToArray();
-        foreach (int instanceId in listenerIds)
+        for (int index = 0; index < listeners.Count; index++)
         {
-            if (!zone.Contains(instanceId))
+            ListenerEntry listener = listeners[index];
+            List<int> currentZone = ResolveListenerZone(listener.Owner, listener.Scope);
+            if (currentZone == null || !currentZone.Contains(listener.InstanceId))
                 continue;
-
-            CardInstance instance = FindCardInstance(state, instanceId);
+            CardInstance instance = FindCardInstance(state, listener.InstanceId);
             if (instance == null)
-                return AbilityResolutionResult.Rejected(matched, resolved, "Listener card instance was not found: " + instanceId);
+                return AbilityResolutionResult.Rejected(matched, resolved, "Listener card instance was not found: " + listener.InstanceId);
             ExtensionCardData definition = resolveCardDefinition(instance.DefinitionId);
             if (definition == null)
                 return AbilityResolutionResult.Rejected(matched, resolved, "Listener card definition could not be resolved: " + instance.DefinitionId);
@@ -282,18 +288,66 @@ public static class TriggerResolver
             AbilityResolutionResult result = AbilityResolver.ResolveTiming(
                 definition,
                 timing,
-                BuildContext(state, owner, instanceId, random, resolution, gameEvent),
-                ability => ScopeEquals(ability, requiredScope) && FilterMatches(ability != null ? ability.filter : null, gameEvent, owner, resolveCardDefinition));
+                BuildContext(state, listener.Owner, listener.InstanceId, random, resolution, gameEvent),
+                ability => ScopeEquals(ability, listener.Scope) && FilterMatches(ability != null ? ability.filter : null, gameEvent, listener.Owner, resolveCardDefinition));
 
             matched += result.AbilitiesMatched;
             resolved += result.EffectsResolved;
             if (result.Status == EffectResolutionStatus.Rejected)
                 return AbilityResolutionResult.Rejected(matched, resolved, result.Error);
             if (result.Status == EffectResolutionStatus.WaitingForChoice)
+            {
+                List<int> remainingIds = new List<int>();
+                List<string> remainingScopes = new List<string>();
+                for (int remaining = index + 1; remaining < listeners.Count; remaining++)
+                {
+                    remainingIds.Add(listeners[remaining].InstanceId);
+                    remainingScopes.Add(listeners[remaining].Scope);
+                }
+                PreserveListenerContinuation(resolution.PendingDecision, listener.Scope, remainingIds, remainingScopes);
                 return AbilityResolutionResult.WaitingForChoice(matched, resolved);
+            }
         }
 
         return AbilityResolutionResult.Applied(matched, resolved);
+    }
+
+    private static void AddListeners(List<ListenerEntry> target, PlayerStateSnapshot owner, List<int> zone, string scope)
+    {
+        if (target == null || owner == null || zone == null) return;
+        foreach (int instanceId in zone.ToArray())
+            target.Add(new ListenerEntry(owner, instanceId, scope));
+    }
+
+    private static List<int> ResolveListenerZone(PlayerStateSnapshot owner, string scope)
+    {
+        if (owner == null) return null;
+        if (string.Equals(scope, DeclarativeRuleVocabulary.InHandScope, StringComparison.OrdinalIgnoreCase)) return owner.Hand;
+        if (string.Equals(scope, DeclarativeRuleVocabulary.InPlayScope, StringComparison.OrdinalIgnoreCase)) return owner.InPlay;
+        if (string.Equals(scope, DeclarativeRuleVocabulary.ArtifactScope, StringComparison.OrdinalIgnoreCase)) return owner.Artifacts;
+        return null;
+    }
+
+    private static void PreserveListenerContinuation(PendingDecisionSnapshot decision, string scope,
+        List<int> remainingIds, List<string> remainingScopes)
+    {
+        if (decision == null || !decision.IsPending) return;
+        decision.ListenerScope = scope ?? string.Empty;
+        decision.RemainingListenerInstanceIds.Clear();
+        decision.RemainingListenerScopes.Clear();
+        if (remainingIds != null) decision.RemainingListenerInstanceIds.AddRange(remainingIds);
+        if (remainingScopes != null) decision.RemainingListenerScopes.AddRange(remainingScopes);
+    }
+
+    private readonly struct ListenerEntry
+    {
+        public PlayerStateSnapshot Owner { get; }
+        public int InstanceId { get; }
+        public string Scope { get; }
+        public ListenerEntry(PlayerStateSnapshot owner, int instanceId, string scope)
+        {
+            Owner = owner; InstanceId = instanceId; Scope = scope ?? string.Empty;
+        }
     }
 
     private static EffectExecutionContext BuildContext(

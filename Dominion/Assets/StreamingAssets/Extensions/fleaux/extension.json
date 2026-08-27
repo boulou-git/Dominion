@@ -33,7 +33,11 @@
       { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
       { "op": "gain_card", "target": "self", "cardId": "base:domaine", "amount": 1, "destinationZone": "discard" }
     ] } ] },
-    { "id": "horreur", "name": "Horreur", "cost": 0, "types": ["Action", "Attaque"], "image": "horreur.png", "text": "Chaque autre joueur défausse jusqu’à avoir 4 cartes en main.\n\nVous pouvez jouer une carte Action coûtant jusqu’à 3 🪙 depuis votre défausse." }
+    { "id": "horreur", "name": "Horreur", "cost": 0, "types": ["Action", "Attaque"], "image": "horreur.png", "text": "Chaque autre joueur défausse jusqu’à avoir 4 cartes en main.\n\nVous pouvez jouer une carte Action coûtant jusqu’à 3 🪙 depuis votre défausse.", "abilities": [ { "when": "play", "effects": [
+      { "op": "discard_others_down_to", "target": "others", "amount": 4, "prompt": "Défaussez jusqu’à avoir 4 cartes en main." },
+      { "op": "choose_cards", "target": "self", "zone": "discard", "min": 0, "max": 1, "allowPass": true, "cardType": "Action", "maxCost": 3, "prompt": "Vous pouvez jouer une carte Action coûtant jusqu’à 3 🪙 depuis votre défausse." },
+      { "op": "play_selected", "target": "self", "sourceZone": "discard" }
+    ] } ] }
   ],
   "artifacts": [
     { "id": "etendard_divin", "name": "Étendard divin", "cost": 0, "types": ["Artefact"], "image": "", "text": "Pendant votre phase d’Ajustement, piochez 1 carte supplémentaire pour votre nouvelle main." },
@@ -42,7 +46,15 @@
     { "id": "necronomicon", "name": "Nécronomicon", "cost": 0, "types": ["Artefact"], "image": "", "text": "À la fin de votre tour, vous pouvez placer une carte coûtant jusqu’à 3 🪙 de votre défausse sur votre deck." },
     { "id": "phylactere", "name": "Phylactère", "cost": 0, "types": ["Artefact"], "image": "", "text": "La première fois à chacun de vos tours qu’une ou plusieurs de vos cartes devraient être défaussées ou écartées, vous pouvez en mettre une de côté à la place. Au début de votre prochain tour, prenez-la dans votre main. Cet effet ne peut pas se déclencher pendant votre phase d’Ajustement." },
     { "id": "encens_noir", "name": "Encens noir", "cost": 0, "types": ["Artefact"], "image": "", "text": "Lorsque vous prenez cet Artefact : +1 Carte. Au début de votre tour, regardez la carte du dessus de votre deck." },
-    { "id": "dague_rituelle", "name": "Dague rituelle", "cost": 0, "types": ["Artefact"], "image": "", "text": "Lorsque vous prenez cet Artefact, vous pouvez défausser une carte de votre main. Puis, la première fois que vous défaussez une carte à chacun de vos tours : +1 🪙." }
+    { "id": "dague_rituelle", "name": "Dague rituelle", "cost": 0, "types": ["Artefact"], "image": "", "text": "Lorsque vous prenez cet Artefact, vous pouvez défausser une carte de votre main. Puis, la première fois que vous défaussez une carte à chacun de vos tours : +1 🪙.", "abilities": [
+      { "when": "artifact_gained", "effects": [
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez défausser une carte de votre main." },
+        { "op": "discard_selected", "target": "self" }
+      ] },
+      { "when": "card_discarded", "scope": "artifact", "filter": { "eventPlayer": "self" }, "oncePerTurn": true, "effects": [
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
+      ] }
+    ] }
   ],
   "specialPiles": [
     { "id": "maladies", "name": "Maladies", "cardsPerPlayer": 10, "shuffle": true, "cardIds": ["fievre", "demangeaisons", "gangrene", "insomnie"] },
@@ -51,7 +63,21 @@
     { "id": "horreurs", "name": "Horreurs", "fixedCount": 10, "shuffle": false, "cardIds": ["horreur"] }
   ],
   "cards": [
-    { "id": "fossoyeur", "name": "Fossoyeur", "cost": 3, "types": ["Action", "Réaction"], "image": "fossoyeur.png", "text": "+1 Action\n+2 🪙\n\nLorsque vous recevez cette carte, recevez une Maladie.\n\nLorsque vous recevez une Maladie, vous pouvez révéler Fossoyeur depuis votre main : +1 Carte, puis défaussez 1 carte." },
+    { "id": "fossoyeur", "name": "Fossoyeur", "cost": 3, "types": ["Action", "Réaction"], "image": "fossoyeur.png", "text": "+1 Action\n+2 🪙\n\nLorsque vous recevez cette carte, recevez une Maladie.\n\nLorsque vous recevez une Maladie, vous pouvez révéler Fossoyeur depuis votre main : +1 Carte, puis défaussez 1 carte.", "abilities": [
+      { "when": "play", "effects": [
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 }
+      ] },
+      { "when": "card_gained", "effects": [
+        { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:maladies", "amount": 1, "destinationZone": "discard" }
+      ] },
+      { "when": "disease_gained", "scope": "in_hand", "filter": { "eventPlayer": "self", "cardType": "Maladie" }, "effects": [
+        { "op": "choose_options", "target": "self", "min": 0, "max": 1, "prompt": "Vous pouvez révéler Fossoyeur.", "options": [ { "id": "reveal", "label": "Révéler Fossoyeur" } ] },
+        { "op": "draw", "target": "self", "amount": 1, "requiresSelectedOption": "reveal" },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "minUpToAvailable": true, "prompt": "Défaussez une carte.", "requiresSelectedOption": "reveal" },
+        { "op": "discard_selected", "target": "self", "requiresSelectedOption": "reveal" }
+      ] }
+    ] },
     { "id": "soeurs", "name": "Sœurs", "cost": 3, "types": ["Action"], "image": "soeurs.png", "text": "+1 Carte\n\nVous pouvez jouer une carte Action coûtant jusqu’à 2 🪙 de votre main.", "abilities": [ { "when": "play", "effects": [
       { "op": "draw", "target": "self", "amount": 1 },
       { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "allowPass": true, "cardType": "Action", "maxCost": 2, "prompt": "Vous pouvez jouer une carte Action coûtant jusqu’à 2 🪙." },
@@ -72,15 +98,43 @@
       ] },
       { "when": "card_trashed", "effects": [ { "op": "gain_trigger_card_from_trash", "target": "self", "destinationZone": "hand" } ] }
     ] },
-    { "id": "marche_clandestin", "name": "Marché clandestin", "cost": 3, "types": ["Action", "Réaction"], "image": "marche_clandestin.png", "text": "+1 Carte\n+1 Action\n+1 Achat\n\nLorsque vous écartez une carte, vous pouvez défausser Marché clandestin depuis votre main. Si vous le faites, recevez un Or." },
+    { "id": "marche_clandestin", "name": "Marché clandestin", "cost": 3, "types": ["Action", "Réaction"], "image": "marche_clandestin.png", "text": "+1 Carte\n+1 Action\n+1 Achat\n\nLorsque vous écartez une carte, vous pouvez défausser Marché clandestin depuis votre main. Si vous le faites, recevez un Or.", "abilities": [
+      { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 }
+      ] },
+      { "when": "card_trashed", "scope": "in_hand", "filter": { "eventPlayer": "self" }, "effects": [
+        { "op": "choose_options", "target": "self", "min": 0, "max": 1, "prompt": "Vous pouvez défausser Marché clandestin pour recevoir un Or.", "options": [ { "id": "react", "label": "Défausser Marché clandestin" } ] },
+        { "op": "discard_source_card", "target": "self", "sourceZone": "hand", "requiresSelectedOption": "react" },
+        { "op": "gain_card", "target": "self", "cardId": "base:or", "amount": 1, "destinationZone": "discard", "requiresSelectedOption": "react" }
+      ] }
+    ] },
     { "id": "cour_des_miracles", "name": "Cour des miracles", "cost": 5, "types": ["Action"], "image": "cour_des_miracles.png", "text": "+3 Cartes\n\nLorsque vous écartez cette carte, recevez un Duché.", "abilities": [
       { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 3 } ] },
       { "when": "card_trashed", "effects": [ { "op": "gain_card", "target": "self", "cardId": "base:duche", "amount": 1, "destinationZone": "discard" } ] }
     ] },
     { "id": "pilleur_de_tombes", "name": "Pilleur de tombes", "cost": 3, "types": ["Action"], "image": "pilleur_de_tombes.png", "text": "Choisissez 1 + le nombre de piles Royaume vides. Vous pouvez choisir plusieurs fois la même option : prenez la Dent en or ; +1 Carte ; +1 Action ; +1 Achat." },
-    { "id": "ossuaire", "name": "Ossuaire", "cost": 5, "types": ["Action"], "image": "ossuaire.png", "text": "Choisissez une option : +2 🪙 ; prenez dans votre main une carte coûtant jusqu’à 3 🪙 du Rebut ; prenez le Sac d’ossements." },
+    { "id": "ossuaire", "name": "Ossuaire", "cost": 5, "types": ["Action"], "image": "ossuaire.png", "text": "Choisissez une option : +2 🪙 ; prenez dans votre main une carte coûtant jusqu’à 3 🪙 du Rebut ; prenez le Sac d’ossements.", "abilities": [ { "when": "play", "effects": [
+      { "op": "choose_options", "target": "self", "min": 1, "max": 1, "prompt": "Choisissez une option.", "options": [
+        { "id": "coins", "label": "+2 🪙" }, { "id": "trash", "label": "Prendre une carte du Rebut" }, { "id": "artifact", "label": "Prendre le Sac d’ossements" }
+      ] },
+      { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "coins" },
+      { "op": "choose_cards", "target": "self", "zone": "trash", "min": 1, "max": 1, "maxCost": 3, "allowNoEligible": true, "prompt": "Prenez une carte coûtant jusqu’à 3 🪙 du Rebut.", "requiresSelectedOption": "trash" },
+      { "op": "gain_selected_trash", "target": "self", "destinationZone": "hand", "requiresSelectedOption": "trash" },
+      { "op": "take_artifact", "target": "self", "artifactId": "fleaux:sac_d_ossements", "requiresSelectedOption": "artifact" }
+    ] } ] },
     { "id": "necromancien", "name": "Nécromancien", "cost": 5, "types": ["Action"], "image": "necromancien.png", "text": "+1 Carte\n+1 Action\n\nVous pouvez écarter une carte de votre main. Si vous aviez déjà écarté une autre carte ce tour-ci, prenez le Nécronomicon." },
-    { "id": "alchimiste", "name": "Alchimiste", "cost": 3, "types": ["Action"], "image": "alchimiste.png", "text": "+1 Action\n\nRegardez les 3 cartes du dessus de votre deck. Défaussez-les toutes ou replacez-les dans l’ordre de votre choix.\n\nSi votre main contient au moins 3 types différents, prenez le Phylactère." },
+    { "id": "alchimiste", "name": "Alchimiste", "cost": 3, "types": ["Action"], "image": "alchimiste.png", "text": "+1 Action\n\nRegardez les 3 cartes du dessus de votre deck. Défaussez-les toutes ou replacez-les dans l’ordre de votre choix.\n\nSi votre main contient au moins 3 types différents, prenez le Phylactère.", "abilities": [ { "when": "play", "effects": [
+      { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+      { "op": "inspect_top_cards", "target": "self", "amount": 3 },
+      { "op": "choose_options", "target": "self", "min": 1, "max": 1, "prompt": "Défaussez les cartes ou replacez-les sur votre deck.", "options": [
+        { "id": "discard", "label": "Tout défausser" }, { "id": "replace", "label": "Replacer sur le deck" }
+      ] },
+      { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "discard", "requiresSelectedOption": "discard", "prompt": "Défaussez les cartes." },
+      { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "deck", "requiresSelectedOption": "replace", "prompt": "Replacez les cartes dans l’ordre de votre choix." },
+      { "op": "take_artifact", "target": "self", "artifactId": "fleaux:phylactere", "requiresMinDistinctTypesInHand": 3 }
+    ] } ] },
     { "id": "cultiste", "name": "Cultiste", "cost": 4, "types": ["Action", "Durée"], "image": "cultiste.png", "text": "Au début de votre prochain tour : +2 Cartes.\n\nPrenez la Dague rituelle ou l’Encens noir.\n\nSi vous contrôlez les deux, écartez cette carte et recevez une Horreur." },
     { "id": "cloitre", "name": "Cloître", "cost": 3, "types": ["Action", "Réaction", "Durée"], "image": "cloitre.png", "text": "+3 Cartes\n\nDéfaussez 2 cartes.\n\nMettez de côté, face cachée sous cette carte, une carte de votre main. Au début de votre prochain tour, prenez-la dans votre main.\n\nRéaction : lorsqu’un autre joueur joue une carte Attaque, vous pouvez révéler Cloître depuis votre main et le mettre de côté. Au début de votre prochain tour, jouez-le." },
     { "id": "cachot", "name": "Cachot", "cost": 4, "types": ["Action", "Durée"], "image": "cachot.png", "text": "+1 Action\n\nMettez de côté la carte du dessus de votre deck. Au début de votre prochain tour, révélez-la : si c’est une Action, jouez-la ; sinon, prenez-la dans votre main.\n\nLorsque vous défaussez ou écartez cette carte autrement que pendant votre phase d’Ajustement, vous pouvez mettre une carte de votre main sur votre deck." },
@@ -99,15 +153,46 @@
       { "op": "move_all_matching_types", "target": "self", "sourceZone": "inspected", "destinationZone": "hand", "cardType": "Victoire|Malédiction|Maladie" },
       { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "deck", "prompt": "Replacez la carte sur votre deck." }
     ] } ] },
-    { "id": "rats", "name": "Rats", "cost": 4, "types": ["Action"], "image": "rats.png", "pileSize": 20, "text": "+1 Carte\n+1 Action\n\nRecevez un Rats.\n\nÉcartez une carte de votre main autre qu’un Rats, ou révélez une main ne contenant que des Rats.\n\nLorsque vous écartez cette carte : +1 Carte." },
-    { "id": "charrette_funebre", "name": "Charrette funèbre", "cost": 4, "types": ["Action"], "image": "charette_funebre.png", "text": "Lorsque vous recevez cette carte, recevez 2 Maladies.\n\n+2 🪙\n\nVous pouvez jouer ou écarter une Maladie de votre main. Si vous le faites : +2 🪙." },
+    { "id": "rats", "name": "Rats", "cost": 4, "types": ["Action"], "image": "rats.png", "pileSize": 20, "text": "+1 Carte\n+1 Action\n\nRecevez un Rats.\n\nÉcartez une carte de votre main autre qu’un Rats, ou révélez une main ne contenant que des Rats.\n\nLorsque vous écartez cette carte : +1 Carte.", "abilities": [
+      { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "gain_card", "target": "self", "cardId": "fleaux:rats", "amount": 1, "destinationZone": "discard" },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "excludedCardId": "fleaux:rats", "allowNoEligible": true, "prompt": "Écartez une carte autre qu’un Rats." },
+        { "op": "trash_selected", "target": "self" },
+        { "op": "reveal_zone", "target": "self", "zone": "hand", "requiresNoLastSelection": true }
+      ] },
+      { "when": "card_trashed", "effects": [ { "op": "draw", "target": "self", "amount": 1 } ] }
+    ] },
+    { "id": "charrette_funebre", "name": "Charrette funèbre", "cost": 4, "types": ["Action"], "image": "charette_funebre.png", "text": "Lorsque vous recevez cette carte, recevez 2 Maladies.\n\n+2 🪙\n\nVous pouvez jouer ou écarter une Maladie de votre main. Si vous le faites : +2 🪙.", "abilities": [
+      { "when": "card_gained", "effects": [ { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:maladies", "amount": 2, "destinationZone": "discard" } ] },
+      { "when": "play", "effects": [
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
+        { "op": "choose_options", "target": "self", "min": 0, "max": 1, "prompt": "Vous pouvez jouer ou écarter une Maladie.", "options": [
+          { "id": "play", "label": "Jouer" }, { "id": "trash", "label": "Écarter" }
+        ] },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "cardType": "Maladie", "allowNoEligible": true, "prompt": "Choisissez une Maladie à jouer.", "requiresSelectedOption": "play" },
+        { "op": "play_selected", "target": "self", "sourceZone": "hand", "requiresSelectedOption": "play" },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "play", "requiresLastSelection": true },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "cardType": "Maladie", "allowNoEligible": true, "prompt": "Choisissez une Maladie à écarter.", "requiresSelectedOption": "trash" },
+        { "op": "trash_selected", "target": "self", "sourceZone": "hand", "requiresSelectedOption": "trash" },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "trash", "requiresLastSelection": true }
+      ] }
+    ] },
     { "id": "charognard", "name": "Charognard", "cost": 5, "types": ["Action", "Victoire"], "image": "charognard.png", "text": "+2 🪙\n\nVous pouvez recevoir une Maladie. Si vous le faites : +2 🪙\n\n———\n\n1 VP", "abilities": [ { "when": "play", "effects": [
       { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
       { "op": "choose_options", "target": "self", "min": 0, "max": 1, "prompt": "Vous pouvez recevoir une Maladie.", "options": [ { "id": "disease", "label": "Recevoir une Maladie" } ] },
       { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:maladies", "amount": 1, "destinationZone": "discard", "requiresSelectedOption": "disease" },
       { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "disease" }
     ] } ] },
-    { "id": "veuve", "name": "Veuve", "cost": 3, "types": ["Action"], "image": "veuve.png", "text": "+1 Carte\n+1 Action\n\nLorsque vous recevez ou écartez cette carte, recevez un Héritage." },
+    { "id": "veuve", "name": "Veuve", "cost": 3, "types": ["Action"], "image": "veuve.png", "text": "+1 Carte\n+1 Action\n\nLorsque vous recevez ou écartez cette carte, recevez un Héritage.", "abilities": [
+      { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 1 },
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 }
+      ] },
+      { "when": "card_gained", "effects": [ { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:heritages", "amount": 1, "destinationZone": "discard" } ] },
+      { "when": "card_trashed", "effects": [ { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:heritages", "amount": 1, "destinationZone": "discard" } ] }
+    ] },
     { "id": "cabinet_des_curiosites", "name": "Cabinet des curiosités", "cost": 7, "types": ["Trésor"], "image": "cabinet_des_curiosites.png", "text": "+1 Achat\n\nLorsque vous jouez cette carte : +1 🪙 par type de carte différent que vous avez en jeu, jusqu’à un maximum de +6 🪙.", "abilities": [ { "when": "play", "effects": [
       { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
       { "op": "add_resource_per_distinct_type_in_play", "target": "self", "resource": "coins", "amount": 1, "max": 6 }

@@ -53,7 +53,7 @@ public static class EffectResolver
         {"reveal_each_other_top_trash_type_except", RevealEachOtherTopTrashTypeExcept},
         {"inspect_top_cards", InspectTopCards}, {"reveal_top_cards", RevealTopCards}, {"reveal_top_if_named", RevealTopIfNamed}, {"move_all_ordered", MoveAllOrdered},
         {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard}, {"reveal_selected", RevealSelected},
-        {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_others_down_to", DiscardOthersDownTo},
+        {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_source_card", DiscardSourceCard}, {"discard_others_down_to", DiscardOthersDownTo},
         {"move_selected", MoveSelected}, {"move_last_moved", MoveLastMoved}, {"move_all_matching_types", MoveAllMatchingTypes},
         {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected}, {"insert_selected_into_deck", InsertSelectedIntoDeck},
         {"choose_supply", ChooseSupply}, {"gain_card", GainCard}, {"gain_selected_supply", GainSelectedSupply},
@@ -187,7 +187,7 @@ public static class EffectResolver
             return EffectResolutionResult.Rejected("choose_cards currently supports hand, discard, inspected and trash zones.");
         int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : min;
         List<int> candidates = Eligible(c.State, c.Actor, z, e.cardId, e.cardType,
-            e.lastMovedOnly ? c.Resolution.LastMovedCardInstanceId : 0, e.maxCost);
+            e.lastMovedOnly ? c.Resolution.LastMovedCardInstanceId : 0, e.maxCost, e.excludedCardId);
         if (e.minUpToAvailable) min = Math.Min(min, candidates.Count);
         max = Math.Min(max, candidates.Count);
         if (candidates.Count == 0 && e.allowNoEligible) { c.Resolution.ClearSelection(); return EffectResolutionResult.Applied(); }
@@ -456,6 +456,19 @@ public static class EffectResolver
             return EffectResolutionResult.Rejected("discard_selected sourceZone is invalid.");
         return DiscardRules.TryDiscardSelected(c.State, c.Actor, source, c.Resolution.TakeSelectedInstanceIds(), c.SourceCardInstanceId, c.EventBus, out string err)
             ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(err);
+    }
+
+    private static EffectResolutionResult DiscardSourceCard(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.SourceCardInstanceId <= 0)
+            return EffectResolutionResult.Rejected("Invalid discard_source_card effect.");
+        CardZone source = CardZone.Hand;
+        if (!string.IsNullOrWhiteSpace(e.sourceZone) && !CardZoneRules.TryParseZone(e.sourceZone, out source))
+            return EffectResolutionResult.Rejected("discard_source_card sourceZone is invalid.");
+        return DiscardRules.TryDiscardSelected(c.State, c.Actor, source, new[] { c.SourceCardInstanceId },
+                c.SourceCardInstanceId, c.EventBus, out string error)
+            ? EffectResolutionResult.Applied()
+            : EffectResolutionResult.Rejected(error);
     }
 
     private static EffectResolutionResult DiscardOthersDownTo(CardEffectData e, EffectExecutionContext c)
@@ -751,13 +764,15 @@ public static class EffectResolver
             : EffectResolutionResult.Rejected(result.Error);
     }
 
-    private static List<int> Eligible(GameStateSnapshot state, PlayerStateSnapshot p, CardZone z, string cardId, string cardType, int onlyId, int maxCost = -1)
+    private static List<int> Eligible(GameStateSnapshot state, PlayerStateSnapshot p, CardZone z, string cardId, string cardType,
+        int onlyId, int maxCost = -1, string excludedCardId = null)
     {
         List<int> r = new List<int>(); List<int> source = CardZoneRules.ResolveZone(state, p, z); if (source == null) return r;
         foreach (int id in source)
         {
             if (onlyId > 0 && id != onlyId) continue; CardInstance i = Find(state, id); if (i == null) continue;
             if (!string.IsNullOrWhiteSpace(cardId) && !string.Equals(i.DefinitionId, cardId, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!string.IsNullOrWhiteSpace(excludedCardId) && string.Equals(i.DefinitionId, excludedCardId, StringComparison.OrdinalIgnoreCase)) continue;
             ExtensionCardData definition = Def(i.DefinitionId);
             if (!string.IsNullOrWhiteSpace(cardType) && !CardDefinitionRules.HasType(definition, cardType)) continue;
             if (maxCost >= 0 && (definition == null || CostRules.GetEffectiveCost(state, definition) > maxCost)) continue;

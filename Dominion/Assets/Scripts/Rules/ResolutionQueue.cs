@@ -70,6 +70,9 @@ public sealed class PendingDecisionSnapshot
     public GameEventSnapshot TriggerEvent;
     public string Timing;
     public int ListenerCardInstanceId;
+    public string ListenerScope;
+    public List<int> RemainingListenerInstanceIds = new List<int>();
+    public List<string> RemainingListenerScopes = new List<string>();
     public int AbilityIndex = -1;
     public int EffectIndex = -1;
 
@@ -78,7 +81,8 @@ public sealed class PendingDecisionSnapshot
         IsPending = false; DecisionId = string.Empty; PlayerId = string.Empty; Operation = string.Empty;
         Zone = string.Empty; Prompt = string.Empty; SourceCardInstanceId = 0; MinSelections = 0; MaxSelections = 0;
         CandidateInstanceIds.Clear(); CandidateDefinitionIds.Clear(); CandidateOptionLabels.Clear(); RemainingPlayerIds.Clear(); TargetHandSize = 0; AllowPass = false;
-        TriggerEvent = null; Timing = string.Empty; ListenerCardInstanceId = 0; AbilityIndex = -1; EffectIndex = -1;
+        TriggerEvent = null; Timing = string.Empty; ListenerCardInstanceId = 0; ListenerScope = string.Empty;
+        RemainingListenerInstanceIds.Clear(); RemainingListenerScopes.Clear(); AbilityIndex = -1; EffectIndex = -1;
     }
 }
 
@@ -296,10 +300,13 @@ public sealed class ResolutionQueue
             Operation = source.Operation, Zone = source.Zone, Prompt = source.Prompt, SourceCardInstanceId = source.SourceCardInstanceId,
             MinSelections = source.MinSelections, MaxSelections = source.MaxSelections, TargetHandSize = source.TargetHandSize, AllowPass = source.AllowPass,
             TriggerEvent = source.TriggerEvent, Timing = source.Timing, ListenerCardInstanceId = source.ListenerCardInstanceId,
+            ListenerScope = source.ListenerScope,
             AbilityIndex = source.AbilityIndex, EffectIndex = source.EffectIndex };
         clone.CandidateInstanceIds.AddRange(source.CandidateInstanceIds); clone.CandidateDefinitionIds.AddRange(source.CandidateDefinitionIds);
         clone.CandidateOptionLabels.AddRange(source.CandidateOptionLabels);
-        clone.RemainingPlayerIds.AddRange(source.RemainingPlayerIds); return clone;
+        clone.RemainingPlayerIds.AddRange(source.RemainingPlayerIds);
+        clone.RemainingListenerInstanceIds.AddRange(source.RemainingListenerInstanceIds);
+        clone.RemainingListenerScopes.AddRange(source.RemainingListenerScopes); return clone;
     }
 
     public static void EnsureSnapshot(GameStateSnapshot state)
@@ -312,6 +319,8 @@ public sealed class ResolutionQueue
         if (state.Resolution.PendingDecision.CandidateDefinitionIds == null) state.Resolution.PendingDecision.CandidateDefinitionIds = new List<string>();
         if (state.Resolution.PendingDecision.CandidateOptionLabels == null) state.Resolution.PendingDecision.CandidateOptionLabels = new List<string>();
         if (state.Resolution.PendingDecision.RemainingPlayerIds == null) state.Resolution.PendingDecision.RemainingPlayerIds = new List<string>();
+        if (state.Resolution.PendingDecision.RemainingListenerInstanceIds == null) state.Resolution.PendingDecision.RemainingListenerInstanceIds = new List<int>();
+        if (state.Resolution.PendingDecision.RemainingListenerScopes == null) state.Resolution.PendingDecision.RemainingListenerScopes = new List<string>();
         if (state.Resolution.SelectedInstanceIds == null) state.Resolution.SelectedInstanceIds = new List<int>();
         if (state.Resolution.SelectedDefinitionIds == null) state.Resolution.SelectedDefinitionIds = new List<string>();
         if (state.Resolution.SelectedOptionIds == null) state.Resolution.SelectedOptionIds = new List<string>();
