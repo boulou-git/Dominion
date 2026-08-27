@@ -367,13 +367,14 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         Transform revealCards = _revealScreen.transform.Find("RevealCards");
         _revealCardsRoot = revealCards != null ? revealCards.Find("Content") as RectTransform : null;
         _revealStatus = _revealScreen.transform.Find("Status")?.GetComponent<Text>();
-        _revealStartButton = _revealScreen.transform.Find("StartButton")?.GetComponent<Button>();
-        if (_revealCardsRoot == null || _revealStatus == null || _revealStartButton == null)
+        //_revealStartButton = _revealScreen.transform.Find("ValidateButton")?.GetComponent<Button>();
+        //if (_revealCardsRoot == null || _revealStatus == null || _revealStartButton == null)
+        if (_revealCardsRoot == null || _revealStatus == null )
         {
             Debug.LogError("LobbySetupScreen Reveal contract is incomplete.", _revealScreen);
             return;
         }
-        _revealStartButton.onClick.AddListener(StartGame);
+        //_revealStartButton.onClick.AddListener(StartGame);
         GameObject zoomPrefab = Resources.Load<GameObject>("UI/CardZoomOverlay");
         if (zoomPrefab == null)
         {
@@ -538,6 +539,10 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         _extensionsPanel = FindDeepChild(_hostSelectionScreen.transform, "ExtensionsPanel") as RectTransform;
         _cardsPanel = FindDeepChild(_hostSelectionScreen.transform, "CardsPanel") as RectTransform;
+
+        _revealStartButton = _hostSelectionScreen.transform.Find("ValidateButton")?.GetComponent<Button>();
+        _revealStartButton.onClick.AddListener(StartGame);
+
         Transform existingBack = _cardsPanel != null ? FindDeepChild(_cardsPanel, "BackButton") : null;
         _cardsBackButton = existingBack != null ? existingBack.GetComponent<Button>() : null;
         if (_extensionsPanel == null || _cardsPanel == null || _cardsBackButton == null)
