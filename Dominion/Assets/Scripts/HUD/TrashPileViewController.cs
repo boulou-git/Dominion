@@ -21,12 +21,19 @@ public sealed class TrashPileViewController : MonoBehaviour
     private Text _openButtonText;
     private GameObject _overlay;
     private RectTransform _cardsRoot;
+    private RectTransform _cardsViewport;
+    private GridLayoutGroup _cardsGrid;
+    private ScrollRect _cardsScroll;
     private Text _title;
     private Text _emptyMessage;
     private GameObject _zoomOverlay;
     private Image _zoomImage;
     private readonly List<GameObject> _renderedCards = new List<GameObject>();
     private int _lastRenderedVersion = -1;
+
+    private const float CardWidth = 130f;
+    private const float CardHeight = 200f;
+    private const float CardSpacing = 18f;
 
     private void Awake()
     {
@@ -40,6 +47,12 @@ public sealed class TrashPileViewController : MonoBehaviour
     private void OnDestroy()
     {
         NetworkGameState.StateChanged -= Refresh;
+    }
+
+    private void OnRectTransformDimensionsChange()
+    {
+        if (_overlay != null && _overlay.activeSelf)
+            RefreshGridColumns();
     }
 
     private void BuildUi()
@@ -148,8 +161,8 @@ public sealed class TrashPileViewController : MonoBehaviour
 
         GameObject viewportObject = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
         viewportObject.transform.SetParent(scrollObject.transform, false);
-        RectTransform viewport = viewportObject.GetComponent<RectTransform>();
-        Stretch(viewport, 0f);
+        _cardsViewport = viewportObject.GetComponent<RectTransform>();
+        Stretch(_cardsViewport, 0f);
         Image viewportImage = viewportObject.GetComponent<Image>();
         viewportImage.color = new Color(0f, 0f, 0f, 0.001f);
         viewportImage.raycastTarget = true;
@@ -164,27 +177,27 @@ public sealed class TrashPileViewController : MonoBehaviour
         _cardsRoot.anchoredPosition = Vector2.zero;
         _cardsRoot.sizeDelta = Vector2.zero;
 
-        GridLayoutGroup grid = contentObject.GetComponent<GridLayoutGroup>();
-        grid.padding = new RectOffset(14, 14, 12, 12);
-        grid.cellSize = new Vector2(130f, 200f);
-        grid.spacing = new Vector2(18f, 18f);
-        grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
-        grid.startAxis = GridLayoutGroup.Axis.Horizontal;
-        grid.childAlignment = TextAnchor.UpperCenter;
-        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        grid.constraintCount = 7;
+        _cardsGrid = contentObject.GetComponent<GridLayoutGroup>();
+        _cardsGrid.padding = new RectOffset(14, 14, 12, 12);
+        _cardsGrid.cellSize = new Vector2(CardWidth, CardHeight);
+        _cardsGrid.spacing = new Vector2(CardSpacing, CardSpacing);
+        _cardsGrid.startCorner = GridLayoutGroup.Corner.UpperLeft;
+        _cardsGrid.startAxis = GridLayoutGroup.Axis.Horizontal;
+        _cardsGrid.childAlignment = TextAnchor.UpperCenter;
+        _cardsGrid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        _cardsGrid.constraintCount = 1;
 
         ContentSizeFitter fitter = contentObject.GetComponent<ContentSizeFitter>();
         fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
         fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        ScrollRect scroll = scrollObject.GetComponent<ScrollRect>();
-        scroll.viewport = viewport;
-        scroll.content = _cardsRoot;
-        scroll.horizontal = false;
-        scroll.vertical = true;
-        scroll.movementType = ScrollRect.MovementType.Clamped;
-        scroll.scrollSensitivity = 30f;
+        _cardsScroll = scrollObject.GetComponent<ScrollRect>();
+        _cardsScroll.viewport = _cardsViewport;
+        _cardsScroll.content = _cardsRoot;
+        _cardsScroll.horizontal = false;
+        _cardsScroll.vertical = true;
+        _cardsScroll.movementType = ScrollRect.MovementType.Clamped;
+        _cardsScroll.scrollSensitivity = 30f;
     }
 
     private void Refresh(GameStateSnapshot state)
@@ -228,24 +241,32 @@ public sealed class TrashPileViewController : MonoBehaviour
         foreach (int instanceId in trash)
         {
             CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
-            if (instance == null || string.IsNullOrEmpty(instance.DefinitionId)) continue;
-            if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out ExtensionPackageData extension,
-                    out ExtensionCardData definition) || definition == null) continue;
+            ExtensionPackageData extension = null;
+            ExtensionCardData definition = null;
+            bool resolved = instance != null && !string.IsNullOrEmpty(instance.DefinitionId) &&
+                            RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition) &&
+                            definition != null;
 
-            Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition);
+            Sprite sprite = resolved ? ExtensionVisualLoader.LoadCardArtwork(extension, definition) : null;
             GameObject cardObject = new GameObject(
-                "Trash_" + instanceId + "_" + definition.id,
+                "Trash_" + instanceId + (resolved ? "_" + definition.id : "_Unresolved"),
                 typeof(RectTransform),
                 typeof(Image),
                 typeof(CardPointerInteraction));
             cardObject.transform.SetParent(_cardsRoot, false);
-            RectTransform cardRect = cardObject.GetComponent<RectTransform>();
-            cardRect.sizeDelta = new Vector2(130f, 200f);
             Image image = cardObject.GetComponent<Image>();
             image.sprite = sprite;
             image.preserveAspect = true;
             image.raycastTarget = true;
             image.color = sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);
+
+            if (!resolved)
+            {
+                Text fallback = CreateText(cardObject.transform, "MissingCard", 14, FontStyle.Bold,
+                    TextAnchor.MiddleCenter, Color.white);
+                Stretch(fallback.rectTransform, 8f);
+                fallback.text = "CARTE INTROUVABLE\n#" + instanceId;
+            }
 
             if (sprite != null)
             {
@@ -259,8 +280,28 @@ public sealed class TrashPileViewController : MonoBehaviour
             _renderedCards.Add(cardObject);
         }
 
+        Canvas.ForceUpdateCanvases();
+        RefreshGridColumns();
         LayoutRebuilder.ForceRebuildLayoutImmediate(_cardsRoot);
         Canvas.ForceUpdateCanvases();
+        if (_cardsScroll != null)
+            _cardsScroll.verticalNormalizedPosition = 1f;
+    }
+
+    private void RefreshGridColumns()
+    {
+        if (_cardsGrid == null || _cardsViewport == null)
+            return;
+
+        float availableWidth = _cardsViewport.rect.width -
+                               _cardsGrid.padding.left - _cardsGrid.padding.right;
+        int columns = Mathf.Max(1, Mathf.FloorToInt((availableWidth + CardSpacing) / (CardWidth + CardSpacing)));
+        if (_cardsGrid.constraintCount == columns)
+            return;
+
+        _cardsGrid.constraintCount = columns;
+        if (_cardsRoot != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_cardsRoot);
     }
 
     private void BindZoomUi()
