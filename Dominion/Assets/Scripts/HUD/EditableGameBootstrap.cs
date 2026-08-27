@@ -27,7 +27,7 @@ public static class EditableGameBootstrap
         GameObject prefab = Resources.Load<GameObject>(PrefabResourcePath);
         if (prefab == null)
         {
-            Debug.LogError("GameScreen prefab missing. Run Dominion > UI > Create or Rebuild Editable Game UI.");
+            Debug.LogError("GameScreen prefab missing. Run Dominion > UI > Create Missing Editable Game UI.");
             return;
         }
 

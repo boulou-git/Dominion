@@ -16,11 +16,24 @@ public static class DominionConnectionPrefabBuilder
     private static readonly Color Accent = new Color(0.31f, 0.255f, 0.14f, 1f);
     private static readonly Color Muted = new Color(0.70f, 0.67f, 0.59f, 1f);
 
-    [MenuItem("Dominion/UI/Create or Rebuild Connection UI")]
+    [MenuItem("Dominion/UI/Create Missing Connection UI")]
     public static void Build()
     {
         Directory.CreateDirectory(RootFolder);
         AssetDatabase.Refresh();
+        GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+        if (existing != null)
+        {
+            Selection.activeObject = existing;
+            Debug.Log("ConnectionScreen.prefab already exists and was left untouched.");
+            return;
+        }
+        Sprite logoSprite = LoadLogoSprite();
+        if (logoSprite == null)
+        {
+            Debug.LogError("Connection UI requires the logo at " + LogoPath + ". No fallback UI was generated.");
+            return;
+        }
 
         GameObject root = UiObject(
             "ConnectionScreen",
@@ -59,19 +72,10 @@ public static class DominionConnectionPrefabBuilder
         Image rightShade = ChildImage(visualRoot.transform, "RightShade", new Vector2(0.82f, 0f), Vector2.one, new Color(0f, 0f, 0f, 0.16f));
         rightShade.raycastTarget = false;
 
-        Sprite logoSprite = LoadLogoSprite();
-        if (logoSprite != null)
-        {
-            Image logo = ChildImage(visualRoot.transform, "Logo", new Vector2(0.29f, 0.70f), new Vector2(0.71f, 0.91f), Color.white);
-            logo.sprite = logoSprite;
-            logo.preserveAspect = true;
-            logo.raycastTarget = false;
-        }
-        else
-        {
-            Text fallbackLogo = ChildText(visualRoot.transform, "LogoFallback", "DOMINION", 62, TextAnchor.MiddleCenter, new Vector2(0.25f, 0.73f), new Vector2(0.75f, 0.90f));
-            fallbackLogo.fontStyle = FontStyle.Bold;
-        }
+        Image logo = ChildImage(visualRoot.transform, "Logo", new Vector2(0.29f, 0.70f), new Vector2(0.71f, 0.91f), Color.white);
+        logo.sprite = logoSprite;
+        logo.preserveAspect = true;
+        logo.raycastTarget = false;
 
         Text edition = ChildText(
             visualRoot.transform,

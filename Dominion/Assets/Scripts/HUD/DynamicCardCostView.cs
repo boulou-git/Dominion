@@ -9,6 +9,7 @@ using UnityEngine.UI;
 public sealed class DynamicCardCostView : MonoBehaviour
 {
     private const string CostTextName = "DynamicCost";
+    private const string CostPrefabResourcePath = "UI/CardCostOverlay";
 
     private ExtensionCardData _definition;
     private Text _costText;
@@ -69,6 +70,8 @@ public sealed class DynamicCardCostView : MonoBehaviour
     public void RefreshCost(GameStateSnapshot state)
     {
         EnsureText();
+        if (_costText == null)
+            return;
         int cost = CostRules.GetEffectiveCost(state, _definition);
         _displayedCost = cost;
         _costText.gameObject.SetActive(cost >= 0);
@@ -88,30 +91,16 @@ public sealed class DynamicCardCostView : MonoBehaviour
 
         if (_costText == null)
         {
-            GameObject textObject = new GameObject(CostTextName, typeof(RectTransform), typeof(Text), typeof(Outline));
-            textObject.transform.SetParent(transform, false);
+            GameObject prefab = Resources.Load<GameObject>(CostPrefabResourcePath);
+            if (prefab == null || prefab.GetComponent<Text>() == null)
+            {
+                Debug.LogError("Missing Resources/UI/CardCostOverlay prefab.", this);
+                return;
+            }
 
-            RectTransform rect = textObject.GetComponent<RectTransform>();
-            // Matches the upper-left coin printed in the locked 59:91 card template.
-            rect.anchorMin = new Vector2(0.035f, 0.815f);
-            rect.anchorMax = new Vector2(0.285f, 0.978f);
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
-
-            _costText = textObject.GetComponent<Text>();
-            _costText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            _costText.alignment = TextAnchor.MiddleCenter;
-            _costText.fontStyle = FontStyle.Bold;
-            _costText.resizeTextForBestFit = true;
-            _costText.resizeTextMinSize = 6;
-            _costText.resizeTextMaxSize = 48;
-            _costText.color = new Color(0.12f, 0.075f, 0.025f, 1f);
-            _costText.raycastTarget = false;
-
-            Outline outline = textObject.GetComponent<Outline>();
-            outline.effectColor = new Color(1f, 0.86f, 0.48f, 0.58f);
-            outline.effectDistance = new Vector2(1f, -1f);
-            outline.useGraphicAlpha = false;
+            GameObject instance = Instantiate(prefab, transform, false);
+            instance.name = CostTextName;
+            _costText = instance.GetComponent<Text>();
         }
 
         _costText.raycastTarget = false;

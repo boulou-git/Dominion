@@ -62,7 +62,7 @@ public static class EditableLobbyBootstrap
         if (prefab == null)
         {
             Debug.LogWarning(
-                "Missing Resources/UI/ConnectionScreen prefab. Run Dominion > UI > Create or Rebuild Connection UI once.");
+                "Missing Resources/UI/ConnectionScreen prefab. Run Dominion > UI > Create Missing Connection UI once.");
             return;
         }
 

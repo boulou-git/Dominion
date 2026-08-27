@@ -126,9 +126,10 @@ public sealed class CardGainAnimationController : MonoBehaviour
         if (destination == null)
             destination = FindDeepChild(transform, "Discard") as RectTransform;
 
-        GameObject visual = new GameObject("GainedCard_" + definition.id, typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
+        RuntimeCardView cardView = RuntimeCardView.Create(_animationRoot, "GainedCard_" + definition.id, definition, sprite, false);
+        if (cardView == null) yield break;
+        GameObject visual = cardView.gameObject;
         RectTransform rect = visual.GetComponent<RectTransform>();
-        rect.SetParent(_animationRoot, false);
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.sizeDelta = new Vector2(230f, 355f);
@@ -136,13 +137,13 @@ public sealed class CardGainAnimationController : MonoBehaviour
         rect.localScale = Vector3.one * 0.78f;
         rect.SetAsLastSibling();
 
-        Image image = visual.GetComponent<Image>();
-        image.sprite = sprite;
-        image.preserveAspect = true;
-        image.raycastTarget = false;
-        DynamicCardCostView.Attach(visual, definition);
-
         CanvasGroup group = visual.GetComponent<CanvasGroup>();
+        if (group == null)
+        {
+            Debug.LogError("RuntimeCard prefab must contain a CanvasGroup for card animations.", visual);
+            Destroy(visual);
+            yield break;
+        }
         group.blocksRaycasts = false;
         group.interactable = false;
         group.alpha = 0f;

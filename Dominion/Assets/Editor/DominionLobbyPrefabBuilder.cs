@@ -11,7 +11,7 @@ public static class DominionLobbyPrefabBuilder
     private const string CardPrefabPath = RootFolder + "/CardSelectionTile.prefab";
     private const string LobbyPrefabPath = RootFolder + "/LobbySetupScreen.prefab";
 
-    [MenuItem("Dominion/UI/Create or Rebuild Editable Lobby Prefabs")]
+    [MenuItem("Dominion/UI/Create Missing Editable Lobby Prefabs")]
     public static void Build()
     {
         Directory.CreateDirectory(RootFolder);
@@ -23,8 +23,15 @@ public static class DominionLobbyPrefabBuilder
             Debug.LogError("Missing editable extension tile prefab at " + ExtensionPrefabPath + ".");
             return;
         }
-        CardSelectionTileView cardPrefab = BuildCardTile();
-        BuildLobby(extensionPrefab, cardPrefab);
+        CardSelectionTileView cardPrefab = AssetDatabase.LoadAssetAtPath<CardSelectionTileView>(CardPrefabPath);
+        if (cardPrefab == null)
+            cardPrefab = BuildCardTile();
+
+        GameObject lobbyPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(LobbyPrefabPath);
+        if (lobbyPrefab == null)
+            BuildLobby(extensionPrefab, cardPrefab);
+        else
+            Debug.Log("LobbySetupScreen.prefab already exists and was left untouched.");
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -118,10 +125,6 @@ public static class DominionLobbyPrefabBuilder
         SetSerialized(controller, "_extensionTilePrefab", extensionPrefab);
         SetSerialized(controller, "_cardTilePrefab", cardPrefab);
         SetSerialized(controller, "_waitingText", waiting.GetComponentInChildren<Text>());
-        SetSerialized(controller, "_revealCardsRoot", revealContent);
-        SetSerialized(controller, "_revealStatus", revealStatus);
-        SetSerialized(controller, "_startButton", start);
-
         PrefabUtility.SaveAsPrefabAsset(root, LobbyPrefabPath);
         Object.DestroyImmediate(root);
     }

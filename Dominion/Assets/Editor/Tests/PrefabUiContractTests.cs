@@ -1,0 +1,75 @@
+#if UNITY_INCLUDE_TESTS
+using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UI;
+
+public sealed class PrefabUiContractTests
+{
+    [Test]
+    public void RuntimeCard_IsTheSharedCompleteCardVisual()
+    {
+        GameObject prefab = Load("RuntimeCard");
+        Assert.NotNull(prefab.GetComponent<Image>());
+        Assert.NotNull(prefab.GetComponent<LayoutElement>());
+        Assert.NotNull(prefab.GetComponent<CanvasGroup>());
+        Assert.NotNull(prefab.GetComponent<CardPointerInteraction>());
+        Assert.NotNull(prefab.GetComponent<DynamicCardCostView>());
+        Assert.NotNull(prefab.GetComponent<RuntimeCardView>());
+        Assert.NotNull(prefab.transform.Find("DynamicCost")?.GetComponent<Text>());
+        Assert.NotNull(prefab.transform.Find("RemainingCount/Text")?.GetComponent<Text>());
+    }
+
+    [Test]
+    public void TrashAndDecisionPrefabs_ExposeTheirRuntimeContracts()
+    {
+        GameObject trash = Load("TrashPileUi");
+        Assert.NotNull(trash.transform.Find("TrashPileButton")?.GetComponent<Button>());
+        Transform cards = trash.transform.Find("TrashPileOverlay/Panel/CardsScroll/Viewport/Cards");
+        Assert.NotNull(cards?.GetComponent<GridLayoutGroup>());
+        Assert.NotNull(trash.transform.Find("TrashPileOverlay/Panel/CardsScroll")?.GetComponent<ScrollRect>());
+
+        GameObject decision = Load("PendingDecisionPanel");
+        Assert.NotNull(decision.transform.Find("Prompt")?.GetComponent<Text>());
+        Assert.NotNull(decision.transform.Find("DecisionCards")?.GetComponent<GridLayoutGroup>());
+        Assert.NotNull(decision.transform.Find("DecisionOptions")?.GetComponent<GridLayoutGroup>());
+        Assert.NotNull(decision.transform.Find("ConfirmDecision")?.GetComponent<Button>());
+        Assert.NotNull(Load("DecisionOption").transform.Find("Label")?.GetComponent<Text>());
+    }
+
+    [Test]
+    public void PauseRevealAndEndGame_ArePrefabAuthored()
+    {
+        GameObject pause = Load("GamePauseMenu");
+        Assert.NotNull(pause.GetComponent<Canvas>());
+        Assert.NotNull(pause.GetComponent<GamePauseMenu>());
+        Assert.NotNull(pause.transform.Find("Backdrop/Window/ResumeButton")?.GetComponent<Button>());
+        Assert.NotNull(pause.transform.Find("Backdrop/Window/CloseGameButton")?.GetComponent<Button>());
+
+        GameObject lobby = Load("LobbySetupScreen");
+        GridLayoutGroup revealGrid = lobby.transform.Find("Reveal/RevealCards/Content")?.GetComponent<GridLayoutGroup>();
+        Assert.NotNull(revealGrid);
+        Assert.AreEqual(GridLayoutGroup.Constraint.FixedColumnCount, revealGrid.constraint);
+        Assert.AreEqual(5, revealGrid.constraintCount);
+        Assert.NotNull(lobby.transform.Find("HostSelection/CardsPanel/BackButton")?.GetComponent<Button>());
+
+        GameObject flow = Load("EndGameFlow");
+        Assert.NotNull(flow.GetComponent<Canvas>());
+        Assert.NotNull(flow.transform.Find("EndGameSurface"));
+        Assert.NotNull(Load("EndGameScoringStage").transform.Find("Breakdown/ScoreRows"));
+        Assert.NotNull(Load("EndGameRankingStage").transform.Find("Ranking/RankingRows"));
+        Assert.NotNull(Load("EndGameRankingStage").transform.Find("Detail/DetailRows"));
+        GameObject scoreRow = Load("EndGameScoreRow");
+        Assert.NotNull(scoreRow.transform.Find("Points/Value")?.GetComponent<Text>());
+        Assert.NotNull(scoreRow.transform.Find("Points/Shield")?.GetComponent<Image>()?.sprite);
+        Assert.NotNull(Load("EndGameRankingRow").transform.Find("Score/Value")?.GetComponent<Text>());
+    }
+
+    private static GameObject Load(string name)
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/UI/" + name + ".prefab");
+        Assert.NotNull(prefab, name + ".prefab is missing.");
+        return prefab;
+    }
+}
+#endif

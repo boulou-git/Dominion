@@ -16,38 +16,45 @@ public sealed partial class EndGameFlowController
         }
 
         ClearStage();
-        _stageRoot = CreatePanel("FinalRankingStage", _surface, new Vector2(0.06f, 0.055f), new Vector2(0.94f, 0.945f), Window);
-
-        Text title = CreateText("Title", _stageRoot, "CLASSEMENT FINAL", 40, TextAnchor.MiddleCenter, Gold, FontStyle.Bold);
-        SetAnchors(title.rectTransform, new Vector2(0.22f, 0.89f), new Vector2(0.78f, 0.975f));
-        AddPanelBehind(title.rectTransform, "TitleBanner", BlueBanner, 10f);
+        GameObject prefab = Resources.Load<GameObject>(RankingStagePrefabPath);
+        if (prefab == null)
+        {
+            Debug.LogError("EndGameRankingStage prefab missing.", this);
+            return;
+        }
+        _stageRoot = Instantiate(prefab, _surface).GetComponent<RectTransform>();
 
         List<RankedPlayerScore> ranking = FinalRankingRules.Calculate(_finalState);
-        RectTransform rankingPanel = CreatePanel("Ranking", _stageRoot, new Vector2(0.035f, 0.13f), new Vector2(0.46f, 0.84f), InnerPanel);
-        RectTransform detailPanel = CreatePanel("Detail", _stageRoot, new Vector2(0.49f, 0.13f), new Vector2(0.965f, 0.84f), InnerPanel);
+        RectTransform rankingPanel = _stageRoot.Find("Ranking") as RectTransform;
+        RectTransform detailPanel = _stageRoot.Find("Detail") as RectTransform;
+        Button returnButton = _stageRoot.Find("ReturnToLobby")?.GetComponent<Button>();
+        if (rankingPanel == null || detailPanel == null || returnButton == null)
+        {
+            Debug.LogError("EndGameRankingStage prefab contract is incomplete.", _stageRoot);
+            return;
+        }
         BuildRankingList(rankingPanel, detailPanel, ranking);
-
-        CreateButton("ReturnToLobby", _stageRoot, "RETOUR AU SALON", new Vector2(0.38f, 0.025f), new Vector2(0.62f, 0.095f), GreenButton, ReturnToLobby);
+        returnButton.onClick.AddListener(ReturnToLobby);
     }
 
     private void BuildRankingList(RectTransform rankingPanel, RectTransform detailPanel, List<RankedPlayerScore> ranking)
     {
         _rankingButtons.Clear();
-        Text heading = CreateText("Heading", rankingPanel, "JOUEURS", 25, TextAnchor.MiddleCenter, Gold, FontStyle.Bold);
-        SetAnchors(heading.rectTransform, new Vector2(0.04f, 0.87f), new Vector2(0.96f, 0.97f));
-
-        float top = 0.82f;
-        float rowHeight = ranking.Count > 0 ? Mathf.Min(0.145f, 0.65f / ranking.Count) : 0.145f;
+        RectTransform rowsRoot = rankingPanel.Find("RankingRows") as RectTransform;
+        if (rowsRoot == null)
+        {
+            Debug.LogError("EndGameRankingStage Ranking/Rows is missing.", rankingPanel);
+            return;
+        }
         RankedPlayerScore defaultSelection = null;
         string localId = NetworkGameState.LocalPlayerId;
 
         for (int i = 0; i < ranking.Count; i++)
         {
             RankedPlayerScore item = ranking[i];
-            float yMax = top - (i * rowHeight);
-            float yMin = yMax - rowHeight + 0.009f;
             Color background = item.Rank == 1 ? WinnerRow : RowDark;
-            Button button = CreateRankingRow(rankingPanel, item, new Vector2(0.04f, yMin), new Vector2(0.96f, yMax), background);
+            Button button = CreateRankingRow(rowsRoot, item, background);
+            if (button == null) continue;
             _rankingButtons.Add(button);
             RankedPlayerScore captured = item;
             button.onClick.AddListener(() =>
@@ -72,26 +79,34 @@ public sealed partial class EndGameFlowController
         }
     }
 
-    private Button CreateRankingRow(RectTransform parent, RankedPlayerScore item, Vector2 min, Vector2 max, Color background)
+    private Button CreateRankingRow(RectTransform parent, RankedPlayerScore item, Color background)
     {
-        GameObject obj = new GameObject("Rank_" + item.Rank + "_" + Sanitize(item.Score.PlayerId), typeof(RectTransform), typeof(Image), typeof(Button));
-        RectTransform row = obj.GetComponent<RectTransform>();
-        row.SetParent(parent, false);
-        SetAnchors(row, min, max);
+        GameObject prefab = Resources.Load<GameObject>(RankingRowPrefabPath);
+        if (prefab == null)
+        {
+            Debug.LogError("EndGameRankingRow prefab missing.", this);
+            return null;
+        }
+        GameObject obj = Instantiate(prefab, parent);
+        obj.name = "Rank_" + item.Rank + "_" + Sanitize(item.Score.PlayerId);
         Image image = obj.GetComponent<Image>();
-        image.color = background;
         Button button = obj.GetComponent<Button>();
-        button.targetGraphic = image;
+        Text rank = obj.transform.Find("Rank")?.GetComponent<Text>();
+        Text name = obj.transform.Find("Name")?.GetComponent<Text>();
+        Text scoreText = obj.transform.Find("Score/Value")?.GetComponent<Text>();
+        if (image == null || button == null || rank == null || name == null || scoreText == null)
+        {
+            Debug.LogError("EndGameRankingRow prefab contract is incomplete.", obj);
+            Destroy(obj);
+            return null;
+        }
+        image.color = background;
 
         string rankLabel = item.IsTied ? "=" + item.Rank : item.Rank.ToString();
-        Text rank = CreateText("Rank", row, rankLabel, 28, TextAnchor.MiddleCenter, Gold, FontStyle.Bold);
-        SetAnchors(rank.rectTransform, new Vector2(0.02f, 0.08f), new Vector2(0.16f, 0.92f));
-
-        Text name = CreateText("Name", row, string.IsNullOrEmpty(item.Score.PlayerName) ? "Joueur" : item.Score.PlayerName, 22, TextAnchor.MiddleLeft, Color.white, item.Rank == 1 ? FontStyle.Bold : FontStyle.Normal);
-        SetAnchors(name.rectTransform, new Vector2(0.18f, 0.08f), new Vector2(0.65f, 0.92f));
-
-        Text scoreText;
-        CreatePointValue(row, "Score", item.Score.VictoryPoints, out scoreText, new Vector2(0.68f, 0.08f), new Vector2(0.97f, 0.92f), 26, Gold);
+        rank.text = rankLabel;
+        name.text = string.IsNullOrEmpty(item.Score.PlayerName) ? "Joueur" : item.Score.PlayerName;
+        name.fontStyle = item.Rank == 1 ? FontStyle.Bold : FontStyle.Normal;
+        scoreText.text = item.Score.VictoryPoints.ToString();
         return button;
     }
 
@@ -112,29 +127,24 @@ public sealed partial class EndGameFlowController
         if (panel == null || ranked == null)
             return;
 
-        ClearChildren(panel);
+        RectTransform rowsRoot = panel.Find("DetailRows") as RectTransform;
+        Text title = panel.Find("DetailTitle")?.GetComponent<Text>();
+        Text meta = panel.Find("Meta")?.GetComponent<Text>();
+        Text totalText = panel.Find("DetailTotal/Value")?.GetComponent<Text>();
+        if (rowsRoot == null || title == null || meta == null || totalText == null)
+        {
+            Debug.LogError("EndGameRankingStage Detail contract is incomplete.", panel);
+            return;
+        }
+        ClearChildren(rowsRoot);
         PlayerScoreResult score = ranked.Score;
-        Text title = CreateText("DetailTitle", panel, "DÉTAIL DES POINTS — " + (string.IsNullOrEmpty(score.PlayerName) ? "JOUEUR" : score.PlayerName.ToUpperInvariant()), 23, TextAnchor.MiddleCenter, Gold, FontStyle.Bold);
-        SetAnchors(title.rectTransform, new Vector2(0.04f, 0.87f), new Vector2(0.96f, 0.97f));
-
-        Text meta = CreateText("Meta", panel, score.TotalCards + " cartes possédées  •  " + ranked.TurnsTaken + " tours joués", 16, TextAnchor.MiddleCenter, new Color(0.78f, 0.74f, 0.65f, 1f));
-        SetAnchors(meta.rectTransform, new Vector2(0.05f, 0.80f), new Vector2(0.95f, 0.865f));
+        title.text = "DÉTAIL DES POINTS — " + (string.IsNullOrEmpty(score.PlayerName) ? "JOUEUR" : score.PlayerName.ToUpperInvariant());
+        meta.text = score.TotalCards + " cartes possédées  •  " + ranked.TurnsTaken + " tours joués";
 
         List<CardScoreBreakdown> breakdown = OrderedBreakdown(score.Breakdown);
-        float top = 0.76f;
-        float rowHeight = breakdown.Count > 0 ? Mathf.Min(0.112f, 0.55f / breakdown.Count) : 0.112f;
         for (int i = 0; i < breakdown.Count; i++)
-        {
-            float yMax = top - (i * rowHeight);
-            float yMin = yMax - rowHeight + 0.007f;
-            CreateScoreRow(panel, breakdown[i], new Vector2(0.045f, yMin), new Vector2(0.955f, yMax), false);
-        }
-
-        RectTransform totalBar = CreatePanel("Total", panel, new Vector2(0.045f, 0.055f), new Vector2(0.955f, 0.15f), new Color(0.085f, 0.075f, 0.06f, 1f));
-        Text totalLabel = CreateText("Label", totalBar, "TOTAL", 26, TextAnchor.MiddleLeft, Gold, FontStyle.Bold);
-        SetAnchors(totalLabel.rectTransform, new Vector2(0.04f, 0.05f), new Vector2(0.45f, 0.95f));
-        Text totalText;
-        CreatePointValue(totalBar, "Value", score.VictoryPoints, out totalText, new Vector2(0.61f, 0.05f), new Vector2(0.96f, 0.95f), 31, Gold);
+            CreateScoreRow(rowsRoot, breakdown[i], false);
+        totalText.text = score.VictoryPoints.ToString();
     }
 
     private void ReturnToLobby()

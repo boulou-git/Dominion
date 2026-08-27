@@ -243,18 +243,16 @@ public sealed class GameScreenController : MonoBehaviour
         }
 
         Transform localHand = FindDeepChild(transform, "LocalHand");
-        if (localHand == null)
-            localHand = CreateFallbackLocalHand();
-
         Transform cards = FindDirectChild(localHand, "Cards");
-        if (cards == null)
-            cards = CreateFallbackCardsRoot(localHand);
 
         if (cards is RectTransform handRect)
         {
             _handRoot = handRect;
             _handRoot.gameObject.SetActive(true);
-            EnsureHandLayout(_handRoot);
+        }
+        else if (!_dynamicRootsLogged)
+        {
+            Debug.LogError("GameScreen prefab contract is incomplete: LocalHand/Cards is missing.", this);
         }
 
         if (!_dynamicRootsLogged)
@@ -264,60 +262,6 @@ public sealed class GameScreenController : MonoBehaviour
                 "Game UI dynamic roots: hand=" + (_handRoot != null ? HierarchyPath(_handRoot) : "NULL") +
                 ", kingdom=" + (_kingdomSupplyRoot != null ? HierarchyPath(_kingdomSupplyRoot) : "NULL") + ".");
         }
-    }
-
-    private Transform CreateFallbackLocalHand()
-    {
-        GameObject localHandObject = new GameObject("LocalHand", typeof(RectTransform), typeof(Image));
-        localHandObject.transform.SetParent(transform, false);
-        RectTransform localHandRect = localHandObject.GetComponent<RectTransform>();
-        SetAnchors(localHandRect, new Vector2(0.015f, 0.015f), new Vector2(0.985f, 0.277f));
-        localHandObject.GetComponent<Image>().color = new Color(0.115f, 0.108f, 0.095f, 0.98f);
-
-        GameObject headerObject = new GameObject("Header", typeof(RectTransform), typeof(Text));
-        headerObject.transform.SetParent(localHandObject.transform, false);
-        RectTransform headerRect = headerObject.GetComponent<RectTransform>();
-        SetAnchors(headerRect, new Vector2(0.018f, 0.82f), new Vector2(0.982f, 0.98f));
-        Text header = headerObject.GetComponent<Text>();
-        header.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        header.text = "VOTRE MAIN";
-        header.fontSize = 18;
-        header.fontStyle = FontStyle.Bold;
-        header.alignment = TextAnchor.MiddleLeft;
-        header.color = Color.white;
-        header.raycastTarget = false;
-
-        Debug.LogWarning("GameScreen had no LocalHand object. Created a runtime fallback hand panel.");
-        return localHandObject.transform;
-    }
-
-    private Transform CreateFallbackCardsRoot(Transform localHand)
-    {
-        GameObject cardsObject = new GameObject("Cards", typeof(RectTransform), typeof(HorizontalLayoutGroup));
-        cardsObject.transform.SetParent(localHand, false);
-        RectTransform cardsRect = cardsObject.GetComponent<RectTransform>();
-        SetAnchors(cardsRect, new Vector2(0.018f, 0.055f), new Vector2(0.982f, 0.81f));
-        EnsureHandLayout(cardsRect);
-        Debug.LogWarning("GameScreen LocalHand had no Cards container. Created it at runtime.");
-        return cardsObject.transform;
-    }
-
-    private static void EnsureHandLayout(RectTransform root)
-    {
-        if (root == null)
-            return;
-
-        HorizontalLayoutGroup layout = root.GetComponent<HorizontalLayoutGroup>();
-        if (layout == null)
-            layout = root.gameObject.AddComponent<HorizontalLayoutGroup>();
-
-        layout.spacing = 8f;
-        layout.childAlignment = TextAnchor.MiddleCenter;
-        layout.childControlWidth = false;
-        layout.childControlHeight = false;
-        layout.childForceExpandWidth = false;
-        layout.childForceExpandHeight = false;
-        layout.padding = new RectOffset(8, 8, 4, 4);
     }
 
     private void SynchroniseLocalHandOrder(List<int> authoritativeHand)
@@ -391,36 +335,12 @@ public sealed class GameScreenController : MonoBehaviour
             }
 
             Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition);
-            GameObject cardObject = new GameObject(
-                "Hand_" + instanceId + "_" + definition.id,
-                typeof(RectTransform),
-                typeof(Image),
-                typeof(LayoutElement),
-                typeof(CardPointerInteraction));
-            cardObject.transform.SetParent(_handRoot, false);
-
-            RectTransform cardRect = cardObject.GetComponent<RectTransform>();
-            cardRect.anchorMin = new Vector2(0.5f, 0.5f);
-            cardRect.anchorMax = new Vector2(0.5f, 0.5f);
-            cardRect.pivot = new Vector2(0.5f, 0.5f);
-            cardRect.sizeDelta = new Vector2(130f, 200f);
-
-            Image image = cardObject.GetComponent<Image>();
-            image.sprite = sprite;
-            image.color = sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);
-            image.preserveAspect = true;
-            image.raycastTarget = true;
-            DynamicCardCostView.Attach(cardObject, definition);
-
-            LayoutElement layout = cardObject.GetComponent<LayoutElement>();
-            layout.preferredWidth = 130f;
-            layout.minWidth = 130f;
-            layout.preferredHeight = 200f;
-            layout.minHeight = 200f;
-            layout.flexibleWidth = 0f;
-            layout.flexibleHeight = 0f;
-
-            CardPointerInteraction pointer = cardObject.GetComponent<CardPointerInteraction>();
+            RuntimeCardView cardView = RuntimeCardView.Create(
+                _handRoot, "Hand_" + instanceId + "_" + definition.id, definition, sprite, true);
+            if (cardView == null)
+                continue;
+            GameObject cardObject = cardView.gameObject;
+            CardPointerInteraction pointer = cardView.Pointer;
             pointer.InspectOnLongPress = false;
             Sprite capturedSprite = sprite;
             ExtensionCardData capturedDefinition = definition;
@@ -517,29 +437,14 @@ public sealed class GameScreenController : MonoBehaviour
                 continue;
 
             Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, card);
-            GameObject cardObject = new GameObject(
-                "Supply_" + card.id,
-                typeof(RectTransform),
-                typeof(Image),
-                typeof(Button),
-                typeof(CardPointerInteraction));
-            cardObject.transform.SetParent(_kingdomSupplyRoot, false);
-
-            Image image = cardObject.GetComponent<Image>();
-            image.sprite = sprite;
-            image.color = sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);
-            image.preserveAspect = true;
-            image.raycastTarget = true;
-            DynamicCardCostView.Attach(cardObject, card);
-
-            Button button = cardObject.GetComponent<Button>();
-            button.targetGraphic = image;
+            RuntimeCardView cardView = RuntimeCardView.Create(
+                _kingdomSupplyRoot, "Supply_" + card.id, card, sprite, true);
+            if (cardView == null)
+                continue;
+            GameObject cardObject = cardView.gameObject;
             Sprite captured = sprite;
             ExtensionCardData capturedDefinition = card;
-            if (captured != null)
-                button.onClick.AddListener(() => ShowZoom(captured, capturedDefinition));
-
-            CardPointerInteraction pointer = cardObject.GetComponent<CardPointerInteraction>();
+            CardPointerInteraction pointer = cardView.Pointer;
             if (captured != null)
                 pointer.InspectRequested += () => ShowZoom(captured, capturedDefinition);
 
@@ -623,14 +528,6 @@ public sealed class GameScreenController : MonoBehaviour
             current = current.parent;
         }
         return path;
-    }
-
-    private static void SetAnchors(RectTransform rect, Vector2 min, Vector2 max)
-    {
-        rect.anchorMin = min;
-        rect.anchorMax = max;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
     }
 
     private static string PhaseLabel(string phase)

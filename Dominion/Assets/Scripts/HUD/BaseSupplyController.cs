@@ -98,20 +98,15 @@ public sealed class BaseSupplyController : MonoBehaviour
             }
 
             Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, card);
-            GameObject pileObject = new GameObject(
-                "BaseSupply_" + card.id,
-                typeof(RectTransform),
-                typeof(Image));
-            pileObject.transform.SetParent(_baseSupplyRoot, false);
+            RuntimeCardView cardView = RuntimeCardView.Create(
+                _baseSupplyRoot, "BaseSupply_" + card.id, card, sprite, false);
+            if (cardView == null)
+                continue;
+            GameObject pileObject = cardView.gameObject;
 
-            Image image = pileObject.GetComponent<Image>();
-            image.sprite = sprite;
-            image.color = sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);
-            image.preserveAspect = true;
-            image.raycastTarget = false;
-            DynamicCardCostView.Attach(pileObject, card);
-
-            Text count = CreateCountBadge(pileObject.transform);
+            cardView.SetRemainingCount(0);
+            Text count = cardView.RemainingCountText;
+            if (count == null) continue;
             _countLabels[definitionId] = count;
             _pileObjects.Add(pileObject);
         }
@@ -123,59 +118,10 @@ public sealed class BaseSupplyController : MonoBehaviour
         Debug.Log("Base Reserve rendered: " + _pileObjects.Count + " pile(s).");
     }
 
-    private static Text CreateCountBadge(Transform parent)
-    {
-        GameObject badgeObject = new GameObject("RemainingCount", typeof(RectTransform), typeof(Image));
-        badgeObject.transform.SetParent(parent, false);
-
-        RectTransform badgeRect = badgeObject.GetComponent<RectTransform>();
-        badgeRect.anchorMin = new Vector2(0.64f, 0.79f);
-        badgeRect.anchorMax = new Vector2(0.98f, 0.98f);
-        badgeRect.offsetMin = Vector2.zero;
-        badgeRect.offsetMax = Vector2.zero;
-
-        Image badge = badgeObject.GetComponent<Image>();
-        badge.color = new Color(0.04f, 0.04f, 0.04f, 0.88f);
-        badge.raycastTarget = false;
-
-        GameObject textObject = new GameObject("Text", typeof(RectTransform), typeof(Text), typeof(Outline));
-        textObject.transform.SetParent(badgeObject.transform, false);
-
-        RectTransform textRect = textObject.GetComponent<RectTransform>();
-        textRect.anchorMin = Vector2.zero;
-        textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = Vector2.zero;
-        textRect.offsetMax = Vector2.zero;
-
-        Text text = textObject.GetComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        text.fontSize = 22;
-        text.fontStyle = FontStyle.Bold;
-        text.alignment = TextAnchor.MiddleCenter;
-        text.color = Color.white;
-        text.raycastTarget = false;
-        text.text = "—";
-
-        Outline outline = textObject.GetComponent<Outline>();
-        outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
-        outline.effectDistance = new Vector2(1f, -1f);
-
-        return text;
-    }
-
     private static void EnsureLayout(RectTransform root)
     {
-        if (root == null || root.GetComponent<LayoutGroup>() != null)
-            return;
-
-        HorizontalLayoutGroup layout = root.gameObject.AddComponent<HorizontalLayoutGroup>();
-        layout.spacing = 8f;
-        layout.padding = new RectOffset(4, 4, 4, 4);
-        layout.childAlignment = TextAnchor.MiddleCenter;
-        layout.childControlWidth = false;
-        layout.childControlHeight = false;
-        layout.childForceExpandWidth = false;
-        layout.childForceExpandHeight = false;
+        if (root != null && root.GetComponent<LayoutGroup>() == null)
+            Debug.LogError("GameScreen prefab contract is incomplete: BaseSupply needs a LayoutGroup.", root);
     }
 
     private void ClearGeneratedPiles()

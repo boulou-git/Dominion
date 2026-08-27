@@ -239,41 +239,7 @@ public sealed class PublicJournalView : MonoBehaviour
             _zoomOverlay.transform.SetAsLastSibling();
             return;
         }
-
-        ShowFallbackZoom(sprite, definition);
-    }
-
-    private void ShowFallbackZoom(Sprite sprite, ExtensionCardData definition)
-    {
-        Canvas canvas = GetComponentInParent<Canvas>();
-        if (canvas == null) return;
-
-        Transform existing = canvas.transform.Find("JournalZoomFallback");
-        if (existing != null) Destroy(existing.gameObject);
-
-        GameObject overlay = new GameObject("JournalZoomFallback", typeof(RectTransform), typeof(Image), typeof(Button));
-        overlay.transform.SetParent(canvas.transform, false);
-        RectTransform overlayRect = overlay.GetComponent<RectTransform>();
-        overlayRect.anchorMin = Vector2.zero;
-        overlayRect.anchorMax = Vector2.one;
-        overlayRect.offsetMin = Vector2.zero;
-        overlayRect.offsetMax = Vector2.zero;
-        overlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.78f);
-        overlay.GetComponent<Button>().onClick.AddListener(() => Destroy(overlay));
-
-        GameObject imageObject = new GameObject("Card", typeof(RectTransform), typeof(Image));
-        imageObject.transform.SetParent(overlay.transform, false);
-        RectTransform cardRect = imageObject.GetComponent<RectTransform>();
-        cardRect.anchorMin = new Vector2(0.37f, 0.13f);
-        cardRect.anchorMax = new Vector2(0.63f, 0.87f);
-        cardRect.offsetMin = Vector2.zero;
-        cardRect.offsetMax = Vector2.zero;
-        Image image = imageObject.GetComponent<Image>();
-        image.sprite = sprite;
-        image.preserveAspect = true;
-        image.raycastTarget = false;
-        DynamicCardCostView.Attach(imageObject, definition);
-        overlay.transform.SetAsLastSibling();
+        Debug.LogError("GameScreen prefab contract is incomplete: CardZoomOverlay/ZoomedCard is missing.", this);
     }
 
     private void ClearRows()

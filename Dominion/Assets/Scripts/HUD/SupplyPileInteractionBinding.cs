@@ -76,7 +76,10 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         if (_selectionHalo == null) _selectionHalo = gameObject.AddComponent<CardSelectionHalo>();
         _selectionHalo.SetVisible(false);
 
-        _countText = FindOrCreateCountText(transform);
+        RuntimeCardView runtimeCard = GetComponent<RuntimeCardView>();
+        _countText = runtimeCard != null ? runtimeCard.RemainingCountText : null;
+        if (_countText == null)
+            Debug.LogError("Supply pile must use RuntimeCard.prefab with RemainingCount/Text.", this);
         EnsureCountBadgeVisible();
         RefreshAvailabilityVisual();
     }
@@ -175,21 +178,25 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
             yield break;
         }
 
-        GameObject flyingObject = new GameObject("PurchasedCardAnimation_" + _definitionId.Replace(':', '_'), typeof(RectTransform), typeof(Image));
-        flyingObject.transform.SetParent(canvas.transform, false);
+        RuntimeCardView flyingView = RuntimeCardView.Create(
+            canvas.transform,
+            "PurchasedCardAnimation_" + _definitionId.Replace(':', '_'),
+            _definition,
+            _sprite,
+            false);
+        if (flyingView == null)
+        {
+            _purchaseAnimationRunning = false;
+            RefreshAvailabilityVisual();
+            yield break;
+        }
+        GameObject flyingObject = flyingView.gameObject;
         flyingObject.transform.SetAsLastSibling();
         RectTransform flying = flyingObject.GetComponent<RectTransform>();
         Vector2 sourceSize = source.rect.size;
         if (sourceSize.x <= 1f || sourceSize.y <= 1f) sourceSize = new Vector2(96f, 148f);
         flying.sizeDelta = sourceSize;
         flying.pivot = new Vector2(0.5f, 0.5f);
-
-        Image flyingImage = flyingObject.GetComponent<Image>();
-        flyingImage.sprite = _sprite;
-        flyingImage.preserveAspect = true;
-        flyingImage.raycastTarget = false;
-        flyingImage.color = Color.white;
-        DynamicCardCostView.Attach(flyingObject, _definition);
 
         Vector3 startWorld = source.TransformPoint(source.rect.center);
         Vector3 targetWorld = discard.TransformPoint(discard.rect.center);
@@ -224,53 +231,6 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         if (_pointer == null) return;
         _pointer.PrimaryActionRequested -= OnPrimaryAction;
         _pointer.InspectRequested -= OnInspect;
-    }
-
-    private static Text FindOrCreateCountText(Transform parent)
-    {
-        Transform existingBadge = parent.Find("RemainingCount");
-        if (existingBadge != null)
-        {
-            existingBadge.gameObject.SetActive(true);
-            existingBadge.SetAsLastSibling();
-            Text existing = existingBadge.GetComponentInChildren<Text>(true);
-            if (existing != null) return existing;
-        }
-
-        GameObject badgeObject = new GameObject("RemainingCount", typeof(RectTransform), typeof(Image));
-        badgeObject.transform.SetParent(parent, false);
-        badgeObject.transform.SetAsLastSibling();
-        RectTransform badgeRect = badgeObject.GetComponent<RectTransform>();
-        badgeRect.anchorMin = new Vector2(0.64f, 0.79f);
-        badgeRect.anchorMax = new Vector2(0.98f, 0.98f);
-        badgeRect.offsetMin = Vector2.zero;
-        badgeRect.offsetMax = Vector2.zero;
-
-        Image badge = badgeObject.GetComponent<Image>();
-        badge.color = new Color(0.03f, 0.03f, 0.03f, 0.88f);
-        badge.raycastTarget = false;
-
-        GameObject textObject = new GameObject("Text", typeof(RectTransform), typeof(Text), typeof(Outline));
-        textObject.transform.SetParent(badgeObject.transform, false);
-        RectTransform textRect = textObject.GetComponent<RectTransform>();
-        textRect.anchorMin = Vector2.zero;
-        textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = Vector2.zero;
-        textRect.offsetMax = Vector2.zero;
-
-        Text text = textObject.GetComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        text.fontSize = 20;
-        text.fontStyle = FontStyle.Bold;
-        text.alignment = TextAnchor.MiddleCenter;
-        text.color = Color.white;
-        text.raycastTarget = false;
-        text.text = "—";
-
-        Outline outline = textObject.GetComponent<Outline>();
-        outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
-        outline.effectDistance = new Vector2(1f, -1f);
-        return text;
     }
 
     private static Transform FindDeepChild(Transform parent, string childName)

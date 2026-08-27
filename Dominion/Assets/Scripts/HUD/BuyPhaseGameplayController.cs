@@ -360,8 +360,9 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         int layers = Mathf.Clamp(count, 1, 3);
         for (int i = 0; i < layers; i++)
         {
-            GameObject layerObject = new GameObject("CardLayer" + i, typeof(RectTransform), typeof(Image));
-            layerObject.transform.SetParent(stack.transform, false);
+            RuntimeCardView layer = RuntimeCardView.Create(stack.transform, "CardLayer" + i, definition, sprite, i == layers - 1);
+            if (layer == null) continue;
+            GameObject layerObject = layer.gameObject;
             RectTransform layerRect = layerObject.GetComponent<RectTransform>();
             layerRect.anchorMin = new Vector2(0.5f, 0.5f);
             layerRect.anchorMax = new Vector2(0.5f, 0.5f);
@@ -369,15 +370,9 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             layerRect.sizeDelta = new Vector2(104f, 160f);
             layerRect.anchoredPosition = new Vector2(i * 5f, -i * 3f);
 
-            Image image = layerObject.GetComponent<Image>();
-            image.sprite = sprite;
-            image.preserveAspect = true;
-            image.raycastTarget = i == layers - 1;
-            DynamicCardCostView.Attach(layerObject, definition);
-
             if (i == layers - 1 && sprite != null)
             {
-                CardPointerInteraction pointer = layerObject.AddComponent<CardPointerInteraction>();
+                CardPointerInteraction pointer = layer.Pointer;
                 pointer.InspectOnLongPress = false;
                 Sprite captured = sprite;
                 ExtensionCardData capturedDefinition = definition;
@@ -411,23 +406,17 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             return;
 
         Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition);
-        _discardTopObject = new GameObject("DiscardTopCard", typeof(RectTransform), typeof(Image));
-        _discardTopObject.transform.SetParent(_discardPanel, false);
+        RuntimeCardView discardView = RuntimeCardView.Create(_discardPanel, "DiscardTopCard", definition, sprite, sprite != null);
+        if (discardView == null) return;
+        _discardTopObject = discardView.gameObject;
         _discardTopObject.transform.SetSiblingIndex(0);
 
         RectTransform rect = _discardTopObject.GetComponent<RectTransform>();
         SetAnchors(rect, new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.96f));
 
-        Image image = _discardTopObject.GetComponent<Image>();
-        image.sprite = sprite;
-        image.preserveAspect = true;
-        image.raycastTarget = sprite != null;
-        image.color = Color.white;
-        DynamicCardCostView.Attach(_discardTopObject, definition);
-
         if (sprite != null)
         {
-            CardPointerInteraction pointer = _discardTopObject.AddComponent<CardPointerInteraction>();
+            CardPointerInteraction pointer = discardView.Pointer;
             pointer.InspectOnLongPress = false;
             Sprite captured = sprite;
             ExtensionCardData capturedDefinition = definition;

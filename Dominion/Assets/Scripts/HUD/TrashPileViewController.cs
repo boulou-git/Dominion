@@ -6,14 +6,11 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Public, read-only view of the match-wide trash.
-/// The UI is built at runtime so it remains independent from the editable GameScreen prefab.
+/// The visual hierarchy is authored in Resources/UI/TrashPileUi.prefab.
 /// </summary>
 public sealed class TrashPileViewController : MonoBehaviour
 {
-    private static readonly Color ButtonColor = new Color(0.29f, 0.24f, 0.16f, 0.98f);
-    private static readonly Color ButtonHighlightedColor = new Color(0.40f, 0.33f, 0.20f, 1f);
-    private static readonly Color PanelColor = new Color(0.105f, 0.095f, 0.08f, 0.99f);
-    private static readonly Color BorderColor = new Color(0.48f, 0.39f, 0.23f, 1f);
+    private const string PrefabResourcePath = "UI/TrashPileUi";
     private static readonly BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
 
     private GameScreenController _screen;
@@ -30,6 +27,7 @@ public sealed class TrashPileViewController : MonoBehaviour
     private Image _zoomImage;
     private readonly List<GameObject> _renderedCards = new List<GameObject>();
     private int _lastRenderedVersion = -1;
+    private bool _uiBindingFailed;
 
     private const float CardWidth = 130f;
     private const float CardHeight = 200f;
@@ -57,147 +55,51 @@ public sealed class TrashPileViewController : MonoBehaviour
 
     private void BuildUi()
     {
-        if (_openButton != null || _screen == null) return;
+        if (_openButton != null || _screen == null || _uiBindingFailed) return;
+        GameObject prefab = Resources.Load<GameObject>(PrefabResourcePath);
+        if (prefab == null)
+        {
+            Debug.LogError("TrashPileUi prefab missing at Resources/UI/TrashPileUi.", this);
+            _uiBindingFailed = true;
+            return;
+        }
 
-        BuildOpenButton();
-        BuildOverlay();
-        _overlay.SetActive(false);
-    }
+        GameObject ui = Instantiate(prefab, transform);
+        ui.name = "TrashPileUi";
+        Transform buttonTransform = ui.transform.Find("TrashPileButton");
+        Transform overlayTransform = ui.transform.Find("TrashPileOverlay");
+        Transform panel = overlayTransform != null ? overlayTransform.Find("Panel") : null;
+        Transform scroll = panel != null ? panel.Find("CardsScroll") : null;
+        Transform viewport = scroll != null ? scroll.Find("Viewport") : null;
+        Transform cards = viewport != null ? viewport.Find("Cards") : null;
 
-    private void BuildOpenButton()
-    {
-        GameObject buttonObject = new GameObject("TrashPileButton", typeof(RectTransform), typeof(Image), typeof(Button));
-        buttonObject.transform.SetParent(transform, false);
-        RectTransform rect = buttonObject.GetComponent<RectTransform>();
-        rect.anchorMin = Vector2.one;
-        rect.anchorMax = Vector2.one;
-        rect.pivot = Vector2.one;
-        rect.anchoredPosition = new Vector2(-500f, -80f);
-        rect.sizeDelta = new Vector2(158f, 46f);
+        _openButton = buttonTransform != null ? buttonTransform.GetComponent<Button>() : null;
+        _openButtonText = buttonTransform != null ? buttonTransform.Find("Label")?.GetComponent<Text>() : null;
+        _overlay = overlayTransform != null ? overlayTransform.gameObject : null;
+        _title = panel != null ? panel.Find("Title")?.GetComponent<Text>() : null;
+        _emptyMessage = panel != null ? panel.Find("EmptyMessage")?.GetComponent<Text>() : null;
+        _cardsScroll = scroll != null ? scroll.GetComponent<ScrollRect>() : null;
+        _cardsViewport = viewport as RectTransform;
+        _cardsRoot = cards as RectTransform;
+        _cardsGrid = cards != null ? cards.GetComponent<GridLayoutGroup>() : null;
+        Button backgroundClose = overlayTransform != null ? overlayTransform.GetComponent<Button>() : null;
+        Button closeButton = panel != null ? panel.Find("Close")?.GetComponent<Button>() : null;
 
-        Image image = buttonObject.GetComponent<Image>();
-        image.color = Color.white;
-        image.raycastTarget = true;
+        if (_openButton == null || _openButtonText == null || _overlay == null || _title == null ||
+            _emptyMessage == null || _cardsScroll == null || _cardsViewport == null || _cardsRoot == null ||
+            _cardsGrid == null || backgroundClose == null || closeButton == null)
+        {
+            Debug.LogError("TrashPileUi prefab contract is incomplete.", ui);
+            Destroy(ui);
+            _openButton = null;
+            _uiBindingFailed = true;
+            return;
+        }
 
-        _openButton = buttonObject.GetComponent<Button>();
-        _openButton.targetGraphic = image;
-        ColorBlock colors = _openButton.colors;
-        colors.normalColor = ButtonColor;
-        colors.highlightedColor = ButtonHighlightedColor;
-        colors.pressedColor = new Color(0.23f, 0.18f, 0.11f, 1f);
-        colors.selectedColor = colors.highlightedColor;
-        _openButton.colors = colors;
         _openButton.onClick.AddListener(Open);
-
-        _openButtonText = CreateText(buttonObject.transform, "Label", 18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
-        Stretch(_openButtonText.rectTransform, 5f);
-        _openButtonText.raycastTarget = false;
-        _openButtonText.text = "ÉCART (0)";
-    }
-
-    private void BuildOverlay()
-    {
-        _overlay = new GameObject("TrashPileOverlay", typeof(RectTransform), typeof(Image), typeof(Button));
-        _overlay.transform.SetParent(transform, false);
-        Stretch(_overlay.GetComponent<RectTransform>(), 0f);
-        Image shade = _overlay.GetComponent<Image>();
-        shade.color = new Color(0f, 0f, 0f, 0.80f);
-        shade.raycastTarget = true;
-        Button backgroundClose = _overlay.GetComponent<Button>();
-        backgroundClose.targetGraphic = shade;
         backgroundClose.onClick.AddListener(Close);
-
-        GameObject panel = new GameObject("Panel", typeof(RectTransform), typeof(Image), typeof(Outline));
-        panel.transform.SetParent(_overlay.transform, false);
-        RectTransform panelRect = panel.GetComponent<RectTransform>();
-        panelRect.anchorMin = new Vector2(0.11f, 0.11f);
-        panelRect.anchorMax = new Vector2(0.89f, 0.89f);
-        panelRect.offsetMin = Vector2.zero;
-        panelRect.offsetMax = Vector2.zero;
-        Image panelImage = panel.GetComponent<Image>();
-        panelImage.color = PanelColor;
-        panelImage.raycastTarget = true;
-        Outline outline = panel.GetComponent<Outline>();
-        outline.effectColor = BorderColor;
-        outline.effectDistance = new Vector2(2f, -2f);
-
-        _title = CreateText(panel.transform, "Title", 28, FontStyle.Bold, TextAnchor.MiddleLeft, Color.white);
-        RectTransform titleRect = _title.rectTransform;
-        titleRect.anchorMin = new Vector2(0.035f, 0.865f);
-        titleRect.anchorMax = new Vector2(0.82f, 0.965f);
-        titleRect.offsetMin = Vector2.zero;
-        titleRect.offsetMax = Vector2.zero;
-        _title.text = "ÉCART — 0 CARTE";
-
-        Button closeButton = CreateButton(panel.transform, "Close", "FERMER", 18);
-        RectTransform closeRect = closeButton.GetComponent<RectTransform>();
-        closeRect.anchorMin = new Vector2(0.84f, 0.885f);
-        closeRect.anchorMax = new Vector2(0.965f, 0.955f);
-        closeRect.offsetMin = Vector2.zero;
-        closeRect.offsetMax = Vector2.zero;
         closeButton.onClick.AddListener(Close);
-
-        BuildScrollView(panel.transform);
-
-        _emptyMessage = CreateText(panel.transform, "EmptyMessage", 22, FontStyle.Italic, TextAnchor.MiddleCenter,
-            new Color(0.76f, 0.72f, 0.63f, 1f));
-        RectTransform emptyRect = _emptyMessage.rectTransform;
-        emptyRect.anchorMin = new Vector2(0.08f, 0.20f);
-        emptyRect.anchorMax = new Vector2(0.92f, 0.78f);
-        emptyRect.offsetMin = Vector2.zero;
-        emptyRect.offsetMax = Vector2.zero;
-        _emptyMessage.text = "Aucune carte n’a encore été écartée.";
-    }
-
-    private void BuildScrollView(Transform panel)
-    {
-        GameObject scrollObject = new GameObject("CardsScroll", typeof(RectTransform), typeof(ScrollRect));
-        scrollObject.transform.SetParent(panel, false);
-        RectTransform scrollRectTransform = scrollObject.GetComponent<RectTransform>();
-        scrollRectTransform.anchorMin = new Vector2(0.035f, 0.055f);
-        scrollRectTransform.anchorMax = new Vector2(0.965f, 0.85f);
-        scrollRectTransform.offsetMin = Vector2.zero;
-        scrollRectTransform.offsetMax = Vector2.zero;
-
-        GameObject viewportObject = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
-        viewportObject.transform.SetParent(scrollObject.transform, false);
-        _cardsViewport = viewportObject.GetComponent<RectTransform>();
-        Stretch(_cardsViewport, 0f);
-        Image viewportImage = viewportObject.GetComponent<Image>();
-        viewportImage.color = new Color(0f, 0f, 0f, 0.001f);
-        viewportImage.raycastTarget = true;
-        viewportObject.GetComponent<Mask>().showMaskGraphic = false;
-
-        GameObject contentObject = new GameObject("Cards", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
-        contentObject.transform.SetParent(viewportObject.transform, false);
-        _cardsRoot = contentObject.GetComponent<RectTransform>();
-        _cardsRoot.anchorMin = new Vector2(0f, 1f);
-        _cardsRoot.anchorMax = new Vector2(1f, 1f);
-        _cardsRoot.pivot = new Vector2(0.5f, 1f);
-        _cardsRoot.anchoredPosition = Vector2.zero;
-        _cardsRoot.sizeDelta = Vector2.zero;
-
-        _cardsGrid = contentObject.GetComponent<GridLayoutGroup>();
-        _cardsGrid.padding = new RectOffset(14, 14, 12, 12);
-        _cardsGrid.cellSize = new Vector2(CardWidth, CardHeight);
-        _cardsGrid.spacing = new Vector2(CardSpacing, CardSpacing);
-        _cardsGrid.startCorner = GridLayoutGroup.Corner.UpperLeft;
-        _cardsGrid.startAxis = GridLayoutGroup.Axis.Horizontal;
-        _cardsGrid.childAlignment = TextAnchor.UpperCenter;
-        _cardsGrid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        _cardsGrid.constraintCount = 1;
-
-        ContentSizeFitter fitter = contentObject.GetComponent<ContentSizeFitter>();
-        fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-        _cardsScroll = scrollObject.GetComponent<ScrollRect>();
-        _cardsScroll.viewport = _cardsViewport;
-        _cardsScroll.content = _cardsRoot;
-        _cardsScroll.horizontal = false;
-        _cardsScroll.vertical = true;
-        _cardsScroll.movementType = ScrollRect.MovementType.Clamped;
-        _cardsScroll.scrollSensitivity = 30f;
+        _overlay.SetActive(false);
     }
 
     private void Refresh(GameStateSnapshot state)
@@ -248,31 +150,21 @@ public sealed class TrashPileViewController : MonoBehaviour
                             definition != null;
 
             Sprite sprite = resolved ? ExtensionVisualLoader.LoadCardArtwork(extension, definition) : null;
-            GameObject cardObject = new GameObject(
-                "Trash_" + instanceId + (resolved ? "_" + definition.id : "_Unresolved"),
-                typeof(RectTransform),
-                typeof(Image),
-                typeof(CardPointerInteraction));
-            cardObject.transform.SetParent(_cardsRoot, false);
-            Image image = cardObject.GetComponent<Image>();
-            image.sprite = sprite;
-            image.preserveAspect = true;
-            image.raycastTarget = true;
-            image.color = sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);
-            if (resolved)
-                DynamicCardCostView.Attach(cardObject, definition);
-
             if (!resolved)
-            {
-                Text fallback = CreateText(cardObject.transform, "MissingCard", 14, FontStyle.Bold,
-                    TextAnchor.MiddleCenter, Color.white);
-                Stretch(fallback.rectTransform, 8f);
-                fallback.text = "CARTE INTROUVABLE\n#" + instanceId;
-            }
+                Debug.LogWarning("Could not resolve trashed card instance #" + instanceId + "; keeping a placeholder card visible.", this);
+
+            RuntimeCardView cardView = RuntimeCardView.Create(
+                _cardsRoot,
+                "Trash_" + instanceId + (resolved ? "_" + definition.id : "_Unresolved"),
+                definition,
+                sprite,
+                resolved);
+            if (cardView == null) continue;
+            GameObject cardObject = cardView.gameObject;
 
             if (sprite != null)
             {
-                CardPointerInteraction pointer = cardObject.GetComponent<CardPointerInteraction>();
+                CardPointerInteraction pointer = cardView.Pointer;
                 pointer.InspectOnLongPress = false;
                 Sprite capturedSprite = sprite;
                 ExtensionCardData capturedDefinition = definition;
@@ -335,40 +227,4 @@ public sealed class TrashPileViewController : MonoBehaviour
         _renderedCards.Clear();
     }
 
-    private static Button CreateButton(Transform parent, string name, string label, int fontSize)
-    {
-        GameObject buttonObject = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
-        buttonObject.transform.SetParent(parent, false);
-        Image image = buttonObject.GetComponent<Image>();
-        image.color = ButtonColor;
-        Button button = buttonObject.GetComponent<Button>();
-        button.targetGraphic = image;
-        Text text = CreateText(buttonObject.transform, "Label", fontSize, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
-        Stretch(text.rectTransform, 4f);
-        text.raycastTarget = false;
-        text.text = label;
-        return button;
-    }
-
-    private static Text CreateText(Transform parent, string name, int fontSize, FontStyle style, TextAnchor alignment, Color color)
-    {
-        GameObject textObject = new GameObject(name, typeof(RectTransform), typeof(Text));
-        textObject.transform.SetParent(parent, false);
-        Text text = textObject.GetComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        text.fontSize = fontSize;
-        text.fontStyle = style;
-        text.alignment = alignment;
-        text.color = color;
-        text.raycastTarget = false;
-        return text;
-    }
-
-    private static void Stretch(RectTransform rect, float inset)
-    {
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = new Vector2(inset, inset);
-        rect.offsetMax = new Vector2(-inset, -inset);
-    }
 }

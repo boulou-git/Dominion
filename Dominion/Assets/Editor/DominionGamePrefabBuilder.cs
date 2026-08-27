@@ -15,11 +15,18 @@ public static class DominionGamePrefabBuilder
     private static readonly Color Accent = new Color(0.31f, 0.255f, 0.14f, 1f);
     private static readonly Color Muted = new Color(0.72f, 0.69f, 0.61f, 1f);
 
-    [MenuItem("Dominion/UI/Create or Rebuild Editable Game UI")]
+    [MenuItem("Dominion/UI/Create Missing Editable Game UI")]
     public static void Build()
     {
         Directory.CreateDirectory(RootFolder);
         AssetDatabase.Refresh();
+        GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(GamePrefabPath);
+        if (existing != null)
+        {
+            Selection.activeObject = existing;
+            Debug.Log("GameScreen.prefab already exists and was left untouched.");
+            return;
+        }
 
         GameObject root = UiObject("GameScreen", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(GameScreenController));
         Stretch(root.GetComponent<RectTransform>());
@@ -99,6 +106,10 @@ public static class DominionGamePrefabBuilder
         Text handCount = StatusLine(right, "HandCount", "Main  5", 0.42f, false);
 
         RectTransform deckPanel = PanelRect(right, "Deck", new Vector2(0.08f, 0.265f), new Vector2(0.46f, 0.385f), PanelAlt);
+        Image deckBack = ChildImage(deckPanel, "CardBack", new Vector2(0.12f, 0.04f), new Vector2(0.88f, 0.96f), Color.white);
+        deckBack.sprite = CardBackReference.LoadSprite();
+        deckBack.preserveAspect = true;
+        deckBack.raycastTarget = false;
         Text deck = ChildText(deckPanel, "Text", "PIOCHE\n0", 16, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
         RectTransform discardPanel = PanelRect(right, "Discard", new Vector2(0.54f, 0.265f), new Vector2(0.92f, 0.385f), PanelAlt);
         Text discard = ChildText(discardPanel, "Text", "DÉFAUSSE\n0", 16, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);

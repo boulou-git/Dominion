@@ -66,37 +66,13 @@ public sealed class DeckPileVisualController : MonoBehaviour
 
         if (_cardBackImage == null)
         {
-            GameObject cardBackObject = new GameObject("CardBack", typeof(RectTransform), typeof(Image));
-            cardBackObject.transform.SetParent(_deckPanel, false);
-            RectTransform rect = cardBackObject.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.12f, 0.04f);
-            rect.anchorMax = new Vector2(0.88f, 0.96f);
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
-
-            _cardBackImage = cardBackObject.GetComponent<Image>();
-            _cardBackImage.preserveAspect = true;
-            _cardBackImage.raycastTarget = false;
-            _cardBackImage.color = Color.white;
-            _cardBackImage.sprite = CardBackReference.LoadSprite();
-            cardBackObject.transform.SetAsFirstSibling();
-        }
-        else if (_cardBackImage.sprite == null)
-        {
-            _cardBackImage.sprite = CardBackReference.LoadSprite();
+            Debug.LogError("GameScreen prefab contract is incomplete: Deck/CardBack is missing.", this);
+            return;
         }
 
-        if (_deckText != null)
+        if (_cardBackImage.sprite == null)
         {
-            _deckText.color = Color.white;
-            _deckText.fontStyle = FontStyle.Bold;
-            _deckText.transform.SetAsLastSibling();
-
-            Outline outline = _deckText.GetComponent<Outline>();
-            if (outline == null)
-                outline = _deckText.gameObject.AddComponent<Outline>();
-            outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
-            outline.effectDistance = new Vector2(1.5f, -1.5f);
+            _cardBackImage.sprite = CardBackReference.LoadSprite();
         }
     }
 

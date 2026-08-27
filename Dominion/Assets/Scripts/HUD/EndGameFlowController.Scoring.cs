@@ -12,48 +12,50 @@ public sealed partial class EndGameFlowController
         _animatedRows.Clear();
         _animatedRunningTotal = 0;
 
-        Text heading = CreateText("Heading", parent, "CARTES DE POINTS", 24, TextAnchor.MiddleCenter, Gold, FontStyle.Bold);
-        SetAnchors(heading.rectTransform, new Vector2(0.05f, 0.86f), new Vector2(0.95f, 0.97f));
+        RectTransform rowsRoot = parent.Find("ScoreRows") as RectTransform;
+        Transform total = parent.Find("ScoreTotal");
+        _scoreTotalText = total != null ? total.Find("Value")?.GetComponent<Text>() : null;
+        if (rowsRoot == null || _scoreTotalText == null)
+        {
+            Debug.LogError("EndGameScoringStage Breakdown contract is incomplete.", parent);
+            return;
+        }
 
         List<CardScoreBreakdown> breakdown = OrderedBreakdown(score.Breakdown);
-        float top = 0.82f;
-        float rowHeight = breakdown.Count > 0 ? Mathf.Min(0.115f, 0.60f / breakdown.Count) : 0.115f;
         for (int i = 0; i < breakdown.Count; i++)
         {
             CardScoreBreakdown data = breakdown[i];
-            float yMax = top - (i * rowHeight);
-            float yMin = yMax - rowHeight + 0.008f;
-            ScoreRowVisual row = CreateScoreRow(parent, data, new Vector2(0.055f, yMin), new Vector2(0.945f, yMax), true);
+            ScoreRowVisual row = CreateScoreRow(rowsRoot, data, true);
+            if (row == null) continue;
             _animatedRows[data.DefinitionId] = row;
         }
-
-        RectTransform totalBar = CreatePanel("Total", parent, new Vector2(0.055f, 0.055f), new Vector2(0.945f, 0.15f), new Color(0.085f, 0.075f, 0.06f, 1f));
-        Text totalLabel = CreateText("Label", totalBar, "TOTAL", 27, TextAnchor.MiddleLeft, Gold, FontStyle.Bold);
-        SetAnchors(totalLabel.rectTransform, new Vector2(0.04f, 0.05f), new Vector2(0.43f, 0.95f));
-        CreatePointValue(totalBar, "TotalValue", 0, out _scoreTotalText, new Vector2(0.60f, 0.05f), new Vector2(0.96f, 0.95f), 31, Gold);
     }
 
-    private ScoreRowVisual CreateScoreRow(RectTransform parent, CardScoreBreakdown data, Vector2 min, Vector2 max, bool animated)
+    private ScoreRowVisual CreateScoreRow(RectTransform parent, CardScoreBreakdown data, bool animated)
     {
-        RectTransform row = CreatePanel("Score_" + Sanitize(data.DefinitionId), parent, min, max, Parchment);
-        Image rowImage = row.GetComponent<Image>();
-        rowImage.raycastTarget = false;
-
-        RectTransform artRoot = CreateEmptyRect("Artwork", row, new Vector2(0.015f, 0.08f), new Vector2(0.145f, 0.92f));
-        Image art = artRoot.gameObject.AddComponent<Image>();
+        GameObject prefab = Resources.Load<GameObject>(ScoreRowPrefabPath);
+        if (prefab == null)
+        {
+            Debug.LogError("EndGameScoreRow prefab missing.", this);
+            return null;
+        }
+        RectTransform row = Instantiate(prefab, parent).GetComponent<RectTransform>();
+        row.gameObject.name = "Score_" + Sanitize(data.DefinitionId);
+        Image art = row.Find("Artwork")?.GetComponent<Image>();
+        Text name = row.Find("Name")?.GetComponent<Text>();
+        Text copies = row.Find("Copies")?.GetComponent<Text>();
+        Text points = row.Find("Points/Value")?.GetComponent<Text>();
+        if (art == null || name == null || copies == null || points == null)
+        {
+            Debug.LogError("EndGameScoreRow prefab contract is incomplete.", row);
+            Destroy(row.gameObject);
+            return null;
+        }
         art.sprite = LoadCardSprite(data.DefinitionId);
-        art.preserveAspect = true;
         art.color = art.sprite != null ? Color.white : new Color(0.28f, 0.24f, 0.18f, 1f);
-        art.raycastTarget = false;
-
-        Text name = CreateText("Name", row, data.CardName, 20, TextAnchor.MiddleLeft, ParchmentDark, FontStyle.Bold);
-        SetAnchors(name.rectTransform, new Vector2(0.17f, 0.05f), new Vector2(0.58f, 0.95f));
-
-        Text copies = CreateText("Copies", row, animated ? "× 0" : "× " + data.Copies, 19, TextAnchor.MiddleCenter, ParchmentDark);
-        SetAnchors(copies.rectTransform, new Vector2(0.58f, 0.05f), new Vector2(0.73f, 0.95f));
-
-        Text points;
-        CreatePointValue(row, "Points", animated ? 0 : data.TotalPoints, out points, new Vector2(0.74f, 0.05f), new Vector2(0.985f, 0.95f), 21, ParchmentDark);
+        name.text = data.CardName;
+        copies.text = animated ? "× 0" : "× " + data.Copies;
+        points.text = (animated ? 0 : data.TotalPoints).ToString();
 
         return new ScoreRowVisual
         {
@@ -81,10 +83,11 @@ public sealed partial class EndGameFlowController
 
             bool scores = scoring.ContainsKey(instance.DefinitionId) && _animatedRows.ContainsKey(instance.DefinitionId);
             Sprite sprite = LoadCardSprite(instance.DefinitionId) ?? _cardBack;
+            RoomGameSetup.TryResolveCard(instance.DefinitionId, out ExtensionPackageData extension, out ExtensionCardData definition);
             RectTransform destination = scores ? _animatedRows[instance.DefinitionId].Root : _nonScoringSink;
             CardScoreBreakdown scoredCard = scores ? scoring[instance.DefinitionId] : null;
             _activeCardAnimations++;
-            StartCoroutine(FlyCard(sprite, destination, scores, scoredCard));
+            StartCoroutine(FlyCard(sprite, definition, destination, scores, scoredCard));
             yield return new WaitForSeconds(0.045f);
         }
 
@@ -107,7 +110,7 @@ public sealed partial class EndGameFlowController
         _scoreRoutine = null;
     }
 
-    private IEnumerator FlyCard(Sprite sprite, RectTransform destination, bool scores, CardScoreBreakdown scoringData)
+    private IEnumerator FlyCard(Sprite sprite, ExtensionCardData definition, RectTransform destination, bool scores, CardScoreBreakdown scoringData)
     {
         if (_animationLayer == null || _sourceDeck == null || destination == null)
         {
@@ -116,20 +119,28 @@ public sealed partial class EndGameFlowController
             yield break;
         }
 
-        GameObject obj = new GameObject("ScoringCard", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(CanvasGroup));
+        RuntimeCardView cardView = RuntimeCardView.Create(_animationLayer, "ScoringCard", definition, sprite, false);
+        if (cardView == null)
+        {
+            ApplyScoreArrival(scores, scoringData);
+            _activeCardAnimations--;
+            yield break;
+        }
+        GameObject obj = cardView.gameObject;
         RectTransform rect = obj.GetComponent<RectTransform>();
-        rect.SetParent(_animationLayer, false);
         rect.sizeDelta = new Vector2(92f, 142f);
         rect.position = _sourceDeck.position;
         rect.localScale = Vector3.one * 0.82f;
 
-        Image image = obj.GetComponent<Image>();
-        image.sprite = sprite;
-        image.preserveAspect = true;
-        image.color = sprite != null ? Color.white : new Color(0.3f, 0.25f, 0.18f, 1f);
-        image.raycastTarget = false;
-
         CanvasGroup group = obj.GetComponent<CanvasGroup>();
+        if (group == null)
+        {
+            Debug.LogError("RuntimeCard prefab must contain a CanvasGroup for scoring animations.", obj);
+            Destroy(obj);
+            ApplyScoreArrival(scores, scoringData);
+            _activeCardAnimations--;
+            yield break;
+        }
         Vector3 start = _sourceDeck.position;
         Vector3 end = destination.position;
         float randomSide = UnityEngine.Random.Range(-55f, 55f);

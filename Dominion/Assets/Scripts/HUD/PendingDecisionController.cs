@@ -9,6 +9,8 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class PendingDecisionController : MonoBehaviour
 {
+    private const string PanelPrefabResourcePath = "UI/PendingDecisionPanel";
+    private const string OptionPrefabResourcePath = "UI/DecisionOption";
     private readonly HashSet<int> _selected = new HashSet<int>();
     private readonly HashSet<string> _selectedSupply = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _selectedOptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -20,12 +22,14 @@ public sealed class PendingDecisionController : MonoBehaviour
 
     private RectTransform _panel;
     private RectTransform _externalCardsRoot;
+    private RectTransform _optionsRoot;
     private Text _promptText;
     private Text _countText;
     private Button _confirmButton;
     private Text _confirmText;
     private string _boundDecisionId;
     private bool _submitPending;
+    private bool _panelBindingFailed;
 
     private void Awake()
     {
@@ -178,7 +182,6 @@ public sealed class PendingDecisionController : MonoBehaviour
         ClearExternalCards();
         if (_externalCardsRoot == null || state == null || decision == null) return;
         _externalCardsRoot.gameObject.SetActive(true);
-        ConfigureExternalGrid(new Vector2(82f, 127f), 7);
 
         foreach (int instanceId in decision.CandidateInstanceIds ?? new List<int>())
         {
@@ -187,16 +190,15 @@ public sealed class PendingDecisionController : MonoBehaviour
             ExtensionPackageData extension; ExtensionCardData definition;
             if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition)) continue;
 
-            GameObject card = new GameObject("DecisionCard_" + instanceId, typeof(RectTransform), typeof(Image), typeof(LayoutElement), typeof(CardPointerInteraction));
-            card.transform.SetParent(_externalCardsRoot, false);
-            RectTransform rect = card.GetComponent<RectTransform>(); rect.sizeDelta = new Vector2(82f, 127f);
-            Image image = card.GetComponent<Image>();
-            image.sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition);
-            image.preserveAspect = true; image.color = image.sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f); image.raycastTarget = true;
-            DynamicCardCostView.Attach(card, definition);
-            LayoutElement layout = card.GetComponent<LayoutElement>(); layout.preferredWidth = 82f; layout.preferredHeight = 127f;
-
-            CardPointerInteraction pointer = card.GetComponent<CardPointerInteraction>(); pointer.InspectOnLongPress = false;
+            RuntimeCardView cardView = RuntimeCardView.Create(
+                _externalCardsRoot,
+                "DecisionCard_" + instanceId,
+                definition,
+                ExtensionVisualLoader.LoadCardArtwork(extension, definition),
+                true);
+            if (cardView == null) continue;
+            GameObject card = cardView.gameObject;
+            CardPointerInteraction pointer = cardView.Pointer; pointer.InspectOnLongPress = false;
             int capturedId = instanceId; Action handler = () => ToggleSelection(capturedId);
             pointer.PrimaryActionRequested += handler; _selectionHandlers.Add(pointer, handler); _externalCards.Add(card);
         }
@@ -206,9 +208,14 @@ public sealed class PendingDecisionController : MonoBehaviour
     private void BuildOptionButtons(PendingDecisionSnapshot decision)
     {
         ClearExternalCards();
-        if (_externalCardsRoot == null || decision == null) return;
-        _externalCardsRoot.gameObject.SetActive(true);
-        ConfigureExternalGrid(new Vector2(185f, 62f), 4);
+        if (_optionsRoot == null || decision == null) return;
+        _optionsRoot.gameObject.SetActive(true);
+        GameObject optionPrefab = Resources.Load<GameObject>(OptionPrefabResourcePath);
+        if (optionPrefab == null)
+        {
+            Debug.LogError("DecisionOption prefab missing at Resources/UI/DecisionOption.", this);
+            return;
+        }
         List<string> ids = decision.CandidateDefinitionIds ?? new List<string>();
         List<string> labels = decision.CandidateOptionLabels ?? new List<string>();
         for (int index = 0; index < ids.Count; index++)
@@ -216,38 +223,26 @@ public sealed class PendingDecisionController : MonoBehaviour
             string optionId = ids[index];
             if (string.IsNullOrWhiteSpace(optionId)) continue;
             string label = index < labels.Count && !string.IsNullOrWhiteSpace(labels[index]) ? labels[index] : optionId;
-            GameObject optionObject = new GameObject("DecisionOption_" + optionId, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
-            optionObject.transform.SetParent(_externalCardsRoot, false);
+            GameObject optionObject = Instantiate(optionPrefab, _optionsRoot);
+            optionObject.name = "DecisionOption_" + optionId;
             Image image = optionObject.GetComponent<Image>();
-            image.color = new Color(0.25f, 0.22f, 0.15f, 1f);
             Button button = optionObject.GetComponent<Button>();
-            button.targetGraphic = image;
+            Text text = optionObject.transform.Find("Label")?.GetComponent<Text>();
+            if (image == null || button == null || text == null)
+            {
+                Debug.LogError("DecisionOption prefab contract is incomplete.", optionObject);
+                Destroy(optionObject);
+                continue;
+            }
             string capturedId = optionId;
             button.onClick.AddListener(() => ToggleOptionSelection(capturedId));
-            LayoutElement layout = optionObject.GetComponent<LayoutElement>();
-            layout.preferredWidth = 185f; layout.preferredHeight = 62f;
-
-            GameObject labelObject = new GameObject("Label", typeof(RectTransform), typeof(Text));
-            labelObject.transform.SetParent(optionObject.transform, false);
-            Text text = labelObject.GetComponent<Text>();
-            ConfigureText(text, 17, TextAnchor.MiddleCenter);
-            text.fontStyle = FontStyle.Bold; text.text = label; text.raycastTarget = false;
-            SetAnchors(labelObject.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
+            text.text = label;
 
             _optionButtons[optionId] = image;
             _externalCards.Add(optionObject);
         }
         RefreshOptionButtons();
-        LayoutRebuilder.ForceRebuildLayoutImmediate(_externalCardsRoot);
-    }
-
-    private void ConfigureExternalGrid(Vector2 cellSize, int columns)
-    {
-        if (_externalCardsRoot == null) return;
-        GridLayoutGroup grid = _externalCardsRoot.GetComponent<GridLayoutGroup>();
-        if (grid == null) return;
-        grid.cellSize = cellSize;
-        grid.constraintCount = Math.Max(1, columns);
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_optionsRoot);
     }
 
     private void ToggleOptionSelection(string optionId)
@@ -405,47 +400,43 @@ public sealed class PendingDecisionController : MonoBehaviour
 
     private void EnsurePanel()
     {
-        if (_panel != null) return;
-        GameObject panelObject = new GameObject("PendingDecisionPanel", typeof(RectTransform), typeof(Image));
-        panelObject.transform.SetParent(transform, false);
+        if (_panel != null || _panelBindingFailed) return;
+        GameObject prefab = Resources.Load<GameObject>(PanelPrefabResourcePath);
+        if (prefab == null)
+        {
+            Debug.LogError("PendingDecisionPanel prefab missing at Resources/UI/PendingDecisionPanel.", this);
+            _panelBindingFailed = true;
+            return;
+        }
+
+        GameObject panelObject = Instantiate(prefab, transform);
+        panelObject.name = "PendingDecisionPanel";
         _panel = panelObject.GetComponent<RectTransform>();
-        panelObject.GetComponent<Image>().color = new Color(0.08f, 0.075f, 0.065f, 0.97f);
-
-        GameObject promptObject = new GameObject("Prompt", typeof(RectTransform), typeof(Text));
-        promptObject.transform.SetParent(_panel, false); _promptText = promptObject.GetComponent<Text>(); ConfigureText(_promptText, 17, TextAnchor.MiddleLeft);
-        GameObject countObject = new GameObject("Count", typeof(RectTransform), typeof(Text));
-        countObject.transform.SetParent(_panel, false); _countText = countObject.GetComponent<Text>(); ConfigureText(_countText, 14, TextAnchor.MiddleLeft);
-
-        GameObject cardsObject = new GameObject("DecisionCards", typeof(RectTransform), typeof(GridLayoutGroup));
-        cardsObject.transform.SetParent(_panel, false); _externalCardsRoot = cardsObject.GetComponent<RectTransform>();
-        GridLayoutGroup grid = cardsObject.GetComponent<GridLayoutGroup>();
-        grid.cellSize = new Vector2(82f, 127f); grid.spacing = new Vector2(8f, 8f); grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        grid.constraintCount = 7; grid.childAlignment = TextAnchor.MiddleCenter;
-
-        GameObject buttonObject = new GameObject("ConfirmDecision", typeof(RectTransform), typeof(Image), typeof(Button));
-        buttonObject.transform.SetParent(_panel, false); Image buttonImage = buttonObject.GetComponent<Image>(); buttonImage.color = new Color(0.30f, 0.26f, 0.16f, 1f);
-        _confirmButton = buttonObject.GetComponent<Button>(); _confirmButton.targetGraphic = buttonImage; _confirmButton.onClick.AddListener(Submit);
-        GameObject buttonTextObject = new GameObject("Label", typeof(RectTransform), typeof(Text));
-        buttonTextObject.transform.SetParent(buttonObject.transform, false); _confirmText = buttonTextObject.GetComponent<Text>();
-        ConfigureText(_confirmText, 16, TextAnchor.MiddleCenter); _confirmText.fontStyle = FontStyle.Bold; _confirmText.text = "VALIDER"; _confirmText.raycastTarget = false;
-        SetAnchors(buttonTextObject.GetComponent<RectTransform>(), Vector2.zero, Vector2.one);
+        _promptText = panelObject.transform.Find("Prompt")?.GetComponent<Text>();
+        _countText = panelObject.transform.Find("Count")?.GetComponent<Text>();
+        _externalCardsRoot = panelObject.transform.Find("DecisionCards") as RectTransform;
+        _optionsRoot = panelObject.transform.Find("DecisionOptions") as RectTransform;
+        _confirmButton = panelObject.transform.Find("ConfirmDecision")?.GetComponent<Button>();
+        _confirmText = _confirmButton != null ? _confirmButton.transform.Find("Label")?.GetComponent<Text>() : null;
+        if (_panel == null || _promptText == null || _countText == null || _externalCardsRoot == null ||
+            _optionsRoot == null || _confirmButton == null || _confirmText == null)
+        {
+            Debug.LogError("PendingDecisionPanel prefab contract is incomplete.", panelObject);
+            Destroy(panelObject);
+            _panel = null;
+            _panelBindingFailed = true;
+            return;
+        }
+        _confirmButton.onClick.AddListener(Submit);
         _panel.gameObject.SetActive(false);
-        ConfigurePanel(CardZone.Hand, false, false);
     }
 
     private void ConfigurePanel(CardZone zone, bool supplyChoice, bool optionChoice)
     {
         if (_panel == null) return;
-        bool compact = (zone == CardZone.Hand || supplyChoice) && !optionChoice;
-        SetAnchors(_panel, compact ? new Vector2(0.30f, 0.245f) : new Vector2(0.12f, 0.20f), compact ? new Vector2(0.70f, 0.34f) : new Vector2(0.88f, 0.66f));
-        SetAnchors(_promptText.rectTransform, compact ? new Vector2(0.03f, 0.40f) : new Vector2(0.03f, 0.82f), compact ? new Vector2(0.70f, 0.94f) : new Vector2(0.78f, 0.97f));
-        SetAnchors(_countText.rectTransform, new Vector2(0.03f, 0.06f), compact ? new Vector2(0.70f, 0.42f) : new Vector2(0.62f, 0.16f));
-        SetAnchors(_confirmButton.GetComponent<RectTransform>(), compact ? new Vector2(0.73f, 0.15f) : new Vector2(0.80f, 0.82f), compact ? new Vector2(0.97f, 0.85f) : new Vector2(0.97f, 0.96f));
-        if (_externalCardsRoot != null)
-        {
-            SetAnchors(_externalCardsRoot, new Vector2(0.03f, 0.18f), new Vector2(0.97f, 0.79f));
-            _externalCardsRoot.gameObject.SetActive(!compact);
-        }
+        bool cardsVisible = zone != CardZone.Hand && !supplyChoice && !optionChoice;
+        if (_externalCardsRoot != null) _externalCardsRoot.gameObject.SetActive(cardsVisible);
+        if (_optionsRoot != null) _optionsRoot.gameObject.SetActive(optionChoice);
     }
 
     private Transform FindHandCardsRoot()
@@ -454,10 +445,6 @@ public sealed class PendingDecisionController : MonoBehaviour
     }
 
     private static Color MultiplyRgb(Color color, float multiplier) => new Color(color.r * multiplier, color.g * multiplier, color.b * multiplier, color.a);
-    private static void ConfigureText(Text text, int fontSize, TextAnchor alignment)
-    { text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); text.fontSize = fontSize; text.alignment = alignment; text.color = Color.white; text.raycastTarget = false; }
-    private static void SetAnchors(RectTransform rect, Vector2 min, Vector2 max)
-    { if (rect == null) return; rect.anchorMin = min; rect.anchorMax = max; rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero; }
     private static Transform FindDirectChild(Transform parent, string name)
     { if (parent == null) return null; for (int i = 0; i < parent.childCount; i++) { Transform child = parent.GetChild(i); if (string.Equals(child.name, name, StringComparison.Ordinal)) return child; } return null; }
     private static Transform FindDeepChild(Transform parent, string name)

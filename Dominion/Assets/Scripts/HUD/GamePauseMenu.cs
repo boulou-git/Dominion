@@ -15,6 +15,7 @@ using UnityEngine.UI;
 public sealed class GamePauseMenu : MonoBehaviour
 {
     private const string RootName = "DominionPauseMenu";
+    private const string PrefabResourcePath = "UI/GamePauseMenu";
     private const string StatePropertyKey = "dominion.gameState.v1";
 
     private GameObject _panel;
@@ -38,19 +39,16 @@ public sealed class GamePauseMenu : MonoBehaviour
         if (GameObject.Find(RootName) != null)
             return;
 
-        GameObject root = new GameObject(RootName, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(GamePauseMenu));
+        GameObject prefab = Resources.Load<GameObject>(PrefabResourcePath);
+        if (prefab == null)
+        {
+            Debug.LogError("GamePauseMenu prefab missing at Resources/UI/GamePauseMenu.");
+            return;
+        }
+
+        GameObject root = Instantiate(prefab);
+        root.name = RootName;
         SceneManager.MoveGameObjectToScene(root, scene);
-
-        Canvas canvas = root.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.overrideSorting = true;
-        canvas.sortingOrder = 5000;
-
-        CanvasScaler scaler = root.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
 
         if (FindFirstObjectByType<EventSystem>() == null)
         {
@@ -61,7 +59,11 @@ public sealed class GamePauseMenu : MonoBehaviour
 
     private void Awake()
     {
-        Build();
+        if (!BindPrefab())
+        {
+            enabled = false;
+            return;
+        }
         NetworkGameState.StateChanged += OnGameStateChanged;
         Refresh();
         _panel.SetActive(false);
@@ -89,31 +91,32 @@ public sealed class GamePauseMenu : MonoBehaviour
             Refresh();
     }
 
-    private void Build()
+    private bool BindPrefab()
     {
-        RectTransform root = GetComponent<RectTransform>();
-        Stretch(root);
+        Transform backdrop = transform.Find("Backdrop");
+        Transform window = backdrop != null ? backdrop.Find("Window") : null;
+        _panel = backdrop != null ? backdrop.gameObject : null;
+        _statusText = window != null ? window.Find("Status")?.GetComponent<Text>() : null;
+        Button resume = window != null ? window.Find("ResumeButton")?.GetComponent<Button>() : null;
+        _pauseButton = window != null ? window.Find("PauseButton")?.GetComponent<Button>() : null;
+        _pauseButtonText = _pauseButton != null ? _pauseButton.GetComponentInChildren<Text>() : null;
+        _finishTestButton = window != null ? window.Find("FinishGameTestButton")?.GetComponent<Button>() : null;
+        Button leave = window != null ? window.Find("LeaveGameButton")?.GetComponent<Button>() : null;
+        Button close = window != null ? window.Find("CloseGameButton")?.GetComponent<Button>() : null;
 
-        _panel = CreatePanel("Backdrop", root, Vector2.zero, Vector2.one, new Color(0f, 0f, 0f, 0.72f)).gameObject;
-        RectTransform window = CreatePanel("Window", _panel.GetComponent<RectTransform>(), new Vector2(0.34f, 0.20f), new Vector2(0.66f, 0.80f), new Color(0.12f, 0.12f, 0.12f, 1f));
+        if (_panel == null || _statusText == null || resume == null || _pauseButton == null ||
+            _finishTestButton == null || leave == null || close == null)
+        {
+            Debug.LogError("GamePauseMenu prefab contract is incomplete. Expected Backdrop/Window and all named controls.", this);
+            return false;
+        }
 
-        Text title = CreateText("Title", window, "MENU", 38, TextAnchor.MiddleCenter);
-        SetAnchors(title.rectTransform, new Vector2(0.08f, 0.82f), new Vector2(0.92f, 0.96f));
-
-        _statusText = CreateText("Status", window, string.Empty, 20, TextAnchor.MiddleCenter);
-        SetAnchors(_statusText.rectTransform, new Vector2(0.08f, 0.69f), new Vector2(0.92f, 0.81f));
-
-        CreateButton("Reprendre", window, 0.54f, ResumeMenu);
-
-        _pauseButton = CreateButton("Mettre en pause", window, 0.40f, ToggleHostPause);
-        _pauseButtonText = _pauseButton.GetComponentInChildren<Text>();
-
-        _finishTestButton = CreateButton("FINIR LA PARTIE (TEST)", window, 0.26f, ForceEndGameForTest);
-        _finishTestButton.gameObject.name = "FinishGameTestButton";
-        _finishTestButton.GetComponent<Image>().color = new Color(0.42f, 0.20f, 0.12f, 1f);
-
-        CreateButton("Quitter la partie", window, 0.26f, LeaveGame).gameObject.name = "LeaveGameButton";
-        CreateButton("Quitter et fermer la partie", window, 0.12f, CloseGameAsHost).gameObject.name = "CloseGameButton";
+        resume.onClick.AddListener(ResumeMenu);
+        _pauseButton.onClick.AddListener(ToggleHostPause);
+        _finishTestButton.onClick.AddListener(ForceEndGameForTest);
+        leave.onClick.AddListener(LeaveGame);
+        close.onClick.AddListener(CloseGameAsHost);
+        return true;
     }
 
     private void Refresh()
@@ -225,68 +228,4 @@ public sealed class GamePauseMenu : MonoBehaviour
             PhotonNetwork.LeaveRoom(false);
     }
 
-    private static RectTransform CreatePanel(string name, RectTransform parent, Vector2 min, Vector2 max, Color color)
-    {
-        GameObject obj = new GameObject(name, typeof(RectTransform), typeof(Image));
-        RectTransform rect = obj.GetComponent<RectTransform>();
-        rect.SetParent(parent, false);
-        rect.anchorMin = min;
-        rect.anchorMax = max;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-        obj.GetComponent<Image>().color = color;
-        return rect;
-    }
-
-    private static Text CreateText(string name, RectTransform parent, string value, int size, TextAnchor alignment)
-    {
-        GameObject obj = new GameObject(name, typeof(RectTransform), typeof(Text));
-        RectTransform rect = obj.GetComponent<RectTransform>();
-        rect.SetParent(parent, false);
-        Text text = obj.GetComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        text.text = value;
-        text.fontSize = size;
-        text.alignment = alignment;
-        text.color = Color.white;
-        return text;
-    }
-
-    private static Button CreateButton(string label, RectTransform parent, float centerY, Action action)
-    {
-        GameObject obj = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(Button));
-        RectTransform rect = obj.GetComponent<RectTransform>();
-        rect.SetParent(parent, false);
-        rect.anchorMin = new Vector2(0.18f, centerY - 0.055f);
-        rect.anchorMax = new Vector2(0.82f, centerY + 0.055f);
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-
-        Image image = obj.GetComponent<Image>();
-        image.color = new Color(0.24f, 0.24f, 0.24f, 1f);
-
-        Button button = obj.GetComponent<Button>();
-        button.targetGraphic = image;
-        button.onClick.AddListener(() => action());
-
-        Text text = CreateText("Text", rect, label, 23, TextAnchor.MiddleCenter);
-        Stretch(text.rectTransform, 8f);
-        return button;
-    }
-
-    private static void SetAnchors(RectTransform rect, Vector2 min, Vector2 max)
-    {
-        rect.anchorMin = min;
-        rect.anchorMax = max;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-    }
-
-    private static void Stretch(RectTransform rect, float inset = 0f)
-    {
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = new Vector2(inset, inset);
-        rect.offsetMax = new Vector2(-inset, -inset);
-    }
 }

@@ -16,7 +16,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     [Header("Screens")]
     [SerializeField] private GameObject _hostSelectionScreen;
     [SerializeField] private GameObject _waitingScreen;
-    [SerializeField] private GameObject _revealScreen; // Legacy only; intentionally never displayed.
+    [SerializeField] private GameObject _revealScreen;
 
     [Header("Host selection")]
     [SerializeField] private RectTransform _extensionsRoot;
@@ -54,7 +54,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     // Final 10-card screen. Each revealed card is ONE GameObject with ONE Image.
     // The sprite is assigned directly to the exact Image visible in the grid.
-    private GameObject _revealOverlay;
     private RectTransform _revealCardsRoot;
     private Text _revealStatus;
     private Button _revealStartButton;
@@ -68,6 +67,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         _canvas = GetComponent<Canvas>();
         _raycaster = GetComponent<GraphicRaycaster>();
         ConfigureSelectionFlow();
+        BindRevealPrefab();
 
         ExtensionCatalog.Reload();
         _config = RoomGameSetup.ReadCurrent();
@@ -169,7 +169,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             SetActive(_hostSelectionScreen, false);
             SetActive(_waitingScreen, false);
             SetActive(_revealScreen, false);
-            SetActive(_revealOverlay, false);
             SetActive(_revealZoomOverlay, false);
             return;
         }
@@ -182,7 +181,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         SetActive(_hostSelectionScreen, !reveal && host);
         SetActive(_waitingScreen, !reveal && !host);
-        SetActive(_revealScreen, false);
+        SetActive(_revealScreen, reveal);
 
         if (reveal)
         {
@@ -190,7 +189,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             return;
         }
 
-        SetActive(_revealOverlay, false);
         SetActive(_revealZoomOverlay, false);
 
         if (!host)
@@ -291,12 +289,11 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
     private void RebuildReveal()
     {
-        EnsureRevealOverlay();
-        if (_revealOverlay == null || _revealCardsRoot == null)
+        if (_revealScreen == null || _revealCardsRoot == null)
             return;
 
-        _revealOverlay.SetActive(true);
-        _revealOverlay.transform.SetAsLastSibling();
+        _revealScreen.SetActive(true);
+        _revealScreen.transform.SetAsLastSibling();
         Clear(_spawnedRevealCards);
 
         int shown = 0;
@@ -315,7 +312,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
                 Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, card);
                 GameObject cardObject = CreateRevealCard(card, sprite);
-                cardObject.transform.SetParent(_revealCardsRoot, false);
+                if (cardObject == null) continue;
                 _spawnedRevealCards.Add(cardObject);
                 shown++;
 
@@ -343,136 +340,56 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private GameObject CreateRevealCard(ExtensionCardData card, Sprite sprite)
     {
         string id = card != null && !string.IsNullOrEmpty(card.id) ? card.id : "unknown";
-        GameObject cardObject = UiObject("RevealCard_" + id, typeof(Image));
-
-        Image image = cardObject.GetComponent<Image>();
-        image.sprite = sprite;
-        image.color = sprite != null ? Color.white : new Color(0.15f, 0.05f, 0.05f, 1f);
-        image.preserveAspect = true;
-        image.raycastTarget = sprite != null;
-        image.enabled = true;
-        DynamicCardCostView.Attach(cardObject, card);
+        RuntimeCardView cardView = RuntimeCardView.Create(_revealCardsRoot, "RevealCard_" + id, card, sprite, sprite != null);
+        if (cardView == null) return null;
+        GameObject cardObject = cardView.gameObject;
 
         if (sprite != null)
         {
-            Button button = cardObject.AddComponent<Button>();
-            button.targetGraphic = image;
-            button.transition = Selectable.Transition.None;
+            CardPointerInteraction pointer = cardView.Pointer;
+            pointer.InspectOnLongPress = false;
             ExtensionCardData capturedDefinition = card;
-            button.onClick.AddListener(() => ShowRevealZoom(sprite, capturedDefinition));
-        }
-        else
-        {
-            Text missing = ChildText(
-                cardObject.transform,
-                "MissingArtwork",
-                (card != null ? card.name : id) + "\nIMAGE MANQUANTE",
-                16,
-                TextAnchor.MiddleCenter,
-                new Vector2(0.05f, 0.05f),
-                new Vector2(0.95f, 0.95f));
-            missing.color = new Color(1f, 0.75f, 0.65f, 1f);
+            pointer.PrimaryActionRequested += () => ShowRevealZoom(sprite, capturedDefinition);
+            pointer.InspectRequested += () => ShowRevealZoom(sprite, capturedDefinition);
         }
 
         return cardObject;
     }
 
-    private void EnsureRevealOverlay()
+    private void BindRevealPrefab()
     {
-        if (_revealOverlay != null)
+        if (_revealScreen == null)
+        {
+            Debug.LogError("LobbySetupScreen prefab contract is incomplete: Reveal is missing.", this);
             return;
+        }
 
-        _revealOverlay = UiObject("KingdomRevealOverlay", typeof(Image));
-        _revealOverlay.transform.SetParent(transform, false);
-        Stretch(_revealOverlay.GetComponent<RectTransform>());
-
-        Image background = _revealOverlay.GetComponent<Image>();
-        background.color = new Color(0.055f, 0.055f, 0.055f, 1f);
-        background.raycastTarget = true;
-
-        Text title = ChildText(
-            _revealOverlay.transform,
-            "Title",
-            "LES 10 CARTES ROYAUME",
-            36,
-            TextAnchor.MiddleCenter,
-            new Vector2(0.08f, 0.91f),
-            new Vector2(0.92f, 0.985f));
-        title.fontStyle = FontStyle.Bold;
-
-        GameObject gridObject = UiObject("CardsGrid", typeof(GridLayoutGroup));
-        gridObject.transform.SetParent(_revealOverlay.transform, false);
-        _revealCardsRoot = gridObject.GetComponent<RectTransform>();
-        SetAnchors(_revealCardsRoot, new Vector2(0.06f, 0.17f), new Vector2(0.94f, 0.89f));
-
-        GridLayoutGroup grid = gridObject.GetComponent<GridLayoutGroup>();
-        grid.cellSize = new Vector2(210f, 324f);
-        grid.spacing = new Vector2(20f, 22f);
-        grid.padding = new RectOffset(12, 12, 12, 12);
-        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        grid.constraintCount = 5;
-        grid.childAlignment = TextAnchor.MiddleCenter;
-        grid.startAxis = GridLayoutGroup.Axis.Horizontal;
-        grid.startCorner = GridLayoutGroup.Corner.UpperLeft;
-
-        _revealStatus = ChildText(
-            _revealOverlay.transform,
-            "Status",
-            string.Empty,
-            19,
-            TextAnchor.MiddleLeft,
-            new Vector2(0.08f, 0.045f),
-            new Vector2(0.64f, 0.135f));
-
-        _revealStartButton = ChildButton(
-            _revealOverlay.transform,
-            "StartButton",
-            "DÉMARRER LA PARTIE",
-            new Vector2(0.68f, 0.04f),
-            new Vector2(0.92f, 0.14f));
+        Transform revealCards = _revealScreen.transform.Find("RevealCards");
+        _revealCardsRoot = revealCards != null ? revealCards.Find("Content") as RectTransform : null;
+        _revealStatus = _revealScreen.transform.Find("Status")?.GetComponent<Text>();
+        _revealStartButton = _revealScreen.transform.Find("StartButton")?.GetComponent<Button>();
+        if (_revealCardsRoot == null || _revealStatus == null || _revealStartButton == null)
+        {
+            Debug.LogError("LobbySetupScreen Reveal contract is incomplete.", _revealScreen);
+            return;
+        }
         _revealStartButton.onClick.AddListener(StartGame);
-
-        BuildRevealZoomOverlay();
-    }
-
-    private void BuildRevealZoomOverlay()
-    {
-        _revealZoomOverlay = UiObject("CardZoomOverlay", typeof(Image), typeof(Button));
-        _revealZoomOverlay.transform.SetParent(_revealOverlay.transform, false);
-        Stretch(_revealZoomOverlay.GetComponent<RectTransform>());
-
-        Image dim = _revealZoomOverlay.GetComponent<Image>();
-        dim.color = new Color(0f, 0f, 0f, 0.84f);
-        dim.raycastTarget = true;
-
+        GameObject zoomPrefab = Resources.Load<GameObject>("UI/CardZoomOverlay");
+        if (zoomPrefab == null)
+        {
+            Debug.LogError("CardZoomOverlay prefab missing at Resources/UI/CardZoomOverlay.", this);
+            return;
+        }
+        _revealZoomOverlay = Instantiate(zoomPrefab, _revealScreen.transform);
+        _revealZoomOverlay.name = "CardZoomOverlay";
+        _revealZoomImage = _revealZoomOverlay.transform.Find("ZoomedCard")?.GetComponent<Image>();
         Button closeButton = _revealZoomOverlay.GetComponent<Button>();
-        closeButton.targetGraphic = dim;
-        closeButton.transition = Selectable.Transition.None;
+        if (_revealZoomImage == null || closeButton == null)
+        {
+            Debug.LogError("CardZoomOverlay prefab contract is incomplete.", _revealZoomOverlay);
+            return;
+        }
         closeButton.onClick.AddListener(HideRevealZoom);
-
-        GameObject zoomCard = UiObject("ZoomedCard", typeof(Image));
-        zoomCard.transform.SetParent(_revealZoomOverlay.transform, false);
-        RectTransform zoomRect = zoomCard.GetComponent<RectTransform>();
-        zoomRect.anchorMin = new Vector2(0.5f, 0.5f);
-        zoomRect.anchorMax = new Vector2(0.5f, 0.5f);
-        zoomRect.pivot = new Vector2(0.5f, 0.5f);
-        zoomRect.anchoredPosition = Vector2.zero;
-        zoomRect.sizeDelta = new Vector2(500f, 771f);
-
-        _revealZoomImage = zoomCard.GetComponent<Image>();
-        _revealZoomImage.preserveAspect = true;
-        _revealZoomImage.raycastTarget = false;
-        _revealZoomImage.color = Color.white;
-
-        ChildText(
-            _revealZoomOverlay.transform,
-            "Hint",
-            "Cliquez pour fermer",
-            18,
-            TextAnchor.MiddleCenter,
-            new Vector2(0.35f, 0.035f),
-            new Vector2(0.65f, 0.085f));
-
         _revealZoomOverlay.SetActive(false);
     }
 
@@ -481,7 +398,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         if (sprite == null)
             return;
 
-        EnsureRevealOverlay();
         if (_revealZoomOverlay == null || _revealZoomImage == null)
             return;
 
@@ -614,11 +530,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         LayoutRebuilder.ForceRebuildLayoutImmediate(_extensionsRoot);
     }
 
-    /// <summary>
-    /// Turns the legacy side-by-side selection prefab into a two-step flow while keeping
-    /// every existing serialized control and callback. Future prefab rebuilds create the
-    /// same hierarchy, but this also migrates older prefab instances safely at runtime.
-    /// </summary>
+    /// <summary>Binds the prefab-authored two-step selection flow.</summary>
     private void ConfigureSelectionFlow()
     {
         if (_selectionFlowConfigured || _hostSelectionScreen == null)
@@ -626,61 +538,17 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         _extensionsPanel = FindDeepChild(_hostSelectionScreen.transform, "ExtensionsPanel") as RectTransform;
         _cardsPanel = FindDeepChild(_hostSelectionScreen.transform, "CardsPanel") as RectTransform;
-        if (_extensionsPanel == null || _cardsPanel == null)
+        Transform existingBack = _cardsPanel != null ? FindDeepChild(_cardsPanel, "BackButton") : null;
+        _cardsBackButton = existingBack != null ? existingBack.GetComponent<Button>() : null;
+        if (_extensionsPanel == null || _cardsPanel == null || _cardsBackButton == null)
+        {
+            Debug.LogError("LobbySetupScreen prefab contract is incomplete: ExtensionsPanel, CardsPanel or BackButton is missing.", this);
             return;
+        }
 
         _selectionFlowConfigured = true;
-        SetAnchors(_extensionsPanel, new Vector2(0.035f, 0.14f), new Vector2(0.965f, 0.89f));
-        SetAnchors(_cardsPanel, new Vector2(0.035f, 0.14f), new Vector2(0.965f, 0.89f));
-
-        Image extensionsBackground = _extensionsPanel.GetComponent<Image>();
-        if (extensionsBackground != null)
-            extensionsBackground.color = new Color(0.075f, 0.07f, 0.06f, 0.97f);
-        Transform extensionsHeaderTransform = FindDeepChild(_extensionsPanel, "Header");
-        Text extensionsHeader = extensionsHeaderTransform != null ? extensionsHeaderTransform.GetComponent<Text>() : null;
-        if (extensionsHeader != null)
-        {
-            extensionsHeader.text = "CHOISISSEZ VOS EXTENSIONS";
-            extensionsHeader.fontSize = 25;
-        }
-
-        Image cardsBackground = _cardsPanel.GetComponent<Image>();
-        if (cardsBackground != null)
-        {
-            cardsBackground.color = new Color(0.055f, 0.052f, 0.047f, 1f);
-            cardsBackground.raycastTarget = true;
-        }
-
-        // The summary belongs to the global flow, not to one extension's card drawer.
-        if (_selectionSummary != null)
-        {
-            _selectionSummary.transform.SetParent(_hostSelectionScreen.transform, false);
-            SetAnchors(_selectionSummary.rectTransform, new Vector2(0.055f, 0.035f), new Vector2(0.64f, 0.125f));
-            _selectionSummary.fontSize = 19;
-        }
-        if (_validateButton != null)
-        {
-            _validateButton.transform.SetParent(_hostSelectionScreen.transform, false);
-            SetAnchors(_validateButton.GetComponent<RectTransform>(), new Vector2(0.70f, 0.03f), new Vector2(0.945f, 0.13f));
-        }
-
-        Transform existingBack = FindDeepChild(_cardsPanel, "BackButton");
-        _cardsBackButton = existingBack != null ? existingBack.GetComponent<Button>() : null;
-        if (_cardsBackButton == null)
-        {
-            _cardsBackButton = ChildButton(_cardsPanel, "BackButton", "‹  EXTENSIONS",
-                new Vector2(0.025f, 0.905f), new Vector2(0.19f, 0.985f));
-            _cardsBackButton.GetComponent<Image>().color = new Color(0.20f, 0.17f, 0.11f, 1f);
-        }
         _cardsBackButton.onClick.RemoveAllListeners();
         _cardsBackButton.onClick.AddListener(HideCardsPanel);
-
-        if (_cardsTitle != null)
-        {
-            SetAnchors(_cardsTitle.rectTransform, new Vector2(0.22f, 0.905f), new Vector2(0.97f, 0.99f));
-            _cardsTitle.alignment = TextAnchor.MiddleLeft;
-            _cardsTitle.fontSize = 27;
-        }
 
         ApplySelectionFlowState(true);
     }
@@ -774,61 +642,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
                 return nested;
         }
         return null;
-    }
-
-    private static GameObject UiObject(string name, params Type[] components)
-    {
-        Type[] all = new Type[components.Length + 1];
-        all[0] = typeof(RectTransform);
-        components.CopyTo(all, 1);
-        return new GameObject(name, all);
-    }
-
-    private static Text ChildText(Transform parent, string name, string value, int size, TextAnchor alignment, Vector2 min, Vector2 max)
-    {
-        GameObject go = UiObject(name, typeof(Text));
-        go.transform.SetParent(parent, false);
-        SetAnchors(go.GetComponent<RectTransform>(), min, max);
-
-        Text text = go.GetComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        text.text = value;
-        text.fontSize = size;
-        text.alignment = alignment;
-        text.color = Color.white;
-        text.raycastTarget = false;
-        return text;
-    }
-
-    private static Button ChildButton(Transform parent, string name, string label, Vector2 min, Vector2 max)
-    {
-        GameObject go = UiObject(name, typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
-        SetAnchors(go.GetComponent<RectTransform>(), min, max);
-
-        Image image = go.GetComponent<Image>();
-        image.color = new Color(0.30f, 0.25f, 0.14f, 1f);
-
-        Button button = go.GetComponent<Button>();
-        Text text = ChildText(go.transform, "Text", label, 21, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one);
-        text.fontStyle = FontStyle.Bold;
-        return button;
-    }
-
-    private static void Stretch(RectTransform rect)
-    {
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-    }
-
-    private static void SetAnchors(RectTransform rect, Vector2 min, Vector2 max)
-    {
-        rect.anchorMin = min;
-        rect.anchorMax = max;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
     }
 
     private static void SetActive(GameObject target, bool active)
