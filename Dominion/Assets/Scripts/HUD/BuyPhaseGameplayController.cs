@@ -80,11 +80,13 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             return;
 
         bool explicitCleanup = string.Equals(state.Phase, NetworkGameState.CleanupPhase, StringComparison.Ordinal);
-        bool emptyBuyingPower = string.Equals(state.Phase, NetworkGameState.BuyPhase, StringComparison.Ordinal) &&
+        /*bool emptyBuyingPower = string.Equals(state.Phase, NetworkGameState.BuyPhase, StringComparison.Ordinal) &&
                                 localPlayer.Coins <= 0 &&
-                                !HandContainsTreasure(state, localPlayer);
+                                !HandContainsTreasure(state, localPlayer);*/
 
-        if ((explicitCleanup || emptyBuyingPower) && _lastAutoCleanupVersion != state.Version)
+
+        //if ((explicitCleanup || emptyBuyingPower) && _lastAutoCleanupVersion != state.Version)
+        if ((explicitCleanup ) && _lastAutoCleanupVersion != state.Version)
         {
             _lastAutoCleanupVersion = state.Version;
             BeginCleanupAnimation();
