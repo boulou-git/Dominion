@@ -183,6 +183,8 @@ public sealed class TrashPileViewController : MonoBehaviour
                 resolved);
             if (cardView == null) continue;
             GameObject cardObject = cardView.gameObject;
+            cardObject.SetActive(true);
+            cardObject.transform.localScale = Vector3.one;
 
             if (sprite != null)
             {
@@ -199,6 +201,7 @@ public sealed class TrashPileViewController : MonoBehaviour
 
         Canvas.ForceUpdateCanvases();
         RefreshGridColumns();
+        ResizeCardsContent();
         _cardsGrid.CalculateLayoutInputHorizontal();
         _cardsGrid.SetLayoutHorizontal();
         _cardsGrid.CalculateLayoutInputVertical();
@@ -207,6 +210,21 @@ public sealed class TrashPileViewController : MonoBehaviour
         Canvas.ForceUpdateCanvases();
         if (_cardsScroll != null)
             _cardsScroll.verticalNormalizedPosition = 1f;
+    }
+
+    private void ResizeCardsContent()
+    {
+        if (_cardsRoot == null || _cardsGrid == null)
+            return;
+
+        int columns = Mathf.Max(1, _cardsGrid.constraintCount);
+        int rows = Mathf.CeilToInt(_renderedCards.Count / (float)columns);
+        float height = _cardsGrid.padding.top + _cardsGrid.padding.bottom;
+        if (rows > 0)
+            height += rows * _cardsGrid.cellSize.y + (rows - 1) * _cardsGrid.spacing.y;
+
+        _cardsRoot.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mathf.Max(1f, height));
+        _cardsRoot.anchoredPosition = Vector2.zero;
     }
 
     private void RefreshGridColumns()
@@ -221,6 +239,7 @@ public sealed class TrashPileViewController : MonoBehaviour
             return;
 
         _cardsGrid.constraintCount = columns;
+        ResizeCardsContent();
         if (_cardsRoot != null)
             LayoutRebuilder.ForceRebuildLayoutImmediate(_cardsRoot);
     }
