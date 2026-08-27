@@ -24,6 +24,11 @@ public sealed class CardScoringData
     // Generic cross-card scoring based on copies of another owned definition.
     public string ownedCardId;
     public int pointsPerOwnedCard;
+
+    // Global Trash/Rebut scaling. Cimetière scores from the number of physical
+    // cards in the match-wide trash, independently for each owned copy.
+    public int pointsPerTrashedCards;
+    public int trashedCardsPerPoint;
 }
 
 public sealed class CardScoreBreakdown
@@ -108,6 +113,9 @@ public static class ScoringRules
             if (scoring.pointsPerOwnedCard != 0 && !string.IsNullOrWhiteSpace(scoring.ownedCardId) &&
                 copiesByDefinition.TryGetValue(scoring.ownedCardId, out int ownedCardCopies))
                 pointsPerCopy += ownedCardCopies * scoring.pointsPerOwnedCard;
+            if (scoring.pointsPerTrashedCards != 0 && scoring.trashedCardsPerPoint > 0)
+                pointsPerCopy += ((state.TrashedCards != null ? state.TrashedCards.Count : 0) /
+                                  scoring.trashedCardsPerPoint) * scoring.pointsPerTrashedCards;
 
             int subtotal = pointsPerCopy * pair.Value;
             totalPoints += subtotal;

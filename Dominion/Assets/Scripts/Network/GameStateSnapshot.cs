@@ -9,7 +9,7 @@ using System.Collections.Generic;
 [Serializable]
 public class GameStateSnapshot
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     // Version of the serialized snapshot shape. This is deliberately separate from
     // Version, which is the monotonic revision number of one running match.
@@ -51,6 +51,17 @@ public class GameStateSnapshot
     // Authoritative remaining card counts for every Reserve pile.
     // DefinitionId uses qualified refs such as "base:cuivre".
     public List<SupplyPileSnapshot> SupplyPiles = new List<SupplyPileSnapshot>();
+
+    // Non-Supply piles owned by an extension (Maladies, Toniques, Héritages,
+    // Horreurs...). Their physical cards live here until a rule gives one to a player.
+    public List<SpecialPileSnapshot> SpecialPiles = new List<SpecialPileSnapshot>();
+
+    // Unique Artefact instances not currently controlled by a player.
+    public List<int> UnownedArtifacts = new List<int>();
+
+    // Cards temporarily set aside by Durations or replacement effects. Keeping the
+    // association in authoritative state makes the effect survive reconnects.
+    public List<SetAsideCardSnapshot> SetAsideCards = new List<SetAsideCardSnapshot>();
 
     // Small replicated public journal. It intentionally stores semantic entries instead
     // of rendered text so every client can format/card-inspect them consistently.
@@ -117,6 +128,34 @@ public class SupplyPileSnapshot
 }
 
 [Serializable]
+public class SpecialPileSnapshot
+{
+    public string PileId;
+    public string DisplayName;
+    public List<int> CardInstanceIds = new List<int>();
+
+    public SpecialPileSnapshot()
+    {
+    }
+
+    public SpecialPileSnapshot(string pileId, string displayName)
+    {
+        PileId = pileId;
+        DisplayName = displayName;
+    }
+}
+
+[Serializable]
+public class SetAsideCardSnapshot
+{
+    public string PlayerId;
+    public int CardInstanceId;
+    public int SourceCardInstanceId;
+    public int DueTurnNumber;
+    public string ReturnMode;
+}
+
+[Serializable]
 public class PlayerStateSnapshot
 {
     // Stable identity used by game rules and reconnection.
@@ -138,6 +177,9 @@ public class PlayerStateSnapshot
     // the owning player look at these cards.
     public List<int> Inspected = new List<int>();
 
+    // Unique Artefacts currently controlled by this player.
+    public List<int> Artifacts = new List<int>();
+
     public int Actions;
     public int Buys;
     public int Coins;
@@ -146,4 +188,12 @@ public class PlayerStateSnapshot
     // CostRules clamps effective costs at zero.
     public int CostReductionThisTurn;
     public int ActionsPlayedThisTurn;
+
+    // Durable semantic counters used by declarative "this turn" conditions.
+    public int CardsDiscardedThisTurn;
+    public int CardsTrashedThisTurn;
+    public int CardsGainedThisTurn;
+
+    // Applied to the next cleanup hand draw, then reset. Insomnie uses -1.
+    public int NextCleanupDrawModifier;
 }

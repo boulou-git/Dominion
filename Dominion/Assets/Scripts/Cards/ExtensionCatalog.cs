@@ -13,7 +13,20 @@ public sealed class ExtensionPackageData
     public string artwork;
     public List<ExtensionCardData> cards = new List<ExtensionCardData>();
     public List<ExtensionCardData> baseCards = new List<ExtensionCardData>();
+    public List<ExtensionCardData> artifacts = new List<ExtensionCardData>();
+    public List<ExtensionSpecialPileData> specialPiles = new List<ExtensionSpecialPileData>();
     [NonSerialized] public string packageDirectory;
+}
+
+[Serializable]
+public sealed class ExtensionSpecialPileData
+{
+    public string id;
+    public string name;
+    public int fixedCount;
+    public int cardsPerPlayer;
+    public bool shuffle;
+    public List<string> cardIds = new List<string>();
 }
 
 [Serializable]
@@ -25,6 +38,10 @@ public sealed class ExtensionCardData
     public List<string> types = new List<string>();
     public string image;
     public string text;
+    // Zero keeps the standard Dominion Kingdom pile size. A positive value is used
+    // by exceptional Kingdom piles such as the 20-card Rats pile.
+    public int pileSize;
+    public bool returnsToPileAfterPlay;
     public List<CardAbilityData> abilities = new List<CardAbilityData>();
 }
 
@@ -137,7 +154,8 @@ public static class ExtensionCatalog
 
         string requestedId = cardId.Trim();
         ExtensionCardData card = FindIn(extension.cards, requestedId);
-        return card ?? FindIn(extension.baseCards, requestedId);
+        card = card ?? FindIn(extension.baseCards, requestedId);
+        return card ?? FindIn(extension.artifacts, requestedId);
     }
 
     public static ExtensionCardData FindCard(string extensionId, string cardId)
@@ -177,6 +195,10 @@ public static class ExtensionCatalog
         if (!ValidateCards(extension.cards, "cards", cardIds, out error))
             return false;
         if (!ValidateCards(extension.baseCards, "baseCards", cardIds, out error))
+            return false;
+        if (!ValidateCards(extension.artifacts, "artifacts", cardIds, out error))
+            return false;
+        if (!ValidateSpecialPiles(extension, cardIds, out error))
             return false;
 
         return true;
@@ -264,9 +286,23 @@ public static class ExtensionCatalog
             extension.cards = new List<ExtensionCardData>();
         if (extension.baseCards == null)
             extension.baseCards = new List<ExtensionCardData>();
+        if (extension.artifacts == null)
+            extension.artifacts = new List<ExtensionCardData>();
+        if (extension.specialPiles == null)
+            extension.specialPiles = new List<ExtensionSpecialPileData>();
 
         NormaliseCards(extension.cards);
         NormaliseCards(extension.baseCards);
+        NormaliseCards(extension.artifacts);
+        foreach (ExtensionSpecialPileData pile in extension.specialPiles)
+        {
+            if (pile == null) continue;
+            pile.id = (pile.id ?? string.Empty).Trim();
+            pile.name = (pile.name ?? string.Empty).Trim();
+            if (pile.cardIds == null) pile.cardIds = new List<string>();
+            for (int index = 0; index < pile.cardIds.Count; index++)
+                pile.cardIds[index] = (pile.cardIds[index] ?? string.Empty).Trim();
+        }
     }
 
     private static void NormaliseCards(List<ExtensionCardData> cards)
@@ -379,6 +415,11 @@ public static class ExtensionCatalog
                 error = "Card '" + card.id + "' has a negative cost.";
                 return false;
             }
+            if (card.pileSize < 0)
+            {
+                error = "Card '" + card.id + "' has a negative pile size.";
+                return false;
+            }
 
             if (card.abilities == null)
             {
@@ -458,6 +499,50 @@ public static class ExtensionCatalog
             }
         }
 
+        return true;
+    }
+
+    private static bool ValidateSpecialPiles(ExtensionPackageData extension, HashSet<string> cardIds, out string error)
+    {
+        error = string.Empty;
+        if (extension.specialPiles == null)
+        {
+            error = "specialPiles cannot be null after normalisation.";
+            return false;
+        }
+
+        HashSet<string> pileIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (ExtensionSpecialPileData pile in extension.specialPiles)
+        {
+            if (pile == null || string.IsNullOrWhiteSpace(pile.id) || pile.id.IndexOf(':') >= 0)
+            {
+                error = "Every special pile requires an unqualified id.";
+                return false;
+            }
+            if (!pileIds.Add(pile.id))
+            {
+                error = "Duplicate special pile id '" + pile.id + "'.";
+                return false;
+            }
+            if (pile.fixedCount < 0 || pile.cardsPerPlayer < 0 || (pile.fixedCount == 0 && pile.cardsPerPlayer == 0))
+            {
+                error = "Special pile '" + pile.id + "' requires a positive fixedCount or cardsPerPlayer.";
+                return false;
+            }
+            if (pile.cardIds == null || pile.cardIds.Count == 0)
+            {
+                error = "Special pile '" + pile.id + "' has no card definitions.";
+                return false;
+            }
+            foreach (string cardId in pile.cardIds)
+            {
+                if (string.IsNullOrWhiteSpace(cardId) || !cardIds.Contains(cardId))
+                {
+                    error = "Special pile '" + pile.id + "' references unknown card '" + cardId + "'.";
+                    return false;
+                }
+            }
+        }
         return true;
     }
 

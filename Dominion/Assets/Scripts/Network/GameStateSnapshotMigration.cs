@@ -31,9 +31,21 @@ public static class GameStateSnapshotMigration
         if (state.SchemaVersion == 0)
             state.SchemaVersion = 1;
 
-        // Future migrations belong here, one explicit step at a time:
-        // if (state.SchemaVersion == 1) UpgradeV1ToV2(state);
+        if (state.SchemaVersion == 1)
+            UpgradeV1ToV2(state);
 
         return state.SchemaVersion == GameStateSnapshot.CurrentSchemaVersion;
+    }
+
+    private static void UpgradeV1ToV2(GameStateSnapshot state)
+    {
+        if (state.SpecialPiles == null) state.SpecialPiles = new System.Collections.Generic.List<SpecialPileSnapshot>();
+        if (state.UnownedArtifacts == null) state.UnownedArtifacts = new System.Collections.Generic.List<int>();
+        if (state.SetAsideCards == null) state.SetAsideCards = new System.Collections.Generic.List<SetAsideCardSnapshot>();
+        if (state.Players != null)
+            foreach (PlayerStateSnapshot player in state.Players)
+                if (player != null && player.Artifacts == null)
+                    player.Artifacts = new System.Collections.Generic.List<int>();
+        state.SchemaVersion = 2;
     }
 }

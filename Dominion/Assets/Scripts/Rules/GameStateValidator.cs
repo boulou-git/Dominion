@@ -30,6 +30,7 @@ public static class GameStateValidator
         Dictionary<int, CardInstance> cards = ValidateCardRegistry(state, players, errors);
         ValidateCardLocations(state, players, cards, errors);
         ValidateSupply(state, errors);
+        ValidateSpecialPiles(state, errors);
         ValidateJournal(state, errors);
         ValidateResolution(state, players, cards, errors);
         ValidateAbilityUsages(state, cards, errors);
@@ -137,7 +138,7 @@ public static class GameStateValidator
 
             if (string.IsNullOrEmpty(card.DefinitionId))
                 errors.Add("Card instance " + card.InstanceId + " has no definition id.");
-            if (string.IsNullOrEmpty(card.OwnerPlayerId) || !players.ContainsKey(card.OwnerPlayerId))
+            if (!string.IsNullOrEmpty(card.OwnerPlayerId) && !players.ContainsKey(card.OwnerPlayerId))
                 errors.Add("Card instance " + card.InstanceId + " has an unknown owner: " + (card.OwnerPlayerId ?? "<null>") + ".");
         }
 
@@ -163,7 +164,37 @@ public static class GameStateValidator
             ValidateZone(player, player.Discard, "discard", cards, locations, errors);
             ValidateZone(player, player.InPlay, "in_play", cards, locations, errors);
             ValidateZone(player, player.Inspected, "inspected", cards, locations, errors);
+            ValidateZone(player, player.Artifacts, "artifacts", cards, locations, errors);
         }
+
+        if (state.SpecialPiles != null)
+            foreach (SpecialPileSnapshot pile in state.SpecialPiles)
+                if (pile != null && pile.CardInstanceIds != null)
+                    foreach (int instanceId in pile.CardInstanceIds)
+                    {
+                        RegisterLocation(instanceId, "special_pile/" + pile.PileId, cards, locations, errors);
+                        if (cards.TryGetValue(instanceId, out CardInstance card) && !string.IsNullOrEmpty(card.OwnerPlayerId))
+                            errors.Add("Card instance " + instanceId + " is in special pile " + pile.PileId + " but still has an owner.");
+                    }
+
+        if (state.UnownedArtifacts != null)
+            foreach (int instanceId in state.UnownedArtifacts)
+            {
+                RegisterLocation(instanceId, "unowned_artifacts", cards, locations, errors);
+                if (cards.TryGetValue(instanceId, out CardInstance card) && !string.IsNullOrEmpty(card.OwnerPlayerId))
+                    errors.Add("Unowned Artefact instance " + instanceId + " still has an owner.");
+            }
+
+        if (state.SetAsideCards != null)
+            foreach (SetAsideCardSnapshot setAside in state.SetAsideCards)
+            {
+                if (setAside == null) { errors.Add("Set-aside collection contains a null entry."); continue; }
+                RegisterLocation(setAside.CardInstanceId, "set_aside/" + setAside.PlayerId, cards, locations, errors);
+                if (!players.ContainsKey(setAside.PlayerId)) errors.Add("Set-aside card references unknown player " + setAside.PlayerId + ".");
+                if (cards.TryGetValue(setAside.CardInstanceId, out CardInstance card) &&
+                    !string.Equals(card.OwnerPlayerId, setAside.PlayerId, StringComparison.Ordinal))
+                    errors.Add("Set-aside card " + setAside.CardInstanceId + " does not belong to " + setAside.PlayerId + ".");
+            }
 
         if (state.TrashedCards == null)
         {
@@ -255,6 +286,21 @@ public static class GameStateValidator
 
             if (pile.RemainingCount < 0)
                 errors.Add("Supply pile " + pile.DefinitionId + " has a negative count.");
+        }
+    }
+
+    private static void ValidateSpecialPiles(GameStateSnapshot state, List<string> errors)
+    {
+        if (state.SpecialPiles == null) { errors.Add("Special-pile collection is null."); return; }
+        if (state.UnownedArtifacts == null) errors.Add("Unowned-Artefact collection is null.");
+        if (state.SetAsideCards == null) errors.Add("Set-aside collection is null.");
+        HashSet<string> ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (SpecialPileSnapshot pile in state.SpecialPiles)
+        {
+            if (pile == null) { errors.Add("Special-pile collection contains a null entry."); continue; }
+            if (string.IsNullOrWhiteSpace(pile.PileId)) errors.Add("A special pile has no id.");
+            else if (!ids.Add(pile.PileId)) errors.Add("Duplicate special pile: " + pile.PileId + ".");
+            if (pile.CardInstanceIds == null) errors.Add("Special pile " + pile.PileId + " has a null card list.");
         }
     }
 

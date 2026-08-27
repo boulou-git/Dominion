@@ -80,6 +80,7 @@ public static class DiscardRules
                 return false;
             }
 
+            player.CardsDiscardedThisTurn++;
             eventBus.Publish(GameEvent.CardDiscarded(
                 player.PlayerId,
                 instanceId,

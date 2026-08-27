@@ -123,6 +123,7 @@ public static class NetworkGameState
         }
 
         CreateSupply(state, roomPlayers.Count);
+        CreateExtensionComponents(state, setup, roomPlayers.Count, NewRandom());
         if (!CreateStarterDecksAndOpeningHands(state)) return false;
         UpdatePauseState(state);
         PlayerStateSnapshot firstConnectedPlayer = state.Players.Find(player => player.IsConnected);
@@ -260,7 +261,58 @@ public static class NetworkGameState
         GameSetupConfig setup = RoomGameSetup.ReadCurrent();
         if (setup != null && setup.kingdomCardIds != null)
             foreach (string definitionId in setup.kingdomCardIds)
-                if (!string.IsNullOrEmpty(definitionId)) AddSupplyPile(state, definitionId, KingdomPileCount);
+                if (!string.IsNullOrEmpty(definitionId))
+                {
+                    ExtensionCardData definition = ResolveCardDefinition(definitionId);
+                    int count = definition != null && definition.pileSize > 0 ? definition.pileSize : KingdomPileCount;
+                    AddSupplyPile(state, definitionId, count);
+                }
+    }
+
+    private static void CreateExtensionComponents(GameStateSnapshot state, GameSetupConfig setup, int playerCount, System.Random random)
+    {
+        if (state == null || setup == null || setup.kingdomCardIds == null) return;
+        HashSet<string> enabledExtensionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string cardRef in setup.kingdomCardIds)
+            if (CardDefinitionReference.TryParseQualified(cardRef, out string extensionId, out _))
+                enabledExtensionIds.Add(extensionId);
+
+        foreach (string extensionId in enabledExtensionIds)
+        {
+            ExtensionPackageData extension = ExtensionCatalog.Find(extensionId);
+            if (extension == null) continue;
+
+            if (extension.specialPiles != null)
+                foreach (ExtensionSpecialPileData definition in extension.specialPiles)
+                {
+                    if (definition == null || definition.cardIds == null || definition.cardIds.Count == 0) continue;
+                    string pileId = extension.id + ":" + definition.id;
+                    SpecialPileSnapshot pile = new SpecialPileSnapshot(pileId,
+                        string.IsNullOrWhiteSpace(definition.name) ? definition.id : definition.name);
+                    int count = definition.fixedCount > 0
+                        ? definition.fixedCount
+                        : Math.Max(0, definition.cardsPerPlayer * Math.Max(1, playerCount));
+                    for (int index = 0; index < count; index++)
+                    {
+                        string cardId = definition.cardIds[index % definition.cardIds.Count];
+                        CardInstance instance = new CardInstance(state.NextCardInstanceId++, extension.id + ":" + cardId, string.Empty);
+                        state.CardInstances.Add(instance);
+                        pile.CardInstanceIds.Add(instance.InstanceId);
+                    }
+                    if (definition.shuffle && random != null)
+                        CardZoneRules.Shuffle(pile.CardInstanceIds, random);
+                    state.SpecialPiles.Add(pile);
+                }
+
+            if (extension.artifacts != null)
+                foreach (ExtensionCardData artifact in extension.artifacts)
+                {
+                    if (artifact == null || string.IsNullOrWhiteSpace(artifact.id)) continue;
+                    CardInstance instance = new CardInstance(state.NextCardInstanceId++, extension.id + ":" + artifact.id, string.Empty);
+                    state.CardInstances.Add(instance);
+                    state.UnownedArtifacts.Add(instance.InstanceId);
+                }
+        }
     }
 
     private static int GetVictoryPileSize(int playerCount)
@@ -444,6 +496,11 @@ public static class NetworkGameState
         if (state == null) return;
         if (state.CardInstances == null) state.CardInstances = new List<CardInstance>();
         if (state.SupplyPiles == null) state.SupplyPiles = new List<SupplyPileSnapshot>();
+        if (state.SpecialPiles == null) state.SpecialPiles = new List<SpecialPileSnapshot>();
+        foreach (SpecialPileSnapshot pile in state.SpecialPiles)
+            if (pile != null && pile.CardInstanceIds == null) pile.CardInstanceIds = new List<int>();
+        if (state.UnownedArtifacts == null) state.UnownedArtifacts = new List<int>();
+        if (state.SetAsideCards == null) state.SetAsideCards = new List<SetAsideCardSnapshot>();
         if (state.Journal == null) state.Journal = new List<GameJournalEntrySnapshot>();
         if (state.NextJournalSequence < 1)
             state.NextJournalSequence = state.Journal.Count > 0 ? state.Journal.Max(entry => entry != null ? entry.Sequence : 0) + 1 : 1;
@@ -460,6 +517,7 @@ public static class NetworkGameState
             if (player.Discard == null) player.Discard = new List<int>();
             if (player.InPlay == null) player.InPlay = new List<int>();
             if (player.Inspected == null) player.Inspected = new List<int>();
+            if (player.Artifacts == null) player.Artifacts = new List<int>();
         }
         ResolutionQueue.EnsureSnapshot(state);
     }

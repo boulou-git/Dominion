@@ -109,4 +109,17 @@ public sealed class GameEvent
             cardDefinitionId,
             sourceCardInstanceId);
     }
+
+    public static GameEvent ArtifactGained(string playerId, int instanceId, string definitionId, int sourceCardInstanceId = 0)
+    {
+        return new GameEvent(GameEventType.ArtifactGained, playerId, instanceId, definitionId,
+            sourceCardInstanceId, CardZone.None);
+    }
+
+    public static GameEvent DiseaseGained(string playerId, int instanceId, string definitionId,
+        CardZone destinationZone, int sourceCardInstanceId = 0)
+    {
+        return new GameEvent(GameEventType.DiseaseGained, playerId, instanceId, definitionId,
+            sourceCardInstanceId, destinationZone);
+    }
 }

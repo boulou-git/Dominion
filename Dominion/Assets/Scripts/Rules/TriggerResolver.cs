@@ -237,6 +237,14 @@ public static class TriggerResolver
                 return AbilityResolutionResult.Rejected(matched, resolved, inPlayResult.Error);
             if (inPlayResult.Status == EffectResolutionStatus.WaitingForChoice)
                 return AbilityResolutionResult.WaitingForChoice(matched, resolved);
+
+            AbilityResolutionResult artifactResult = ResolveZoneListeners(owner, owner.Artifacts, DeclarativeRuleVocabulary.ArtifactScope, gameEvent, timing, resolution, state, resolveCardDefinition, random);
+            matched += artifactResult.AbilitiesMatched;
+            resolved += artifactResult.EffectsResolved;
+            if (artifactResult.Status == EffectResolutionStatus.Rejected)
+                return AbilityResolutionResult.Rejected(matched, resolved, artifactResult.Error);
+            if (artifactResult.Status == EffectResolutionStatus.WaitingForChoice)
+                return AbilityResolutionResult.WaitingForChoice(matched, resolved);
         }
 
         return AbilityResolutionResult.Applied(matched, resolved);

@@ -68,6 +68,7 @@ public static class TrashRules
             return false;
 
         pile.RemainingCount--;
+        actor.CardsTrashedThisTurn++;
         eventBus?.Publish(GameEvent.CardTrashed(
             actor.PlayerId,
             trashedInstanceId,
@@ -148,6 +149,7 @@ public static class TrashRules
             return false;
         }
 
+        owner.CardsTrashedThisTurn++;
         eventBus?.Publish(new GameEvent(
             GameEventType.CardTrashed,
             owner.PlayerId,

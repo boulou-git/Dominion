@@ -79,6 +79,7 @@ public static class GainRules
             return false;
 
         pile.RemainingCount--;
+        owner.CardsGainedThisTurn++;
 
         if (eventBus != null)
         {
@@ -166,6 +167,7 @@ public static class GainRules
         }
 
         instance.OwnerPlayerId = newOwner.PlayerId;
+        newOwner.CardsGainedThisTurn++;
 
         eventBus?.Publish(GameEvent.CardGained(
             newOwner.PlayerId,

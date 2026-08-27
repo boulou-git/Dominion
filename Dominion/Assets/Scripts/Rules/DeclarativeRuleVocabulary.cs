@@ -21,6 +21,7 @@ public static class DeclarativeRuleVocabulary
     public const string SubjectScope = "subject";
     public const string InHandScope = "in_hand";
     public const string InPlayScope = "in_play";
+    public const string ArtifactScope = "artifact";
 
     public const string AnyEventPlayer = "any";
     public const string SelfEventPlayer = "self";
@@ -52,7 +53,8 @@ public static class DeclarativeRuleVocabulary
     {
         SubjectScope,
         InHandScope,
-        InPlayScope
+        InPlayScope,
+        ArtifactScope
     };
 
     private static readonly HashSet<string> EventPlayers = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
