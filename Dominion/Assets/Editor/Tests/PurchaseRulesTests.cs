@@ -43,6 +43,42 @@ public sealed class PurchaseRulesTests
         Assert.That(GameStateValidator.TryValidate(state, out string validationError), Is.True, validationError);
     }
 
+    [Test]
+    public void ZeroCoins_WithRemainingBuy_KeepsBuyPhaseAndAllowsCopper()
+    {
+        const string silverId = "base:argent";
+        const string copperId = "base:cuivre";
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        player.Coins = 3;
+        player.Buys = 2;
+        state.SupplyPiles.Add(new SupplyPileSnapshot(silverId, 3));
+        state.SupplyPiles.Add(new SupplyPileSnapshot(copperId, 46));
+
+        ExtensionCardData silver = new ExtensionCardData { id = "argent", name = "Argent", cost = 3 };
+        ExtensionCardData copper = new ExtensionCardData { id = "cuivre", name = "Cuivre", cost = 0 };
+        ExtensionCardData Resolve(string definitionId) =>
+            string.Equals(definitionId, silverId, StringComparison.OrdinalIgnoreCase) ? silver :
+            string.Equals(definitionId, copperId, StringComparison.OrdinalIgnoreCase) ? copper : null;
+
+        GameRuleResult silverPurchase = GameRules.TryBuyCard(
+            state, player.PlayerId, silverId, Resolve, new Random(1));
+
+        Assert.That(silverPurchase.Status, Is.EqualTo(GameRuleStatus.Applied), silverPurchase.Error);
+        Assert.That(player.Coins, Is.Zero);
+        Assert.That(player.Buys, Is.EqualTo(1));
+        Assert.That(state.Phase, Is.EqualTo(GameRules.BuyPhase));
+
+        GameRuleResult copperPurchase = GameRules.TryBuyCard(
+            state, player.PlayerId, copperId, Resolve, new Random(1));
+
+        Assert.That(copperPurchase.Status, Is.EqualTo(GameRuleStatus.Applied), copperPurchase.Error);
+        Assert.That(player.Coins, Is.Zero);
+        Assert.That(player.Buys, Is.Zero);
+        Assert.That(state.Phase, Is.EqualTo(GameRules.CleanupPhase));
+        Assert.That(state.SupplyPiles.Single(pile => pile.DefinitionId == copperId).RemainingCount, Is.EqualTo(45));
+        Assert.That(GameStateValidator.TryValidate(state, out string validationError), Is.True, validationError);
+    }
+
     private static GameStateSnapshot NewState(out PlayerStateSnapshot player)
     {
         GameStateSnapshot state = new GameStateSnapshot
