@@ -79,13 +79,29 @@ public sealed class PrefabUiContractTests
         GameObject flow = Load("EndGameFlow");
         Assert.NotNull(flow.GetComponent<Canvas>());
         Assert.NotNull(flow.transform.Find("EndGameSurface"));
-        Assert.NotNull(Load("EndGameScoringStage").transform.Find("Breakdown/ScoreRows"));
-        Assert.NotNull(Load("EndGameRankingStage").transform.Find("Ranking/RankingRows"));
-        Assert.NotNull(Load("EndGameRankingStage").transform.Find("Detail/DetailRows"));
+        GameObject scoringStage = Load("EndGameScoringStage");
+        VerticalLayoutGroup scoreRows = scoringStage.transform.Find("Breakdown/ScoreRows")?.GetComponent<VerticalLayoutGroup>();
+        Assert.NotNull(scoreRows);
+        Assert.IsTrue(scoreRows.childControlHeight);
+
+        GameObject rankingStage = Load("EndGameRankingStage");
+        VerticalLayoutGroup rankingRows = rankingStage.transform.Find("Ranking/RankingRows")?.GetComponent<VerticalLayoutGroup>();
+        VerticalLayoutGroup detailRows = rankingStage.transform.Find("Detail/DetailRows")?.GetComponent<VerticalLayoutGroup>();
+        Assert.NotNull(rankingRows);
+        Assert.NotNull(detailRows);
+        Assert.IsTrue(rankingRows.childControlHeight);
+        Assert.IsTrue(detailRows.childControlHeight);
         GameObject scoreRow = Load("EndGameScoreRow");
+        LayoutElement scoreRowLayout = scoreRow.GetComponent<LayoutElement>();
+        Assert.NotNull(scoreRowLayout);
+        Assert.Greater(scoreRowLayout.preferredHeight, 0f);
         Assert.NotNull(scoreRow.transform.Find("Points/Value")?.GetComponent<Text>());
         Assert.NotNull(scoreRow.transform.Find("Points/Shield")?.GetComponent<Image>()?.sprite);
-        Assert.NotNull(Load("EndGameRankingRow").transform.Find("Score/Value")?.GetComponent<Text>());
+        GameObject rankingRow = Load("EndGameRankingRow");
+        LayoutElement rankingRowLayout = rankingRow.GetComponent<LayoutElement>();
+        Assert.NotNull(rankingRowLayout);
+        Assert.Greater(rankingRowLayout.preferredHeight, 0f);
+        Assert.NotNull(rankingRow.transform.Find("Score/Value")?.GetComponent<Text>());
     }
 
     private static GameObject Load(string name)
