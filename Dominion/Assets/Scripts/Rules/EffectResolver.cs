@@ -61,6 +61,10 @@ public static class EffectResolver
         {"reveal_zone", RevealZone}, {"trash_source_card", TrashSourceCard},
         {"simultaneous_pass_left", SimultaneousPassLeft}, {"discard_hand_draw", DiscardHandDraw},
         {"replace_each_other_top_card", ReplaceEachOtherTopCard}, {"each_other_choose_discard_or_gain", EachOtherChooseDiscardOrGain},
+        {"gain_special_pile", GainSpecialPile}, {"take_artifact", TakeArtifact},
+        {"gain_trigger_card_from_trash", GainTriggerCardFromTrash},
+        {"add_resource_per_distinct_type_in_play", AddResourcePerDistinctTypeInPlay},
+        {"set_next_cleanup_draw_penalty", SetNextCleanupDrawPenalty},
         {ReactionRules.DrawDiscardOperation, AttackReactionDrawDiscard}
     };
 
@@ -104,6 +108,12 @@ public static class EffectResolver
         if (e.requiresMinActionsPlayedThisTurn > 0 && c.Actor.ActionsPlayedThisTurn < e.requiresMinActionsPlayedThisTurn)
             return EffectResolutionResult.Applied();
         if (e.requiresMaxHandSize >= 0 && (c.Actor.Hand == null || c.Actor.Hand.Count > e.requiresMaxHandSize))
+            return EffectResolutionResult.Applied();
+        if (e.requiresMinDiscardedOrTrashedThisTurn > 0 &&
+            c.Actor.CardsDiscardedThisTurn + c.Actor.CardsTrashedThisTurn < e.requiresMinDiscardedOrTrashedThisTurn)
+            return EffectResolutionResult.Applied();
+        if (e.requiresMinDistinctTypesInHand > 0 &&
+            CountDistinctTypes(c.State, c.Actor.Hand) < e.requiresMinDistinctTypesInHand)
             return EffectResolutionResult.Applied();
         if (!string.IsNullOrWhiteSpace(e.requiresLastMovedCardType))
         {
@@ -176,7 +186,8 @@ public static class EffectResolver
             (z != CardZone.Hand && z != CardZone.Discard && z != CardZone.Inspected && z != CardZone.Trash))
             return EffectResolutionResult.Rejected("choose_cards currently supports hand, discard, inspected and trash zones.");
         int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : min;
-        List<int> candidates = Eligible(c.State, c.Actor, z, e.cardId, e.cardType, e.lastMovedOnly ? c.Resolution.LastMovedCardInstanceId : 0);
+        List<int> candidates = Eligible(c.State, c.Actor, z, e.cardId, e.cardType,
+            e.lastMovedOnly ? c.Resolution.LastMovedCardInstanceId : 0, e.maxCost);
         if (e.minUpToAvailable) min = Math.Min(min, candidates.Count);
         max = Math.Min(max, candidates.Count);
         if (candidates.Count == 0 && e.allowNoEligible) { c.Resolution.ClearSelection(); return EffectResolutionResult.Applied(); }
@@ -571,6 +582,78 @@ public static class EffectResolver
         return EffectResolutionResult.Applied();
     }
 
+    private static EffectResolutionResult GainSpecialPile(CardEffectData e, EffectExecutionContext c)
+    {
+        if ((!Self(e) && !Others(e)) || string.IsNullOrWhiteSpace(e.specialPileId) || e.amount < 0)
+            return EffectResolutionResult.Rejected("Invalid gain_special_pile effect.");
+        CardZone destination = CardZone.Discard;
+        if (!string.IsNullOrWhiteSpace(e.destinationZone) && !CardZoneRules.TryParseZone(e.destinationZone, out destination))
+            return EffectResolutionResult.Rejected("gain_special_pile destination is invalid.");
+        int requested = e.amount > 0 ? e.amount : 1;
+        List<PlayerStateSnapshot> targets = new List<PlayerStateSnapshot>();
+        if (Self(e)) targets.Add(c.Actor);
+        else if (c.State.Players != null)
+            foreach (PlayerStateSnapshot player in c.State.Players)
+                if (player != null && player.PlayerId != c.Actor.PlayerId && !SkipAttackTarget(c, player)) targets.Add(player);
+
+        foreach (PlayerStateSnapshot target in targets)
+        {
+            int gained = 0;
+            for (int index = 0; index < requested; index++)
+            {
+                SpecialPileSnapshot pile = SpecialPileRules.Find(c.State, e.specialPileId);
+                if (pile == null) return EffectResolutionResult.Rejected("Special pile was not found: " + e.specialPileId);
+                if (pile.CardInstanceIds == null || pile.CardInstanceIds.Count == 0) break;
+                if (!SpecialPileRules.TryGainTop(c.State, target, e.specialPileId, destination,
+                        c.SourceCardInstanceId, c.EventBus, Def, out _, out string error))
+                    return EffectResolutionResult.Rejected(error);
+                gained++;
+            }
+            if (e.drawForMissing && gained < requested &&
+                !CardZoneRules.DrawCards(target, requested - gained, c.Random, out string drawError))
+                return EffectResolutionResult.Rejected(drawError);
+        }
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult TakeArtifact(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || string.IsNullOrWhiteSpace(e.artifactId))
+            return EffectResolutionResult.Rejected("Invalid take_artifact effect.");
+        return ArtifactRules.TryTake(c.State, c.Actor, e.artifactId, c.SourceCardInstanceId,
+            c.EventBus, out _, out string error)
+            ? EffectResolutionResult.Applied()
+            : EffectResolutionResult.Rejected(error);
+    }
+
+    private static EffectResolutionResult GainTriggerCardFromTrash(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.TriggerEvent == null || c.TriggerEvent.CardInstanceId <= 0)
+            return EffectResolutionResult.Rejected("gain_trigger_card_from_trash requires a card event.");
+        CardZone destination = CardZone.Hand;
+        if (!string.IsNullOrWhiteSpace(e.destinationZone) && !CardZoneRules.TryParseZone(e.destinationZone, out destination))
+            return EffectResolutionResult.Rejected("Trigger-card gain destination is invalid.");
+        return GainRules.TryGainFromTrash(c.State, c.Actor, c.TriggerEvent.CardInstanceId, destination,
+            c.SourceCardInstanceId, c.EventBus, out string error)
+            ? EffectResolutionResult.Applied()
+            : EffectResolutionResult.Rejected(error);
+    }
+
+    private static EffectResolutionResult AddResourcePerDistinctTypeInPlay(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || e.amount < 0) return EffectResolutionResult.Rejected("Invalid type-scaled resource effect.");
+        int typeCount = CountDistinctTypes(c.State, c.Actor.InPlay);
+        int units = e.max > 0 ? Math.Min(typeCount, e.max) : typeCount;
+        return AddResource(new CardEffectData { target = "self", resource = e.resource, amount = units * e.amount }, c);
+    }
+
+    private static EffectResolutionResult SetNextCleanupDrawPenalty(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || e.amount < 0) return EffectResolutionResult.Rejected("Invalid cleanup draw penalty.");
+        c.Actor.NextCleanupDrawModifier -= e.amount;
+        return EffectResolutionResult.Applied();
+    }
+
     private static EffectResolutionResult TrashSelectedSupply(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("Invalid trash_selected_supply effect.");
@@ -668,14 +751,17 @@ public static class EffectResolver
             : EffectResolutionResult.Rejected(result.Error);
     }
 
-    private static List<int> Eligible(GameStateSnapshot state, PlayerStateSnapshot p, CardZone z, string cardId, string cardType, int onlyId)
+    private static List<int> Eligible(GameStateSnapshot state, PlayerStateSnapshot p, CardZone z, string cardId, string cardType, int onlyId, int maxCost = -1)
     {
         List<int> r = new List<int>(); List<int> source = CardZoneRules.ResolveZone(state, p, z); if (source == null) return r;
         foreach (int id in source)
         {
             if (onlyId > 0 && id != onlyId) continue; CardInstance i = Find(state, id); if (i == null) continue;
             if (!string.IsNullOrWhiteSpace(cardId) && !string.Equals(i.DefinitionId, cardId, StringComparison.OrdinalIgnoreCase)) continue;
-            if (!string.IsNullOrWhiteSpace(cardType) && !CardDefinitionRules.HasType(Def(i.DefinitionId), cardType)) continue; r.Add(id);
+            ExtensionCardData definition = Def(i.DefinitionId);
+            if (!string.IsNullOrWhiteSpace(cardType) && !CardDefinitionRules.HasType(definition, cardType)) continue;
+            if (maxCost >= 0 && (definition == null || CostRules.GetEffectiveCost(state, definition) > maxCost)) continue;
+            r.Add(id);
         }
         return r;
     }
@@ -683,6 +769,20 @@ public static class EffectResolver
     {
         if (c == null || p == null || c.Resolution == null || !c.Resolution.IsAttackProtected(p.PlayerId)) return false;
         CardInstance s = Find(c.State, c.SourceCardInstanceId); return s != null && CardDefinitionRules.HasType(Def(s.DefinitionId), "Attaque");
+    }
+    private static int CountDistinctTypes(GameStateSnapshot state, List<int> instanceIds)
+    {
+        HashSet<string> types = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (instanceIds == null) return 0;
+        foreach (int id in instanceIds)
+        {
+            CardInstance instance = Find(state, id);
+            ExtensionCardData definition = instance != null ? Def(instance.DefinitionId) : null;
+            if (definition == null || definition.types == null) continue;
+            foreach (string type in definition.types)
+                if (!string.IsNullOrWhiteSpace(type)) types.Add(type.Trim());
+        }
+        return types.Count;
     }
     private static bool Cursor(EffectExecutionContext c) => c.AbilityIndex >= 0 && c.EffectIndex >= 0 && c.ListenerCardInstanceId > 0 && c.TriggerEvent != null && c.TriggerEvent.CardInstanceId == c.ListenerCardInstanceId;
     private static CardInstance Find(GameStateSnapshot s, int id) => s != null && s.CardInstances != null && id > 0 ? s.CardInstances.Find(x => x != null && x.InstanceId == id) : null;

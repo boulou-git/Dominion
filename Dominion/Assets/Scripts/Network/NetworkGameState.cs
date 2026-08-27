@@ -369,7 +369,13 @@ public static class NetworkGameState
         CardZoneRules.MoveAll(current, CardZone.InPlay, CardZone.Discard);
         CardZoneRules.MoveAll(current, CardZone.Hand, CardZone.Discard, true);
         current.Actions = 1; current.Buys = 1; current.Coins = 0; current.ActionsPlayedThisTurn = 0; CostRules.ResetForTurn(current);
-        CardZoneRules.DrawCards(current, StartingHandSize, NewRandom(), out _);
+        int cleanupDraw = StartingHandSize + current.NextCleanupDrawModifier;
+        if (ArtifactRules.Controls(state, current, "fleaux:etendard_divin")) cleanupDraw++;
+        current.NextCleanupDrawModifier = 0;
+        CardZoneRules.DrawCards(current, Math.Max(0, cleanupDraw), NewRandom(), out _);
+        current.CardsDiscardedThisTurn = 0;
+        current.CardsTrashedThisTurn = 0;
+        current.CardsGainedThisTurn = 0;
 
         // Dominion end conditions never interrupt the current turn. Finalise only
         // after cleanup, before rotating the active player or incrementing TurnNumber.

@@ -109,6 +109,11 @@ public sealed class CardEffectData
     public string requiresLastMovedCardType;
     public bool exactCost;
     public int minHandSize;
+    public string specialPileId;
+    public string artifactId;
+    public bool drawForMissing;
+    public int requiresMinDiscardedOrTrashedThisTurn;
+    public int requiresMinDistinctTypesInHand;
 }
 
 public static class ExtensionCatalog
@@ -355,6 +360,8 @@ public static class ExtensionCatalog
                     effect.requiresSelectedOption = (effect.requiresSelectedOption ?? string.Empty).Trim();
                     effect.requiresNoCardType = (effect.requiresNoCardType ?? string.Empty).Trim();
                     effect.conditionZone = (effect.conditionZone ?? string.Empty).Trim();
+                    effect.specialPileId = (effect.specialPileId ?? string.Empty).Trim();
+                    effect.artifactId = (effect.artifactId ?? string.Empty).Trim();
                     if (effect.options == null)
                         effect.options = new List<CardChoiceOptionData>();
                     foreach (CardChoiceOptionData option in effect.options)
@@ -639,7 +646,8 @@ public static class ExtensionCatalog
             return false;
         }
 
-        if (effect.requiresMinActionsPlayedThisTurn < 0 || effect.requiresMaxHandSize < -1 || effect.minHandSize < 0)
+        if (effect.requiresMinActionsPlayedThisTurn < 0 || effect.requiresMaxHandSize < -1 || effect.minHandSize < 0 ||
+            effect.requiresMinDiscardedOrTrashedThisTurn < 0 || effect.requiresMinDistinctTypesInHand < 0)
         {
             error = prefix + " has an invalid turn/hand-size condition.";
             return false;
@@ -685,6 +693,19 @@ public static class ExtensionCatalog
         if (!string.IsNullOrWhiteSpace(effect.cardId) && !CardDefinitionReference.IsValid(effect.cardId))
         {
             error = prefix + " has malformed cardId '" + effect.cardId + "'.";
+            return false;
+        }
+
+        if (string.Equals(op, "gain_special_pile", StringComparison.OrdinalIgnoreCase) &&
+            !CardDefinitionReference.TryParseQualified(effect.specialPileId, out _, out _))
+        {
+            error = prefix + " requires a qualified specialPileId.";
+            return false;
+        }
+        if (string.Equals(op, "take_artifact", StringComparison.OrdinalIgnoreCase) &&
+            !CardDefinitionReference.TryParseQualified(effect.artifactId, out _, out _))
+        {
+            error = prefix + " requires a qualified artifactId.";
             return false;
         }
 
