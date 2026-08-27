@@ -80,13 +80,11 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             return;
 
         bool explicitCleanup = string.Equals(state.Phase, NetworkGameState.CleanupPhase, StringComparison.Ordinal);
-        /*bool emptyBuyingPower = string.Equals(state.Phase, NetworkGameState.BuyPhase, StringComparison.Ordinal) &&
-                                localPlayer.Coins <= 0 &&
-                                !HandContainsTreasure(state, localPlayer);*/
+        bool noRemainingBuys = string.Equals(state.Phase, NetworkGameState.BuyPhase, StringComparison.Ordinal) &&
+                               localPlayer.Buys <= 0;
 
+        if ((explicitCleanup || noRemainingBuys) && _lastAutoCleanupVersion != state.Version)
 
-        //if ((explicitCleanup || emptyBuyingPower) && _lastAutoCleanupVersion != state.Version)
-        if ((explicitCleanup ) && _lastAutoCleanupVersion != state.Version)
         {
             _lastAutoCleanupVersion = state.Version;
             BeginCleanupAnimation();
@@ -581,26 +579,6 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         }
 
         return state.Players.Count == 1 ? state.Players[0] : null;
-    }
-
-    private static bool HandContainsTreasure(GameStateSnapshot state, PlayerStateSnapshot player)
-    {
-        if (state == null || player == null || player.Hand == null)
-            return false;
-
-        foreach (int instanceId in player.Hand)
-        {
-            CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
-            if (instance == null)
-                continue;
-
-            ExtensionPackageData extension;
-            ExtensionCardData definition;
-            if (RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition) && IsTreasure(definition))
-                return true;
-        }
-
-        return false;
     }
 
     private static bool IsTreasure(ExtensionCardData definition)

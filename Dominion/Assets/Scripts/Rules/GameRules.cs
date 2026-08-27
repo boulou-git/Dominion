@@ -55,7 +55,7 @@ public static class GameRules
         TriggerResolutionResult tr = TriggerResolver.ResolvePending(q, s, resolve, random); List<GameEvent> events = q.Events.SnapshotHistory();
         if (tr.Status == EffectResolutionStatus.Rejected) return GameRuleResult.Rejected(tr.Error, events);
         if (tr.Status == EffectResolutionStatus.WaitingForChoice) return q.IsWaitingForDecision ? GameRuleResult.WaitingForChoice(events) : GameRuleResult.Rejected("Waiting trigger has no durable decision.", events);
-        if (p.Buys <= 0 || (p.Coins <= 0 && !HandContainsType(s, p, resolve, "Trésor"))) s.Phase = CleanupPhase;
+        if (p.Buys <= 0) s.Phase = CleanupPhase;
         q.CompleteIfIdle(); return GameRuleResult.Applied(events);
     }
 
@@ -416,10 +416,6 @@ public static class GameRules
         if (s.Phase == ActionPhase) { if (!CardDefinitionRules.HasType(d, "Action")) return "Only Action cards can be played during the Action phase."; if (p.Actions <= 0) return "No Actions remain."; consumes = true; return string.Empty; }
         if (s.Phase == BuyPhase) return CardDefinitionRules.HasType(d, "Trésor") ? string.Empty : "Only Treasure cards can be played during the Buy phase.";
         return "Cards cannot be played during phase: " + (s.Phase ?? string.Empty);
-    }
-    private static bool HandContainsType(GameStateSnapshot s, PlayerStateSnapshot p, Func<string, ExtensionCardData> resolve, string type)
-    {
-        if (p == null || p.Hand == null) return false; foreach (int id in p.Hand) { CardInstance i = Card(s, id); if (i != null && CardDefinitionRules.HasType(resolve(i.DefinitionId), type)) return true; } return false;
     }
     private static PlayerStateSnapshot Player(GameStateSnapshot s, string id) => s != null && s.Players != null ? s.Players.Find(x => x != null && x.PlayerId == id) : null;
     private static CardInstance Card(GameStateSnapshot s, int id) => s != null && s.CardInstances != null ? s.CardInstances.Find(x => x != null && x.InstanceId == id) : null;
