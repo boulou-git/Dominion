@@ -45,6 +45,7 @@ public sealed class CardSelectionTileView : MonoBehaviour, IPointerClickHandler
                 artRect.offsetMax = Vector2.zero;
                 image.preserveAspect = true;
                 image.raycastTarget = true;
+                DynamicCardCostView.Attach(image.gameObject, card);
             }
         }
 

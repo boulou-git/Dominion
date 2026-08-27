@@ -193,6 +193,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             Image image = card.GetComponent<Image>();
             image.sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition);
             image.preserveAspect = true; image.color = image.sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f); image.raycastTarget = true;
+            DynamicCardCostView.Attach(card, definition);
             LayoutElement layout = card.GetComponent<LayoutElement>(); layout.preferredWidth = 82f; layout.preferredHeight = 127f;
 
             CardPointerInteraction pointer = card.GetComponent<CardPointerInteraction>(); pointer.InspectOnLongPress = false;

@@ -109,6 +109,7 @@ public sealed class BaseSupplyController : MonoBehaviour
             image.color = sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);
             image.preserveAspect = true;
             image.raycastTarget = false;
+            DynamicCardCostView.Attach(pileObject, card);
 
             Text count = CreateCountBadge(pileObject.transform);
             _countLabels[definitionId] = count;

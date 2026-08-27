@@ -351,13 +351,15 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         image.preserveAspect = true;
         image.raycastTarget = sprite != null;
         image.enabled = true;
+        DynamicCardCostView.Attach(cardObject, card);
 
         if (sprite != null)
         {
             Button button = cardObject.AddComponent<Button>();
             button.targetGraphic = image;
             button.transition = Selectable.Transition.None;
-            button.onClick.AddListener(() => ShowRevealZoom(sprite));
+            ExtensionCardData capturedDefinition = card;
+            button.onClick.AddListener(() => ShowRevealZoom(sprite, capturedDefinition));
         }
         else
         {
@@ -474,7 +476,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         _revealZoomOverlay.SetActive(false);
     }
 
-    private void ShowRevealZoom(Sprite sprite)
+    private void ShowRevealZoom(Sprite sprite, ExtensionCardData definition)
     {
         if (sprite == null)
             return;
@@ -485,6 +487,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         _revealZoomImage.sprite = sprite;
         _revealZoomImage.enabled = true;
+        DynamicCardCostView.Attach(_revealZoomImage.gameObject, definition);
         _revealZoomOverlay.SetActive(true);
         _revealZoomOverlay.transform.SetAsLastSibling();
     }

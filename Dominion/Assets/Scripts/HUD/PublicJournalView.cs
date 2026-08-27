@@ -234,15 +234,16 @@ public sealed class PublicJournalView : MonoBehaviour
         {
             _zoomImage.sprite = sprite;
             _zoomImage.preserveAspect = true;
+            DynamicCardCostView.Attach(_zoomImage.gameObject, definition);
             _zoomOverlay.SetActive(true);
             _zoomOverlay.transform.SetAsLastSibling();
             return;
         }
 
-        ShowFallbackZoom(sprite);
+        ShowFallbackZoom(sprite, definition);
     }
 
-    private void ShowFallbackZoom(Sprite sprite)
+    private void ShowFallbackZoom(Sprite sprite, ExtensionCardData definition)
     {
         Canvas canvas = GetComponentInParent<Canvas>();
         if (canvas == null) return;
@@ -271,6 +272,7 @@ public sealed class PublicJournalView : MonoBehaviour
         image.sprite = sprite;
         image.preserveAspect = true;
         image.raycastTarget = false;
+        DynamicCardCostView.Attach(imageObject, definition);
         overlay.transform.SetAsLastSibling();
     }
 

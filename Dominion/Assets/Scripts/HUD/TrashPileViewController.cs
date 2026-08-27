@@ -259,6 +259,8 @@ public sealed class TrashPileViewController : MonoBehaviour
             image.preserveAspect = true;
             image.raycastTarget = true;
             image.color = sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);
+            if (resolved)
+                DynamicCardCostView.Attach(cardObject, definition);
 
             if (!resolved)
             {
@@ -273,8 +275,9 @@ public sealed class TrashPileViewController : MonoBehaviour
                 CardPointerInteraction pointer = cardObject.GetComponent<CardPointerInteraction>();
                 pointer.InspectOnLongPress = false;
                 Sprite capturedSprite = sprite;
-                pointer.PrimaryActionRequested += () => ShowZoom(capturedSprite);
-                pointer.InspectRequested += () => ShowZoom(capturedSprite);
+                ExtensionCardData capturedDefinition = definition;
+                pointer.PrimaryActionRequested += () => ShowZoom(capturedSprite, capturedDefinition);
+                pointer.InspectRequested += () => ShowZoom(capturedSprite, capturedDefinition);
             }
 
             _renderedCards.Add(cardObject);
@@ -313,13 +316,14 @@ public sealed class TrashPileViewController : MonoBehaviour
         _zoomImage = imageField != null ? imageField.GetValue(_screen) as Image : null;
     }
 
-    private void ShowZoom(Sprite sprite)
+    private void ShowZoom(Sprite sprite, ExtensionCardData definition)
     {
         if (sprite == null) return;
         if (_zoomOverlay == null || _zoomImage == null) BindZoomUi();
         if (_zoomOverlay == null || _zoomImage == null) return;
         _zoomImage.sprite = sprite;
         _zoomImage.preserveAspect = true;
+        DynamicCardCostView.Attach(_zoomImage.gameObject, definition);
         _zoomOverlay.SetActive(true);
         _zoomOverlay.transform.SetAsLastSibling();
     }

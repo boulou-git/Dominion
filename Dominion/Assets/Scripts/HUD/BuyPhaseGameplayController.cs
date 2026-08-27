@@ -264,13 +264,14 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             ExtensionPackageData extension;
             ExtensionCardData definition;
             bool resolved = RoomGameSetup.TryResolveCard(pair.Key, out extension, out definition);
+            int effectiveCost = resolved ? CostRules.GetEffectiveCost(state, definition) : -1;
             bool buyable = resolved &&
                            remaining > 0 &&
                            localTurn &&
                            buyPhase &&
                            state != null && !state.IsPaused &&
                            localPlayer.Buys > 0 &&
-                           definition.cost <= localPlayer.Coins;
+                           effectiveCost >= 0 && effectiveCost <= localPlayer.Coins;
             binding.SetBuyable(buyable);
         }
     }
@@ -336,7 +337,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
                 continue;
 
             Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition);
-            GameObject stack = CreateInPlayStack(definition.id, sprite, groups[definitionId].Count);
+            GameObject stack = CreateInPlayStack(definition.id, sprite, definition, groups[definitionId].Count);
             stack.transform.SetParent(_inPlayRoot, false);
             _inPlayObjects.Add(stack);
         }
@@ -344,7 +345,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         LayoutRebuilder.ForceRebuildLayoutImmediate(_inPlayRoot);
     }
 
-    private GameObject CreateInPlayStack(string cardId, Sprite sprite, int count)
+    private GameObject CreateInPlayStack(string cardId, Sprite sprite, ExtensionCardData definition, int count)
     {
         GameObject stack = new GameObject("InPlay_" + cardId, typeof(RectTransform), typeof(LayoutElement));
         RectTransform stackRect = stack.GetComponent<RectTransform>();
@@ -372,13 +373,15 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             image.sprite = sprite;
             image.preserveAspect = true;
             image.raycastTarget = i == layers - 1;
+            DynamicCardCostView.Attach(layerObject, definition);
 
             if (i == layers - 1 && sprite != null)
             {
                 CardPointerInteraction pointer = layerObject.AddComponent<CardPointerInteraction>();
                 pointer.InspectOnLongPress = false;
                 Sprite captured = sprite;
-                pointer.InspectRequested += () => ShowZoom(captured);
+                ExtensionCardData capturedDefinition = definition;
+                pointer.InspectRequested += () => ShowZoom(captured, capturedDefinition);
             }
         }
 
@@ -420,13 +423,15 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         image.preserveAspect = true;
         image.raycastTarget = sprite != null;
         image.color = Color.white;
+        DynamicCardCostView.Attach(_discardTopObject, definition);
 
         if (sprite != null)
         {
             CardPointerInteraction pointer = _discardTopObject.AddComponent<CardPointerInteraction>();
             pointer.InspectOnLongPress = false;
             Sprite captured = sprite;
-            pointer.InspectRequested += () => ShowZoom(captured);
+            ExtensionCardData capturedDefinition = definition;
+            pointer.InspectRequested += () => ShowZoom(captured, capturedDefinition);
         }
     }
 
@@ -550,13 +555,14 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         _cleanupAnimating = false;
     }
 
-    private void ShowZoom(Sprite sprite)
+    private void ShowZoom(Sprite sprite, ExtensionCardData definition)
     {
         if (_zoomOverlay == null || _zoomImage == null || sprite == null)
             return;
 
         _zoomImage.sprite = sprite;
         _zoomImage.preserveAspect = true;
+        DynamicCardCostView.Attach(_zoomImage.gameObject, definition);
         _zoomOverlay.SetActive(true);
         _zoomOverlay.transform.SetAsLastSibling();
     }

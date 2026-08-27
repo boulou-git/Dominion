@@ -410,6 +410,7 @@ public sealed class GameScreenController : MonoBehaviour
             image.color = sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);
             image.preserveAspect = true;
             image.raycastTarget = true;
+            DynamicCardCostView.Attach(cardObject, definition);
 
             LayoutElement layout = cardObject.GetComponent<LayoutElement>();
             layout.preferredWidth = 130f;
@@ -422,8 +423,9 @@ public sealed class GameScreenController : MonoBehaviour
             CardPointerInteraction pointer = cardObject.GetComponent<CardPointerInteraction>();
             pointer.InspectOnLongPress = false;
             Sprite capturedSprite = sprite;
+            ExtensionCardData capturedDefinition = definition;
             if (capturedSprite != null)
-                pointer.InspectRequested += () => ShowZoom(capturedSprite);
+                pointer.InspectRequested += () => ShowZoom(capturedSprite, capturedDefinition);
 
             HandCardMotion motion = cardObject.AddComponent<HandCardMotion>();
             motion.BindInstance(instanceId, HandleHandOrderChanged);
@@ -528,16 +530,18 @@ public sealed class GameScreenController : MonoBehaviour
             image.color = sprite != null ? Color.white : new Color(0.55f, 0.12f, 0.12f, 1f);
             image.preserveAspect = true;
             image.raycastTarget = true;
+            DynamicCardCostView.Attach(cardObject, card);
 
             Button button = cardObject.GetComponent<Button>();
             button.targetGraphic = image;
             Sprite captured = sprite;
+            ExtensionCardData capturedDefinition = card;
             if (captured != null)
-                button.onClick.AddListener(() => ShowZoom(captured));
+                button.onClick.AddListener(() => ShowZoom(captured, capturedDefinition));
 
             CardPointerInteraction pointer = cardObject.GetComponent<CardPointerInteraction>();
             if (captured != null)
-                pointer.InspectRequested += () => ShowZoom(captured);
+                pointer.InspectRequested += () => ShowZoom(captured, capturedDefinition);
 
             _kingdomCards.Add(cardObject);
         }
@@ -548,13 +552,14 @@ public sealed class GameScreenController : MonoBehaviour
         Debug.Log("Kingdom supply rendered: " + _kingdomCards.Count + " card(s), rootSize=" + _kingdomSupplyRoot.rect.size + ".");
     }
 
-    private void ShowZoom(Sprite sprite)
+    private void ShowZoom(Sprite sprite, ExtensionCardData definition)
     {
         if (_zoomOverlay == null || _zoomImage == null || sprite == null)
             return;
 
         _zoomImage.sprite = sprite;
         _zoomImage.preserveAspect = true;
+        DynamicCardCostView.Attach(_zoomImage.gameObject, definition);
         _zoomOverlay.SetActive(true);
         _zoomOverlay.transform.SetAsLastSibling();
     }

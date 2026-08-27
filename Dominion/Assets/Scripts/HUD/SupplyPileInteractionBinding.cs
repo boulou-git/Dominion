@@ -21,7 +21,8 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     private CardPointerInteraction _pointer;
     private Sprite _sprite;
     private Action<string> _buyRequested;
-    private Action<Sprite> _inspectRequested;
+    private Action<Sprite, ExtensionCardData> _inspectRequested;
+    private ExtensionCardData _definition;
     private bool _buyable;
     private bool _hasCards = true;
     private bool _purchaseAnimationRunning;
@@ -33,12 +34,16 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
 
     public string DefinitionId => _definitionId;
 
-    public void Bind(string definitionId, Sprite sprite, Action<string> buyRequested, Action<Sprite> inspectRequested)
+    public void Bind(string definitionId, Sprite sprite, Action<string> buyRequested,
+        Action<Sprite, ExtensionCardData> inspectRequested)
     {
         _definitionId = definitionId;
         _sprite = sprite;
         _buyRequested = buyRequested;
         _inspectRequested = inspectRequested;
+        ExtensionPackageData extension;
+        RoomGameSetup.TryResolveCard(definitionId, out extension, out _definition);
+        DynamicCardCostView.Attach(gameObject, _definition);
 
         _image = GetComponent<Image>();
         if (_image != null)
@@ -184,6 +189,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         flyingImage.preserveAspect = true;
         flyingImage.raycastTarget = false;
         flyingImage.color = Color.white;
+        DynamicCardCostView.Attach(flyingObject, _definition);
 
         Vector3 startWorld = source.TransformPoint(source.rect.center);
         Vector3 targetWorld = discard.TransformPoint(discard.rect.center);
@@ -210,7 +216,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
 
     private void OnInspect()
     {
-        if (_sprite != null) _inspectRequested?.Invoke(_sprite);
+        if (_sprite != null) _inspectRequested?.Invoke(_sprite, _definition);
     }
 
     private void OnDestroy()

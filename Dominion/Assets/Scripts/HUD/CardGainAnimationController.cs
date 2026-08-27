@@ -140,6 +140,7 @@ public sealed class CardGainAnimationController : MonoBehaviour
         image.sprite = sprite;
         image.preserveAspect = true;
         image.raycastTarget = false;
+        DynamicCardCostView.Attach(visual, definition);
 
         CanvasGroup group = visual.GetComponent<CanvasGroup>();
         group.blocksRaycasts = false;
