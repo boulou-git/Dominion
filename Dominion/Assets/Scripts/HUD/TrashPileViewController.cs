@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -28,6 +29,7 @@ public sealed class TrashPileViewController : MonoBehaviour
     private readonly List<GameObject> _renderedCards = new List<GameObject>();
     private int _lastRenderedVersion = -1;
     private bool _uiBindingFailed;
+    private Coroutine _openRefreshRoutine;
 
     private const float CardWidth = 130f;
     private const float CardHeight = 200f;
@@ -45,6 +47,8 @@ public sealed class TrashPileViewController : MonoBehaviour
     private void OnDestroy()
     {
         NetworkGameState.StateChanged -= Refresh;
+        if (_openRefreshRoutine != null)
+            StopCoroutine(_openRefreshRoutine);
     }
 
     private void OnRectTransformDimensionsChange()
@@ -121,11 +125,29 @@ public sealed class TrashPileViewController : MonoBehaviour
         _overlay.SetActive(true);
         _overlay.transform.SetAsLastSibling();
         _lastRenderedVersion = -1;
+        if (_openRefreshRoutine != null)
+            StopCoroutine(_openRefreshRoutine);
+        _openRefreshRoutine = StartCoroutine(RebuildAfterOverlayLayout());
+    }
+
+    private IEnumerator RebuildAfterOverlayLayout()
+    {
+        // The prefab overlay is inactive until Open. Its ScrollRect viewport therefore
+        // has no reliable dimensions during the click frame. Wait for Unity's layout
+        // pass before creating and positioning the cards inside the masked viewport.
+        yield return null;
+        Canvas.ForceUpdateCanvases();
         RebuildCards(NetworkGameState.State);
+        _openRefreshRoutine = null;
     }
 
     private void Close()
     {
+        if (_openRefreshRoutine != null)
+        {
+            StopCoroutine(_openRefreshRoutine);
+            _openRefreshRoutine = null;
+        }
         if (_overlay != null) _overlay.SetActive(false);
     }
 
@@ -177,6 +199,10 @@ public sealed class TrashPileViewController : MonoBehaviour
 
         Canvas.ForceUpdateCanvases();
         RefreshGridColumns();
+        _cardsGrid.CalculateLayoutInputHorizontal();
+        _cardsGrid.SetLayoutHorizontal();
+        _cardsGrid.CalculateLayoutInputVertical();
+        _cardsGrid.SetLayoutVertical();
         LayoutRebuilder.ForceRebuildLayoutImmediate(_cardsRoot);
         Canvas.ForceUpdateCanvases();
         if (_cardsScroll != null)
