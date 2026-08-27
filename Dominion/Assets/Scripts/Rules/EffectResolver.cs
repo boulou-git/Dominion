@@ -64,7 +64,7 @@ public static class EffectResolver
         {"gain_special_pile", GainSpecialPile}, {"take_artifact", TakeArtifact},
         {"gain_trigger_card_from_trash", GainTriggerCardFromTrash},
         {"add_resource_per_distinct_type_in_play", AddResourcePerDistinctTypeInPlay},
-        {"set_next_cleanup_draw_penalty", SetNextCleanupDrawPenalty},
+        {"set_next_cleanup_draw_penalty", SetNextCleanupDrawPenalty}, {"mark_duration_resolved", MarkDurationResolved},
         {ReactionRules.DrawDiscardOperation, AttackReactionDrawDiscard}
     };
 
@@ -115,6 +115,9 @@ public static class EffectResolver
         if (e.requiresMinDistinctTypesInHand > 0 &&
             CountDistinctTypes(c.State, c.Actor.Hand) < e.requiresMinDistinctTypesInHand)
             return EffectResolutionResult.Applied();
+        if (e.requiresArtifactIds != null)
+            foreach (string artifactId in e.requiresArtifactIds)
+                if (!ArtifactRules.Controls(c.State, c.Actor, artifactId)) return EffectResolutionResult.Applied();
         if (!string.IsNullOrWhiteSpace(e.requiresLastMovedCardType))
         {
             CardInstance moved = Find(c.State, c.Resolution != null ? c.Resolution.LastMovedCardInstanceId : 0);
@@ -665,6 +668,14 @@ public static class EffectResolver
         if (!Self(e) || e.amount < 0) return EffectResolutionResult.Rejected("Invalid cleanup draw penalty.");
         c.Actor.NextCleanupDrawModifier -= e.amount;
         return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult MarkDurationResolved(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e)) return EffectResolutionResult.Rejected("mark_duration_resolved requires target self.");
+        return DurationRules.TryMarkResolved(c.State, c.Actor, c.SourceCardInstanceId, Def, out string error)
+            ? EffectResolutionResult.Applied()
+            : EffectResolutionResult.Rejected(error);
     }
 
     private static EffectResolutionResult TrashSelectedSupply(CardEffectData e, EffectExecutionContext c)

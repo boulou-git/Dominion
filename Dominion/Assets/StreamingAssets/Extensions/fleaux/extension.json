@@ -145,10 +145,36 @@
       { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "deck", "requiresSelectedOption": "replace", "prompt": "Replacez les cartes dans l’ordre de votre choix." },
       { "op": "take_artifact", "target": "self", "artifactId": "fleaux:phylactere", "requiresMinDistinctTypesInHand": 3 }
     ] } ] },
-    { "id": "cultiste", "name": "Cultiste", "cost": 4, "types": ["Action", "Durée"], "image": "cultiste.png", "text": "Au début de votre prochain tour : +2 Cartes.\n\nPrenez la Dague rituelle ou l’Encens noir.\n\nSi vous contrôlez les deux, écartez cette carte et recevez une Horreur." },
+    { "id": "cultiste", "name": "Cultiste", "cost": 4, "types": ["Action", "Durée"], "image": "cultiste.png", "text": "Au début de votre prochain tour : +2 Cartes.\n\nPrenez la Dague rituelle ou l’Encens noir.\n\nSi vous contrôlez les deux, écartez cette carte et recevez une Horreur.", "abilities": [
+      { "when": "play", "effects": [
+        { "op": "choose_options", "target": "self", "min": 1, "max": 1, "prompt": "Prenez la Dague rituelle ou l’Encens noir.", "options": [
+          { "id": "dagger", "label": "Dague rituelle" }, { "id": "incense", "label": "Encens noir" }
+        ] },
+        { "op": "take_artifact", "target": "self", "artifactId": "fleaux:dague_rituelle", "requiresSelectedOption": "dagger" },
+        { "op": "take_artifact", "target": "self", "artifactId": "fleaux:encens_noir", "requiresSelectedOption": "incense" },
+        { "op": "trash_source_card", "target": "self", "requiresArtifactIds": ["fleaux:dague_rituelle", "fleaux:encens_noir"] },
+        { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:horreurs", "amount": 1, "destinationZone": "discard", "requiresArtifactIds": ["fleaux:dague_rituelle", "fleaux:encens_noir"] }
+      ] },
+      { "when": "turn_started", "scope": "in_play", "filter": { "eventPlayer": "self" }, "effects": [
+        { "op": "draw", "target": "self", "amount": 2 },
+        { "op": "mark_duration_resolved", "target": "self" }
+      ] }
+    ] },
     { "id": "cloitre", "name": "Cloître", "cost": 3, "types": ["Action", "Réaction", "Durée"], "image": "cloitre.png", "text": "+3 Cartes\n\nDéfaussez 2 cartes.\n\nMettez de côté, face cachée sous cette carte, une carte de votre main. Au début de votre prochain tour, prenez-la dans votre main.\n\nRéaction : lorsqu’un autre joueur joue une carte Attaque, vous pouvez révéler Cloître depuis votre main et le mettre de côté. Au début de votre prochain tour, jouez-le." },
     { "id": "cachot", "name": "Cachot", "cost": 4, "types": ["Action", "Durée"], "image": "cachot.png", "text": "+1 Action\n\nMettez de côté la carte du dessus de votre deck. Au début de votre prochain tour, révélez-la : si c’est une Action, jouez-la ; sinon, prenez-la dans votre main.\n\nLorsque vous défaussez ou écartez cette carte autrement que pendant votre phase d’Ajustement, vous pouvez mettre une carte de votre main sur votre deck." },
-    { "id": "pestifere", "name": "Pestiféré", "cost": 5, "types": ["Action", "Attaque", "Durée"], "image": "pestifere.png", "text": "+2 Cartes\n\nChaque joueur, vous compris, reçoit une Maladie.\n\nAu début de votre prochain tour : +1 Carte. Puis vous pouvez jouer une Maladie de votre main." },
+    { "id": "pestifere", "name": "Pestiféré", "cost": 5, "types": ["Action", "Attaque", "Durée"], "image": "pestifere.png", "text": "+2 Cartes\n\nChaque joueur, vous compris, reçoit une Maladie.\n\nAu début de votre prochain tour : +1 Carte. Puis vous pouvez jouer une Maladie de votre main.", "abilities": [
+      { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 2 },
+        { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:maladies", "amount": 1, "destinationZone": "discard" },
+        { "op": "gain_special_pile", "target": "others", "specialPileId": "fleaux:maladies", "amount": 1, "destinationZone": "discard" }
+      ] },
+      { "when": "turn_started", "scope": "in_play", "filter": { "eventPlayer": "self" }, "effects": [
+        { "op": "draw", "target": "self", "amount": 1 },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "allowPass": true, "cardType": "Maladie", "prompt": "Vous pouvez jouer une Maladie de votre main." },
+        { "op": "play_selected", "target": "self", "sourceZone": "hand" },
+        { "op": "mark_duration_resolved", "target": "self" }
+      ] }
+    ] },
     { "id": "inquisiteur", "name": "Inquisiteur", "cost": 4, "types": ["Action", "Attaque"], "image": "inquisiteur.png", "text": "+2 🪙\n\nNommez une carte Trésor. Chaque autre joueur ayant cette carte en main en défausse un exemplaire, ou révèle une main qui n’en contient pas.\n\nSi au moins une carte a été défaussée ainsi : +1 🪙." },
     { "id": "mort_vivant", "name": "Mort-vivant", "cost": 2, "types": ["Action"], "image": "mortvivant.png", "text": "+2 Actions\n\nLorsque vous écartez cette carte : +2 Cartes. Puis mettez-la de côté. À la fin du tour, replacez-la sur sa pile dans la Réserve." },
     { "id": "cimetiere", "name": "Cimetière", "cost": 6, "types": ["Action", "Victoire"], "image": "cimetiere.png", "text": "+1 Action\n\nSi vous avez écarté ou défaussé une carte ce tour-ci : +2 Cartes\n\n———\n\nVaut 1 VP par tranche de 6 cartes dans le Rebut.", "abilities": [ { "when": "play", "effects": [

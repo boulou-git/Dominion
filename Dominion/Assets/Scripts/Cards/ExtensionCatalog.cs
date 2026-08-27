@@ -115,6 +115,7 @@ public sealed class CardEffectData
     public bool drawForMissing;
     public int requiresMinDiscardedOrTrashedThisTurn;
     public int requiresMinDistinctTypesInHand;
+    public List<string> requiresArtifactIds = new List<string>();
 }
 
 public static class ExtensionCatalog
@@ -709,6 +710,13 @@ public static class ExtensionCatalog
             error = prefix + " requires a qualified artifactId.";
             return false;
         }
+        if (effect.requiresArtifactIds != null)
+            foreach (string artifactId in effect.requiresArtifactIds)
+                if (!CardDefinitionReference.TryParseQualified(artifactId, out _, out _))
+                {
+                    error = prefix + " has malformed requiresArtifactIds entry '" + (artifactId ?? string.Empty) + "'.";
+                    return false;
+                }
 
         return true;
     }

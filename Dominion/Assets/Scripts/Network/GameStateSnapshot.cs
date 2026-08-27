@@ -9,7 +9,7 @@ using System.Collections.Generic;
 [Serializable]
 public class GameStateSnapshot
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     // Version of the serialized snapshot shape. This is deliberately separate from
     // Version, which is the monotonic revision number of one running match.
@@ -179,6 +179,10 @@ public class PlayerStateSnapshot
 
     // Unique Artefacts currently controlled by this player.
     public List<int> Artifacts = new List<int>();
+
+    // Duration cards whose next-turn effect resolved during the current turn. They
+    // remain in play until this player's next Cleanup, then become discardable.
+    public List<int> ResolvedDurationCards = new List<int>();
 
     public int Actions;
     public int Buys;

@@ -179,6 +179,29 @@ public sealed class FleauxSimpleCardRulesTests
         Assert.That(state.Resolution.IsActive, Is.False);
     }
 
+    [Test]
+    public void Cultiste_DurationSurvivesUntilItsNextTurnEffectHasResolved()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance cultist = AddOwned(state, player, "fleaux:cultiste", CardZone.InPlay);
+        AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        AddOwned(state, player, "base:argent", CardZone.Deck);
+
+        DurationRules.MoveCleanupInPlayCards(state, player, Resolve);
+        Assert.That(player.InPlay, Does.Contain(cultist.InstanceId));
+        Assert.That(player.Discard, Does.Not.Contain(cultist.InstanceId));
+
+        GameRuleResult start = TurnLifecycleRules.TryResolveTurnStarted(state, player, Resolve, new Random(1));
+
+        Assert.That(start.Status, Is.EqualTo(GameRuleStatus.Applied), start.Error);
+        Assert.That(player.Hand.Count, Is.EqualTo(2));
+        Assert.That(player.ResolvedDurationCards, Does.Contain(cultist.InstanceId));
+        DurationRules.MoveCleanupInPlayCards(state, player, Resolve);
+        Assert.That(player.InPlay, Does.Not.Contain(cultist.InstanceId));
+        Assert.That(player.Discard, Does.Contain(cultist.InstanceId));
+        Assert.That(player.ResolvedDurationCards, Does.Not.Contain(cultist.InstanceId));
+    }
+
     private static GameStateSnapshot NewState(out PlayerStateSnapshot player)
     {
         GameStateSnapshot state = new GameStateSnapshot

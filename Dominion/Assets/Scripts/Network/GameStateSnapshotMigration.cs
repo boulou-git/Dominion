@@ -33,6 +33,8 @@ public static class GameStateSnapshotMigration
 
         if (state.SchemaVersion == 1)
             UpgradeV1ToV2(state);
+        if (state.SchemaVersion == 2)
+            UpgradeV2ToV3(state);
 
         return state.SchemaVersion == GameStateSnapshot.CurrentSchemaVersion;
     }
@@ -47,5 +49,14 @@ public static class GameStateSnapshotMigration
                 if (player != null && player.Artifacts == null)
                     player.Artifacts = new System.Collections.Generic.List<int>();
         state.SchemaVersion = 2;
+    }
+
+    private static void UpgradeV2ToV3(GameStateSnapshot state)
+    {
+        if (state.Players != null)
+            foreach (PlayerStateSnapshot player in state.Players)
+                if (player != null && player.ResolvedDurationCards == null)
+                    player.ResolvedDurationCards = new System.Collections.Generic.List<int>();
+        state.SchemaVersion = 3;
     }
 }

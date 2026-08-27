@@ -369,7 +369,7 @@ public static class NetworkGameState
         if (state == null || state.Players == null || state.Players.Count == 0) return false;
         PlayerStateSnapshot current = FindPlayer(state, state.ActivePlayerId);
         if (current == null) return false;
-        CardZoneRules.MoveAll(current, CardZone.InPlay, CardZone.Discard);
+        DurationRules.MoveCleanupInPlayCards(state, current, ResolveCardDefinition);
         CardZoneRules.MoveAll(current, CardZone.Hand, CardZone.Discard, true);
         current.Actions = 1; current.Buys = 1; current.Coins = 0; current.ActionsPlayedThisTurn = 0; CostRules.ResetForTurn(current);
         int cleanupDraw = StartingHandSize + current.NextCleanupDrawModifier;
@@ -534,6 +534,7 @@ public static class NetworkGameState
             if (player.InPlay == null) player.InPlay = new List<int>();
             if (player.Inspected == null) player.Inspected = new List<int>();
             if (player.Artifacts == null) player.Artifacts = new List<int>();
+            if (player.ResolvedDurationCards == null) player.ResolvedDurationCards = new List<int>();
         }
         ResolutionQueue.EnsureSnapshot(state);
     }
