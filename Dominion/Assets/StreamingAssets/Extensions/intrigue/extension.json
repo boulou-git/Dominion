@@ -162,7 +162,7 @@
     },
     {
       "id": "puits_aux_souhaits",
-      "name": "Puits aux souhaits",
+      "name": "Puit aux souhaits",
       "cost": 3,
       "types": ["Action"],
       "image": "puits_aux_souhaits.png",
