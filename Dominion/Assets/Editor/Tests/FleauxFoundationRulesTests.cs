@@ -22,6 +22,8 @@ public sealed class FleauxFoundationRulesTests
         Assert.That(extension.specialPiles.Count, Is.EqualTo(4));
         Assert.That(ExtensionCatalog.FindCard(extension, "confesseur").name, Is.EqualTo("Confesseur"));
         Assert.That(ExtensionCatalog.FindCard(extension, "rats").pileSize, Is.EqualTo(20));
+        Assert.That(ExtensionCatalog.FindCard(extension, "rats").abilities[0].effects[3].excludedCardId,
+            Is.EqualTo("fleaux:rats"));
     }
 
     [Test]

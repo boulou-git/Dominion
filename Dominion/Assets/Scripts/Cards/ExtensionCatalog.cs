@@ -61,7 +61,6 @@ public sealed class CardTriggerFilterData
 {
     public string eventPlayer;
     public string cardId;
-    public string excludedCardId;
     public string cardType;
 }
 
@@ -89,6 +88,7 @@ public sealed class CardEffectData
     public string destinationZone;
 
     public string cardId;
+    public string excludedCardId;
     public string cardType;
 
     public bool lastMovedOnly;
