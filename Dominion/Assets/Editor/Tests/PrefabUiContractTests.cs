@@ -16,8 +16,14 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(prefab.GetComponent<CardPointerInteraction>());
         Assert.NotNull(prefab.GetComponent<DynamicCardCostView>());
         Assert.NotNull(prefab.GetComponent<RuntimeCardView>());
-        Assert.NotNull(prefab.transform.Find("DynamicCost")?.GetComponent<Text>());
+        RectTransform runtimeCost = prefab.transform.Find("DynamicCost") as RectTransform;
+        Assert.NotNull(runtimeCost?.GetComponent<Text>());
         Assert.NotNull(prefab.transform.Find("RemainingCount/Text")?.GetComponent<Text>());
+
+        RectTransform detachedCost = Load("CardCostOverlay").GetComponent<RectTransform>();
+        Assert.NotNull(detachedCost?.GetComponent<Text>());
+        Assert.AreEqual(runtimeCost.anchorMin, detachedCost.anchorMin);
+        Assert.AreEqual(runtimeCost.anchorMax, detachedCost.anchorMax);
     }
 
     [Test]
