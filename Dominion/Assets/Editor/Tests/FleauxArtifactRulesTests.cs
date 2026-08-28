@@ -40,7 +40,7 @@ public sealed class FleauxArtifactRulesTests
 
         Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
         Assert.That(player.Deck.Last(), Is.EqualTo(gainedId));
-        Assert.That(player.Discard, Does.Not.Contain(gainedId));
+        Assert.That(player.Discard.Contains(gainedId), Is.False);
     }
 
     [Test]
@@ -57,7 +57,7 @@ public sealed class FleauxArtifactRulesTests
 
         Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
         Assert.That(player.Deck.Last(), Is.EqualTo(copper.InstanceId));
-        Assert.That(player.Discard, Does.Not.Contain(copper.InstanceId));
+        Assert.That(player.Discard.Contains(copper.InstanceId), Is.False);
     }
 
     [Test]
@@ -77,13 +77,13 @@ public sealed class FleauxArtifactRulesTests
             queue.PendingDecision.DecisionId, new[] { "save" }, Resolve, new Random(1));
 
         Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
-        Assert.That(player.Discard, Does.Not.Contain(beggar.InstanceId));
+        Assert.That(player.Discard.Contains(beggar.InstanceId), Is.False);
         Assert.That(state.SetAsideCards.Exists(entry => entry.CardInstanceId == beggar.InstanceId), Is.True);
         Assert.That(player.Actions, Is.EqualTo(1), "Mendiant's discard trigger must not fire when the discard is replaced.");
         state.TurnNumber++;
         Assert.That(TurnLifecycleRules.TryResolveTurnStarted(state, player, Resolve, new Random(1)).Status,
             Is.EqualTo(GameRuleStatus.Applied));
-        Assert.That(player.Hand, Does.Contain(beggar.InstanceId));
+        Assert.That(player.Hand.Contains(beggar.InstanceId), Is.True);
     }
 
     [Test]
@@ -108,7 +108,7 @@ public sealed class FleauxArtifactRulesTests
         TriggerResolutionResult second = TriggerResolver.ResolvePending(queue, state, Resolve, new Random(1));
 
         Assert.That(second.Status, Is.EqualTo(EffectResolutionStatus.Applied), second.Error);
-        Assert.That(state.TrashedCards, Does.Contain(estate.InstanceId));
+        Assert.That(state.TrashedCards.Contains(estate.InstanceId), Is.True);
         Assert.That(queue.IsWaitingForDecision, Is.False);
     }
 
