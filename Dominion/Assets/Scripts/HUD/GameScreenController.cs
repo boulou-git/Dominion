@@ -597,7 +597,7 @@ public sealed class GameScreenController : MonoBehaviour
                 continue;
 
             Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, card);
-            RuntimeCardView cardView = RuntimeCardView.Create(
+            RuntimeCardView cardView = RuntimeCardView.CreateSupply(
                 _kingdomSupplyRoot, "Supply_" + card.id, card, sprite, true);
             if (cardView == null)
                 continue;

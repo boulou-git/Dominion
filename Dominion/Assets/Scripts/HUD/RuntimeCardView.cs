@@ -9,7 +9,9 @@ using UnityEngine.UI;
 public sealed class RuntimeCardView : MonoBehaviour
 {
     private const string PrefabResourcePath = "UI/RuntimeCard";
+    private const string SupplyPrefabResourcePath = "UI/SupplyCard";
     private static GameObject _prefab;
+    private static GameObject _supplyPrefab;
 
     [SerializeField] private Image _artwork;
     [SerializeField] private DynamicCardCostView _costView;
@@ -31,15 +33,29 @@ public sealed class RuntimeCardView : MonoBehaviour
     public static RuntimeCardView Create(Transform parent, string objectName,
         ExtensionCardData definition, Sprite artwork, bool raycastTarget)
     {
-        if (_prefab == null)
-            _prefab = Resources.Load<GameObject>(PrefabResourcePath);
-        if (_prefab == null || _prefab.GetComponent<RuntimeCardView>() == null)
+        return CreateFromPrefab(ref _prefab, PrefabResourcePath, parent, objectName,
+            definition, artwork, raycastTarget);
+    }
+
+    public static RuntimeCardView CreateSupply(Transform parent, string objectName,
+        ExtensionCardData definition, Sprite artwork, bool raycastTarget)
+    {
+        return CreateFromPrefab(ref _supplyPrefab, SupplyPrefabResourcePath, parent, objectName,
+            definition, artwork, raycastTarget);
+    }
+
+    private static RuntimeCardView CreateFromPrefab(ref GameObject cachedPrefab, string resourcePath,
+        Transform parent, string objectName, ExtensionCardData definition, Sprite artwork, bool raycastTarget)
+    {
+        if (cachedPrefab == null)
+            cachedPrefab = Resources.Load<GameObject>(resourcePath);
+        if (cachedPrefab == null || cachedPrefab.GetComponent<RuntimeCardView>() == null)
         {
-            Debug.LogError("Missing Resources/UI/RuntimeCard prefab.");
+            Debug.LogError("Missing Resources/" + resourcePath + " prefab.");
             return null;
         }
 
-        RuntimeCardView view = Instantiate(_prefab, parent, false).GetComponent<RuntimeCardView>();
+        RuntimeCardView view = Instantiate(cachedPrefab, parent, false).GetComponent<RuntimeCardView>();
         view.gameObject.name = objectName;
         view.Bind(definition, artwork, raycastTarget);
         return view;

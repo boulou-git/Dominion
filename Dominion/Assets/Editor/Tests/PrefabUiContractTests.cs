@@ -27,6 +27,23 @@ public sealed class PrefabUiContractTests
     }
 
     [Test]
+    public void SupplyCard_IsASeparateSquareCroppedVisual()
+    {
+        GameObject prefab = Load("SupplyCard");
+        Assert.NotNull(prefab.transform.Find("CropViewport")?.GetComponent<Mask>());
+        Assert.NotNull(prefab.GetComponent<RuntimeCardView>());
+        Assert.NotNull(prefab.GetComponent<CardPointerInteraction>());
+        Assert.NotNull(prefab.GetComponent<DynamicCardCostView>());
+        RectTransform root = prefab.GetComponent<RectTransform>();
+        Assert.AreEqual(root.sizeDelta.x, root.sizeDelta.y, 0.01f);
+        RectTransform artwork = prefab.transform.Find("CropViewport/Artwork") as RectTransform;
+        Assert.NotNull(artwork?.GetComponent<Image>());
+        Assert.Greater(artwork.sizeDelta.y, root.sizeDelta.y);
+        Assert.NotNull(prefab.transform.Find("DynamicCost")?.GetComponent<Text>());
+        Assert.NotNull(prefab.transform.Find("RemainingCount/Text")?.GetComponent<Text>());
+    }
+
+    [Test]
     public void TrashAndDecisionPrefabs_ExposeTheirRuntimeContracts()
     {
         GameObject trash = Load("TrashPileUi");

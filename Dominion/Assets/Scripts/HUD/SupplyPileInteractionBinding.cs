@@ -46,7 +46,10 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         RoomGameSetup.TryResolveCard(definitionId, out extension, out _definition);
         DynamicCardCostView.Attach(gameObject, _definition);
 
-        _image = GetComponent<Image>();
+        RuntimeCardView runtimeCard = GetComponent<RuntimeCardView>();
+        _image = runtimeCard != null && runtimeCard.Artwork != null
+            ? runtimeCard.Artwork
+            : GetComponent<Image>();
         if (_image != null)
         {
             _image.raycastTarget = true;
@@ -68,8 +71,8 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         _pointer.PrimaryActionRequested += OnPrimaryAction;
         _pointer.InspectRequested += OnInspect;
 
-        _outline = GetComponent<Outline>();
-        if (_outline == null) _outline = gameObject.AddComponent<Outline>();
+        _outline = _image != null ? _image.GetComponent<Outline>() : null;
+        if (_outline == null && _image != null) _outline = _image.gameObject.AddComponent<Outline>();
         _outline.useGraphicAlpha = false;
         _outline.enabled = false;
 
@@ -77,7 +80,6 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         if (_selectionHalo == null) _selectionHalo = gameObject.AddComponent<CardSelectionHalo>();
         _selectionHalo.SetVisible(false);
 
-        RuntimeCardView runtimeCard = GetComponent<RuntimeCardView>();
         _countText = runtimeCard != null ? runtimeCard.RemainingCountText : null;
         if (_countText == null)
             Debug.LogError("Supply pile must use RuntimeCard.prefab with RemainingCount/Text.", this);

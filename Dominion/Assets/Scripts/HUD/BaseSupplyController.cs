@@ -98,7 +98,7 @@ public sealed class BaseSupplyController : MonoBehaviour
             }
 
             Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, card);
-            RuntimeCardView cardView = RuntimeCardView.Create(
+            RuntimeCardView cardView = RuntimeCardView.CreateSupply(
                 _baseSupplyRoot, "BaseSupply_" + card.id, card, sprite, false);
             if (cardView == null)
                 continue;
