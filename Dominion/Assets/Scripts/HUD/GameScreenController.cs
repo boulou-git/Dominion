@@ -92,7 +92,6 @@ public sealed class GameScreenController : MonoBehaviour
     private readonly List<int> _renderedHandIds = new List<int>();
     private readonly PlayerBoardSelectionModel _boardSelection = new PlayerBoardSelectionModel();
     private GameObject _playerTabPrefab;
-    private GameObject _followActiveToggleObject;
     private Toggle _followActiveToggle;
     private bool _kingdomBuilt;
     private bool _dynamicRootsLogged;
@@ -347,19 +346,8 @@ public sealed class GameScreenController : MonoBehaviour
         if (_followActiveToggle == null)
         {
             Transform existing = FindDeepChild(transform, "FollowActivePlayerToggle");
-            if (existing == null)
-            {
-                GameObject prefab = Resources.Load<GameObject>("UI/FollowActivePlayerToggle");
-                Transform inPlayPanel = FindDeepChild(transform, "InPlayPanel");
-                if (prefab != null && inPlayPanel != null)
-                {
-                    _followActiveToggleObject = Instantiate(prefab, inPlayPanel, false);
-                    existing = _followActiveToggleObject.transform;
-                }
-            }
             if (existing != null)
             {
-                _followActiveToggleObject = existing.gameObject;
                 _followActiveToggle = existing.GetComponent<Toggle>() ?? existing.GetComponentInChildren<Toggle>(true);
                 if (_followActiveToggle != null)
                 {
@@ -371,7 +359,7 @@ public sealed class GameScreenController : MonoBehaviour
             if (_followActiveToggle == null && !_missingFollowToggleLogged)
             {
                 _missingFollowToggleLogged = true;
-                Debug.LogError("Required UI prefab Resources/UI/FollowActivePlayerToggle.prefab is missing or invalid.", this);
+                Debug.LogError("GameScreen.prefab contract is incomplete: TopBar/FollowActivePlayerToggle must contain a Toggle.", this);
             }
         }
     }

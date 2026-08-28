@@ -124,6 +124,17 @@ public sealed class PrefabUiContractTests
     [Test]
     public void PlayerBoardControlsAndArtifacts_ArePrefabAuthored()
     {
+        GameObject gameScreen = Load("GameScreen");
+        Transform topBarFollowToggle = gameScreen.transform.Find("TopBar/FollowActivePlayerToggle");
+        Assert.NotNull(topBarFollowToggle?.GetComponent<Toggle>());
+        Assert.NotNull(topBarFollowToggle?.Find("Box/Checkmark")?.GetComponent<Image>());
+        Assert.NotNull(topBarFollowToggle?.Find("Label")?.GetComponent<Text>());
+
+        GridLayoutGroup kingdomGrid = gameScreen.transform
+            .Find("SupplyPanel/KingdomSupply")?.GetComponent<GridLayoutGroup>();
+        Assert.NotNull(kingdomGrid);
+        Assert.AreEqual(kingdomGrid.cellSize.x, kingdomGrid.cellSize.y, 0.01f);
+
         GameObject playerTab = Load("PlayerBoardTab");
         Assert.NotNull(playerTab.GetComponent<Button>());
         Assert.NotNull(playerTab.GetComponent<LayoutElement>());
