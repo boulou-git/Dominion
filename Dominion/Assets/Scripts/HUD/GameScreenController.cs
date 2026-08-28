@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Photon.Pun;
 using UnityEngine;
 using UnityEngine.UI;
+using static UnityEngine.GraphicsBuffer;
 
 /// <summary>
 /// Binds the editable GameScreen prefab to the current replicated game state.
@@ -186,12 +187,12 @@ public sealed class GameScreenController : MonoBehaviour
         PlayerStateSnapshot counters = viewedPlayer ?? activePlayer ?? localPlayer;
         if (counters != null)
         {
-            if (_actionsText != null) _actionsText.text = "Actions  " + counters.Actions;
-            if (_buysText != null) _buysText.text = "Achats  " + counters.Buys;
-            if (_coinsText != null) _coinsText.text = "Pièces  " + counters.Coins;
+            if (_actionsText != null) _actionsText.text = "" + counters.Actions + " Actions";
+            if (_buysText != null) _buysText.text = "" + counters.Buys + " Achats";
+            if (_coinsText != null) _coinsText.text = "" + counters.Coins + " Pieces";
             if (_deckText != null) _deckText.text = "PIOCHE\n" + SafeCount(counters.Deck);
             if (_discardText != null) _discardText.text = "DÉFAUSSE\n" + SafeCount(counters.Discard);
-            if (_handCountText != null) _handCountText.text = "Main  " + SafeCount(counters.Hand);
+            if (_handCountText != null) _handCountText.text = "" + SafeCount(counters.Hand) + " Cartes";
         }
 
         RefreshLocalHand(state, localPlayer);
