@@ -38,7 +38,7 @@ public sealed class FleauxSimpleCardRulesTests
         TriggerResolutionResult resolution = TriggerResolver.ResolvePending(queue, state, Resolve, new Random(1));
 
         Assert.That(resolution.Status, Is.EqualTo(EffectResolutionStatus.Applied), resolution.Error);
-        Assert.That(player.Artifacts, Does.Contain(banner.InstanceId));
+        Assert.That(player.Artifacts.Contains(banner.InstanceId), Is.True);
         Assert.That(banner.OwnerPlayerId, Is.EqualTo(player.PlayerId));
     }
 
@@ -102,8 +102,8 @@ public sealed class FleauxSimpleCardRulesTests
             new[] { discard.InstanceId }, Resolve, new Random(1));
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
-        Assert.That(player.Hand, Does.Contain(fossoyeur.InstanceId));
-        Assert.That(player.Discard, Does.Contain(discard.InstanceId));
+        Assert.That(player.Hand.Contains(fossoyeur.InstanceId), Is.True);
+        Assert.That(player.Discard.Contains(discard.InstanceId), Is.True);
         Assert.That(player.Hand.Count(id => id == fossoyeur.InstanceId), Is.EqualTo(1));
         Assert.That(state.Resolution.IsActive, Is.False);
     }
@@ -155,7 +155,7 @@ public sealed class FleauxSimpleCardRulesTests
 
         Assert.That(reacted.Status, Is.EqualTo(GameRuleStatus.Applied), reacted.Error);
         Assert.That(player.Hand.Contains(market.InstanceId), Is.False);
-        Assert.That(player.Discard, Does.Contain(market.InstanceId));
+        Assert.That(player.Discard.Contains(market.InstanceId), Is.True);
         Assert.That(player.Discard.Select(id => state.CardInstances.Find(card => card.InstanceId == id).DefinitionId),
             Does.Contain("base:or"));
     }
@@ -188,17 +188,17 @@ public sealed class FleauxSimpleCardRulesTests
         AddOwned(state, player, "base:argent", CardZone.Deck);
 
         DurationRules.MoveCleanupInPlayCards(state, player, Resolve);
-        Assert.That(player.InPlay, Does.Contain(cultist.InstanceId));
+        Assert.That(player.InPlay.Contains(cultist.InstanceId), Is.True);
         Assert.That(player.Discard.Contains(cultist.InstanceId), Is.False);
 
         GameRuleResult start = TurnLifecycleRules.TryResolveTurnStarted(state, player, Resolve, new Random(1));
 
         Assert.That(start.Status, Is.EqualTo(GameRuleStatus.Applied), start.Error);
         Assert.That(player.Hand.Count, Is.EqualTo(2));
-        Assert.That(player.ResolvedDurationCards, Does.Contain(cultist.InstanceId));
+        Assert.That(player.ResolvedDurationCards.Contains(cultist.InstanceId), Is.True);
         DurationRules.MoveCleanupInPlayCards(state, player, Resolve);
         Assert.That(player.InPlay.Contains(cultist.InstanceId), Is.False);
-        Assert.That(player.Discard, Does.Contain(cultist.InstanceId));
+        Assert.That(player.Discard.Contains(cultist.InstanceId), Is.True);
         Assert.That(player.ResolvedDurationCards.Contains(cultist.InstanceId), Is.False);
     }
 

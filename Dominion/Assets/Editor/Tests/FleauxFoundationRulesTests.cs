@@ -59,7 +59,7 @@ public sealed class FleauxFoundationRulesTests
 
         Assert.That(gained, Is.True, error);
         Assert.That(gainedId, Is.EqualTo(disease.InstanceId));
-        Assert.That(player.Discard, Does.Contain(disease.InstanceId));
+        Assert.That(player.Discard.Contains(disease.InstanceId), Is.True);
         Assert.That(disease.OwnerPlayerId, Is.EqualTo(player.PlayerId));
         Assert.That(player.CardsGainedThisTurn, Is.EqualTo(1));
         Assert.That(queue.Events.SnapshotHistory().Exists(e => e.Type == GameEventType.DiseaseGained), Is.True);
@@ -79,7 +79,7 @@ public sealed class FleauxFoundationRulesTests
         Assert.That(ArtifactRules.TryTake(state, second, artifact.DefinitionId, 0, null, out _, out string secondError), Is.True, secondError);
 
         Assert.That(first.Artifacts.Contains(artifact.InstanceId), Is.False);
-        Assert.That(second.Artifacts, Does.Contain(artifact.InstanceId));
+        Assert.That(second.Artifacts.Contains(artifact.InstanceId), Is.True);
         Assert.That(artifact.OwnerPlayerId, Is.EqualTo(second.PlayerId));
     }
 
