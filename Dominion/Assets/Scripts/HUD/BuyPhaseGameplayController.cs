@@ -532,10 +532,10 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             !string.Equals(state.Phase, NetworkGameState.CleanupPhase, StringComparison.Ordinal))
             return;
 
-        StartCoroutine(CleanupAnimationRoutine());
+        StartCoroutine(CleanupAnimationRoutine(localPlayer.PlayerId));
     }
 
-    private IEnumerator CleanupAnimationRoutine()
+    private IEnumerator CleanupAnimationRoutine(string localPlayerId)
     {
         _cleanupAnimating = true;
 
@@ -558,7 +558,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             }
         }
 
-        if (_screenController == null || _screenController.ViewedPlayerId == localPlayer.PlayerId)
+        if (_screenController == null || _screenController.ViewedPlayerId == localPlayerId)
             foreach (GameObject inPlay in _inPlayObjects)
             {
                 if (inPlay != null && inPlay.transform is RectTransform rect)
