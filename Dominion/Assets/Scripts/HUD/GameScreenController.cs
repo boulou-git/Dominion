@@ -10,6 +10,31 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class GameScreenController : MonoBehaviour
 {
+    [Serializable]
+    private sealed class PlayerColorTarget
+    {
+        [SerializeField] private Graphic _graphic;
+        [SerializeField, Range(0f, 1f)] private float _strength = 0.4f;
+
+        [NonSerialized] private Graphic _capturedGraphic;
+        [NonSerialized] private Color _baseColor;
+
+        public void Apply(Color playerColor)
+        {
+            if (_graphic == null)
+                return;
+            if (_capturedGraphic != _graphic)
+            {
+                _capturedGraphic = _graphic;
+                _baseColor = _graphic.color;
+            }
+
+            Color tinted = Color.Lerp(_baseColor, playerColor, Mathf.Clamp01(_strength));
+            tinted.a = _baseColor.a;
+            _graphic.color = tinted;
+        }
+    }
+
     public event Action BoardPlayerChanged;
 
     [Header("Top bar")]
@@ -23,6 +48,20 @@ public sealed class GameScreenController : MonoBehaviour
     [Header("Board")]
     [SerializeField] private RectTransform _inPlayRoot;
     [SerializeField] private Text _boardTitle;
+
+    [Header("Player colors")]
+    [SerializeField] private Color[] _playerColorPalette =
+    {
+        new Color(0.33f, 0.42f, 0.46f, 1f),
+        new Color(0.37f, 0.44f, 0.35f, 1f),
+        new Color(0.47f, 0.33f, 0.35f, 1f),
+        new Color(0.50f, 0.42f, 0.30f, 1f),
+        new Color(0.40f, 0.36f, 0.45f, 1f),
+        new Color(0.31f, 0.44f, 0.42f, 1f),
+        new Color(0.48f, 0.37f, 0.31f, 1f),
+        new Color(0.42f, 0.42f, 0.30f, 1f)
+    };
+    [SerializeField] private List<PlayerColorTarget> _playerColorTargets = new List<PlayerColorTarget>();
 
     [Header("Right status")]
     [SerializeField] private Text _phaseText;
@@ -131,6 +170,7 @@ public sealed class GameScreenController : MonoBehaviour
         PlayerStateSnapshot activePlayer = state.Players.Find(p => p != null && p.PlayerId == state.ActivePlayerId);
         PlayerStateSnapshot localPlayer = ResolveLocalPlayer(state);
         PlayerStateSnapshot viewedPlayer = _boardSelection.ResolvePlayer(state) ?? activePlayer;
+        ApplyViewedPlayerColor(state, viewedPlayer);
 
         if (_turnText != null)
         {
@@ -228,6 +268,7 @@ public sealed class GameScreenController : MonoBehaviour
 
             GameObject pill = Instantiate(_playerTabPrefab, _playersRoot, false);
             pill.name = "Player_" + player.ActorNumber;
+            ApplyPlayerTabColor(pill, ResolvePlayerColor(state, player.PlayerId));
             Transform labelTransform = FindDeepChild(pill.transform, "Label");
             Text label = labelTransform != null ? labelTransform.GetComponent<Text>() : null;
             if (label != null)
@@ -252,6 +293,33 @@ public sealed class GameScreenController : MonoBehaviour
     }
 
     public string ViewedPlayerId => _boardSelection.ViewedPlayerId;
+
+    public Color ResolvePlayerColor(GameStateSnapshot state, string playerId)
+    {
+        int paletteSize = _playerColorPalette != null ? _playerColorPalette.Length : 0;
+        int index = PlayerColorAssignment.ResolvePaletteIndex(state, playerId, paletteSize);
+        return index >= 0 && index < paletteSize ? _playerColorPalette[index] : Color.gray;
+    }
+
+    private void ApplyViewedPlayerColor(GameStateSnapshot state, PlayerStateSnapshot viewedPlayer)
+    {
+        if (viewedPlayer == null || _playerColorTargets == null)
+            return;
+        Color playerColor = ResolvePlayerColor(state, viewedPlayer.PlayerId);
+        foreach (PlayerColorTarget target in _playerColorTargets)
+            target?.Apply(playerColor);
+    }
+
+    private static void ApplyPlayerTabColor(GameObject tab, Color playerColor)
+    {
+        Transform colorTransform = FindDeepChild(tab != null ? tab.transform : null, "PlayerColor");
+        Graphic graphic = colorTransform != null ? colorTransform.GetComponent<Graphic>() : null;
+        if (graphic == null)
+            return;
+        Color tinted = playerColor;
+        tinted.a = graphic.color.a;
+        graphic.color = tinted;
+    }
 
     private void SelectBoardPlayer(string playerId)
     {

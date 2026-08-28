@@ -111,6 +111,7 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(playerTab.GetComponent<Button>());
         Assert.NotNull(playerTab.GetComponent<LayoutElement>());
         Assert.NotNull(playerTab.transform.Find("Label")?.GetComponent<Text>());
+        Assert.NotNull(playerTab.transform.Find("PlayerColor")?.GetComponent<Image>());
         Assert.NotNull(playerTab.transform.Find("ActiveIndicator")?.GetComponent<Image>());
         Assert.NotNull(playerTab.transform.Find("ViewedIndicator")?.GetComponent<Image>());
 

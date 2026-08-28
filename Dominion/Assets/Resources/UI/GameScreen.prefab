@@ -1211,6 +1211,18 @@ MonoBehaviour:
   _kingdomSupplyRoot: {fileID: 8576627323056351841}
   _inPlayRoot: {fileID: 6834958034110684970}
   _boardTitle: {fileID: 8998818666814129530}
+  _playerColorPalette:
+  - {r: 0.33, g: 0.42, b: 0.46, a: 1}
+  - {r: 0.37, g: 0.44, b: 0.35, a: 1}
+  - {r: 0.47, g: 0.33, b: 0.35, a: 1}
+  - {r: 0.5, g: 0.42, b: 0.3, a: 1}
+  - {r: 0.4, g: 0.36, b: 0.45, a: 1}
+  - {r: 0.31, g: 0.44, b: 0.42, a: 1}
+  - {r: 0.48, g: 0.37, b: 0.31, a: 1}
+  - {r: 0.42, g: 0.42, b: 0.3, a: 1}
+  _playerColorTargets:
+  - _graphic: {fileID: 6179410694714333312}
+    _strength: 0.42
   _phaseText: {fileID: 8395932375181424524}
   _actionsText: {fileID: 2205265935774902653}
   _buysText: {fileID: 3372974680358475752}
