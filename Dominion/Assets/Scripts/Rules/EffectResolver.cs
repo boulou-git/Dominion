@@ -254,9 +254,16 @@ public static class EffectResolver
                 " options; use a dedicated decision control for larger sets.");
         max = Math.Min(max, ids.Count);
         if (min > max) return EffectResolutionResult.Rejected("choose_options does not have enough distinct options.");
-        return c.Resolution.TrySuspendForOptionDecision(c.Actor.PlayerId, "choose_options", e.prompt, c.SourceCardInstanceId,
-            min, max, ids, labels, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err)
-            ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(err);
+        if (!c.Resolution.TrySuspendForOptionDecision(c.Actor.PlayerId, "choose_options", e.prompt, c.SourceCardInstanceId,
+                min, max, ids, labels, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err))
+            return EffectResolutionResult.Rejected(err);
+
+        // An option immediately following inspect_top_cards must show the privately
+        // inspected cards before the player chooses what to do with them.
+        List<int> inspected = CardZoneRules.ResolveZone(c.Actor, CardZone.Inspected);
+        if (inspected != null && inspected.Count > 0)
+            c.Resolution.PendingDecision.CandidateInstanceIds.AddRange(inspected);
+        return EffectResolutionResult.WaitingForChoice();
     }
 
     private static EffectResolutionResult ChooseOptionsRepeatedPerEmptyKingdomPile(CardEffectData e, EffectExecutionContext c)

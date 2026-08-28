@@ -84,6 +84,60 @@ public sealed class FleauxFoundationRulesTests
     }
 
     [Test]
+    public void Fievre_ShowsInspectedCardsBeforeTheOptionChoice()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance lower = AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        CardInstance top = AddOwned(state, player, "base:argent", CardZone.Deck);
+        CardInstance fever = AddOwned(state, player, "fleaux:fievre", CardZone.Hand);
+
+        GameRuleResult waiting = GameRules.TryPlayCard(state, player.PlayerId, fever.InstanceId, Resolve, new Random(1));
+
+        Assert.That(waiting.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), waiting.Error);
+        Assert.That(state.Resolution.PendingDecision.Zone, Is.EqualTo("options"));
+        CollectionAssert.AreEqual(new[] { top.InstanceId, lower.InstanceId }, player.Inspected);
+        CollectionAssert.AreEqual(player.Inspected, state.Resolution.PendingDecision.CandidateInstanceIds);
+    }
+
+    [Test]
+    public void Fievre_DiscardChoiceUsesDrawOrderWithoutAskingForOrder()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance lower = AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        CardInstance top = AddOwned(state, player, "base:argent", CardZone.Deck);
+        CardInstance fever = AddOwned(state, player, "fleaux:fievre", CardZone.Hand);
+        GameRuleResult waiting = GameRules.TryPlayCard(state, player.PlayerId, fever.InstanceId, Resolve, new Random(1));
+        Assert.That(waiting.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), waiting.Error);
+
+        GameRuleResult finished = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "discard" }, Resolve, new Random(1));
+
+        Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
+        CollectionAssert.AreEqual(new[] { top.InstanceId, lower.InstanceId }, player.Discard);
+        Assert.That(player.Inspected, Is.Empty);
+        Assert.That(player.CardsDiscardedThisTurn, Is.EqualTo(2));
+        Assert.That(state.Resolution.PendingDecision.IsPending, Is.False);
+    }
+
+    [Test]
+    public void Fievre_ReplaceChoiceStillAsksForTheDeckOrder()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        AddOwned(state, player, "base:argent", CardZone.Deck);
+        CardInstance fever = AddOwned(state, player, "fleaux:fievre", CardZone.Hand);
+        GameRuleResult waiting = GameRules.TryPlayCard(state, player.PlayerId, fever.InstanceId, Resolve, new Random(1));
+        Assert.That(waiting.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), waiting.Error);
+
+        GameRuleResult orderChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "replace" }, Resolve, new Random(1));
+
+        Assert.That(orderChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), orderChoice.Error);
+        Assert.That(state.Resolution.PendingDecision.Zone, Is.EqualTo("inspected"));
+        Assert.That(state.Resolution.PendingDecision.Operation, Does.StartWith("move_all_ordered|"));
+    }
+
+    [Test]
     public void Cemetery_ScoresFromGlobalTrashInGroupsOfSix()
     {
         GameStateSnapshot state = NewState(out PlayerStateSnapshot player);

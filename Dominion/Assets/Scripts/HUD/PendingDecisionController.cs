@@ -26,8 +26,12 @@ public sealed class PendingDecisionController : MonoBehaviour
     private RectTransform _panel;
     private RectTransform _externalCardsRoot;
     private RectTransform _optionsRoot;
+    private RectTransform _optionPreviewCardsRoot;
+    private RectTransform _optionPreviewOptionsRoot;
     private DecisionScrollGrid _cardsScrollGrid;
     private DecisionScrollGrid _optionsScrollGrid;
+    private DecisionScrollGrid _optionPreviewCardsScrollGrid;
+    private DecisionScrollGrid _optionPreviewOptionsScrollGrid;
     private DeckPositionDecisionView _deckPositionView;
     private CardNameDecisionView _cardNameView;
     private Text _promptText;
@@ -79,8 +83,9 @@ public sealed class PendingDecisionController : MonoBehaviour
         bool optionChoice = IsOptionDecision(decision);
         bool deckPositionChoice = IsDeckPositionDecision(decision);
         bool cardNameChoice = IsCardNameDecision(decision);
+        bool hasCardPreview = optionChoice && decision.CandidateInstanceIds != null && decision.CandidateInstanceIds.Count > 0;
         CardZone choiceZone = ResolveDecisionZone(decision);
-        ConfigurePanel(choiceZone, supplyChoice, optionChoice, deckPositionChoice, cardNameChoice);
+        ConfigurePanel(choiceZone, supplyChoice, optionChoice, deckPositionChoice, cardNameChoice, hasCardPreview);
 
         if (optionChoice)
         {
@@ -89,7 +94,13 @@ public sealed class PendingDecisionController : MonoBehaviour
             {
                 if (deckPositionChoice) BuildDeckPositionChoice(decision);
                 else if (cardNameChoice) BuildCardNameChoice(decision);
-                else BuildOptionButtons(decision);
+                else
+                {
+                    if (hasCardPreview) BuildOptionPreviewCards(state, decision);
+                    BuildOptionButtons(decision,
+                        hasCardPreview ? _optionPreviewOptionsRoot : _optionsRoot,
+                        hasCardPreview ? _optionPreviewOptionsScrollGrid : _optionsScrollGrid);
+                }
             }
             else if (!deckPositionChoice && !cardNameChoice) RefreshOptionButtons();
         }
@@ -201,10 +212,23 @@ public sealed class PendingDecisionController : MonoBehaviour
     private void BuildExternalCards(GameStateSnapshot state, PendingDecisionSnapshot decision)
     {
         ClearExternalCards();
-        if (_externalCardsRoot == null || state == null || decision == null) return;
-        _externalCardsRoot.gameObject.SetActive(true);
+        BuildCards(state, decision != null ? decision.CandidateInstanceIds : null,
+            _externalCardsRoot, _cardsScrollGrid, true);
+    }
 
-        foreach (int instanceId in decision.CandidateInstanceIds ?? new List<int>())
+    private void BuildOptionPreviewCards(GameStateSnapshot state, PendingDecisionSnapshot decision)
+    {
+        BuildCards(state, decision != null ? decision.CandidateInstanceIds : null,
+            _optionPreviewCardsRoot, _optionPreviewCardsScrollGrid, false);
+    }
+
+    private void BuildCards(GameStateSnapshot state, IEnumerable<int> instanceIds,
+        RectTransform cardsRoot, DecisionScrollGrid scrollGrid, bool selectable)
+    {
+        if (cardsRoot == null || state == null || instanceIds == null) return;
+        cardsRoot.gameObject.SetActive(true);
+
+        foreach (int instanceId in instanceIds)
         {
             CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
             if (instance == null) continue;
@@ -212,25 +236,31 @@ public sealed class PendingDecisionController : MonoBehaviour
             if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition)) continue;
 
             RuntimeCardView cardView = RuntimeCardView.Create(
-                _externalCardsRoot,
-                "DecisionCard_" + instanceId,
+                cardsRoot,
+                (selectable ? "DecisionCard_" : "DecisionPreviewCard_") + instanceId,
                 definition,
                 ExtensionVisualLoader.LoadCardArtwork(extension, definition),
                 true);
             if (cardView == null) continue;
             GameObject card = cardView.gameObject;
-            CardPointerInteraction pointer = cardView.Pointer; pointer.InspectOnLongPress = false;
-            int capturedId = instanceId; Action handler = () => ToggleSelection(capturedId);
-            pointer.PrimaryActionRequested += handler; _selectionHandlers.Add(pointer, handler); _externalCards.Add(card);
+            CardPointerInteraction pointer = cardView.Pointer;
+            pointer.InspectOnLongPress = false;
+            if (selectable)
+            {
+                int capturedId = instanceId;
+                Action handler = () => ToggleSelection(capturedId);
+                pointer.PrimaryActionRequested += handler;
+                _selectionHandlers.Add(pointer, handler);
+            }
+            _externalCards.Add(card);
         }
-        _cardsScrollGrid?.RefreshLayout(true);
+        scrollGrid?.RefreshLayout(true);
     }
 
-    private void BuildOptionButtons(PendingDecisionSnapshot decision)
+    private void BuildOptionButtons(PendingDecisionSnapshot decision, RectTransform optionsRoot, DecisionScrollGrid scrollGrid)
     {
-        ClearExternalCards();
-        if (_optionsRoot == null || decision == null) return;
-        _optionsRoot.gameObject.SetActive(true);
+        if (optionsRoot == null || decision == null) return;
+        optionsRoot.gameObject.SetActive(true);
         GameObject optionPrefab = Resources.Load<GameObject>(OptionPrefabResourcePath);
         if (optionPrefab == null)
         {
@@ -250,7 +280,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             string optionId = ids[index];
             if (string.IsNullOrWhiteSpace(optionId)) continue;
             string label = index < labels.Count && !string.IsNullOrWhiteSpace(labels[index]) ? labels[index] : optionId;
-            GameObject optionObject = Instantiate(optionPrefab, _optionsRoot);
+            GameObject optionObject = Instantiate(optionPrefab, optionsRoot);
             optionObject.name = "DecisionOption_" + optionId;
             Image image = optionObject.GetComponent<Image>();
             Button button = optionObject.GetComponent<Button>();
@@ -269,7 +299,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             _externalCards.Add(optionObject);
         }
         RefreshOptionButtons();
-        _optionsScrollGrid?.RefreshLayout(true);
+        scrollGrid?.RefreshLayout(true);
     }
 
     private void BuildDeckPositionChoice(PendingDecisionSnapshot decision)
@@ -497,14 +527,21 @@ public sealed class PendingDecisionController : MonoBehaviour
         _countText = panelObject.transform.Find("Count")?.GetComponent<Text>();
         Transform cardsViewport = panelObject.transform.Find("DecisionCards");
         Transform optionsViewport = panelObject.transform.Find("DecisionOptions");
+        Transform optionPreviewCardsViewport = panelObject.transform.Find("OptionPreviewCards");
+        Transform optionPreviewOptionsViewport = panelObject.transform.Find("OptionPreviewOptions");
         _cardsScrollGrid = cardsViewport != null ? cardsViewport.GetComponent<DecisionScrollGrid>() : null;
         _optionsScrollGrid = optionsViewport != null ? optionsViewport.GetComponent<DecisionScrollGrid>() : null;
+        _optionPreviewCardsScrollGrid = optionPreviewCardsViewport != null ? optionPreviewCardsViewport.GetComponent<DecisionScrollGrid>() : null;
+        _optionPreviewOptionsScrollGrid = optionPreviewOptionsViewport != null ? optionPreviewOptionsViewport.GetComponent<DecisionScrollGrid>() : null;
         _externalCardsRoot = _cardsScrollGrid != null ? _cardsScrollGrid.Content : null;
         _optionsRoot = _optionsScrollGrid != null ? _optionsScrollGrid.Content : null;
+        _optionPreviewCardsRoot = _optionPreviewCardsScrollGrid != null ? _optionPreviewCardsScrollGrid.Content : null;
+        _optionPreviewOptionsRoot = _optionPreviewOptionsScrollGrid != null ? _optionPreviewOptionsScrollGrid.Content : null;
         _confirmButton = panelObject.transform.Find("ConfirmDecision")?.GetComponent<Button>();
         _confirmText = _confirmButton != null ? _confirmButton.transform.Find("Label")?.GetComponent<Text>() : null;
         if (_panel == null || _promptText == null || _countText == null || _cardsScrollGrid == null ||
-            _optionsScrollGrid == null || _externalCardsRoot == null || _optionsRoot == null ||
+            _optionsScrollGrid == null || _optionPreviewCardsScrollGrid == null || _optionPreviewOptionsScrollGrid == null ||
+            _externalCardsRoot == null || _optionsRoot == null || _optionPreviewCardsRoot == null || _optionPreviewOptionsRoot == null ||
             _confirmButton == null || _confirmText == null)
         {
             Debug.LogError("PendingDecisionPanel prefab contract is incomplete.", panelObject);
@@ -518,12 +555,15 @@ public sealed class PendingDecisionController : MonoBehaviour
     }
 
     private void ConfigurePanel(CardZone zone, bool supplyChoice, bool optionChoice,
-        bool deckPositionChoice, bool cardNameChoice)
+        bool deckPositionChoice, bool cardNameChoice, bool hasCardPreview)
     {
         if (_panel == null) return;
         bool cardsVisible = zone != CardZone.Hand && !supplyChoice && !optionChoice;
         if (_cardsScrollGrid != null) _cardsScrollGrid.gameObject.SetActive(cardsVisible);
-        if (_optionsScrollGrid != null) _optionsScrollGrid.gameObject.SetActive(optionChoice && !deckPositionChoice && !cardNameChoice);
+        bool genericOptions = optionChoice && !deckPositionChoice && !cardNameChoice;
+        if (_optionsScrollGrid != null) _optionsScrollGrid.gameObject.SetActive(genericOptions && !hasCardPreview);
+        if (_optionPreviewCardsScrollGrid != null) _optionPreviewCardsScrollGrid.gameObject.SetActive(genericOptions && hasCardPreview);
+        if (_optionPreviewOptionsScrollGrid != null) _optionPreviewOptionsScrollGrid.gameObject.SetActive(genericOptions && hasCardPreview);
         if (_deckPositionView != null) _deckPositionView.gameObject.SetActive(deckPositionChoice);
         if (_cardNameView != null) _cardNameView.gameObject.SetActive(cardNameChoice);
     }

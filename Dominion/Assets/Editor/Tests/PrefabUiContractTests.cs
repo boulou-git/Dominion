@@ -58,10 +58,16 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(prompt?.GetComponent<DraggableDecisionPanel>());
         Transform decisionCards = decision.transform.Find("DecisionCards");
         Transform decisionOptions = decision.transform.Find("DecisionOptions");
+        Transform optionPreviewCards = decision.transform.Find("OptionPreviewCards");
+        Transform optionPreviewOptions = decision.transform.Find("OptionPreviewOptions");
         Assert.NotNull(decisionCards?.GetComponent<GridLayoutGroup>());
         Assert.NotNull(decisionCards?.GetComponent<DecisionScrollGrid>());
         Assert.NotNull(decisionOptions?.GetComponent<GridLayoutGroup>());
         Assert.NotNull(decisionOptions?.GetComponent<DecisionScrollGrid>());
+        Assert.NotNull(optionPreviewCards?.GetComponent<GridLayoutGroup>());
+        Assert.NotNull(optionPreviewCards?.GetComponent<DecisionScrollGrid>());
+        Assert.NotNull(optionPreviewOptions?.GetComponent<GridLayoutGroup>());
+        Assert.NotNull(optionPreviewOptions?.GetComponent<DecisionScrollGrid>());
         Assert.NotNull(decision.transform.Find("ConfirmDecision")?.GetComponent<Button>());
         Assert.NotNull(Load("DecisionOption").transform.Find("Label")?.GetComponent<Text>());
 

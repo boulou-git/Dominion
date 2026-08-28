@@ -78,6 +78,18 @@ public static class AdvancedActionRules
         if (state == null || player == null || resolution == null || sourceZone == CardZone.None || destinationZone == CardZone.None || sourceZone == destinationZone)
             return GameRuleResult.Rejected("Invalid ordered move effect.", resolution != null ? resolution.Events.SnapshotHistory() : null);
 
+        if (destinationZone == CardZone.Discard)
+        {
+            List<int> source = CardZoneRules.ResolveZone(player, sourceZone);
+            if (source == null)
+                return GameRuleResult.Rejected("Ordered move source zone is unavailable.", resolution.Events.SnapshotHistory());
+            List<int> drawOrder = new List<int>(source);
+            return DiscardRules.TryDiscardSelected(state, player, sourceZone, drawOrder, sourceCardInstanceId,
+                    resolution.Events, out string discardError)
+                ? GameRuleResult.Applied(resolution.Events.SnapshotHistory())
+                : GameRuleResult.Rejected(discardError, resolution.Events.SnapshotHistory());
+        }
+
         return ContinueMoveAllOrdered(player, resolution, sourceZone, destinationZone, prompt, sourceCardInstanceId,
             triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex);
     }
