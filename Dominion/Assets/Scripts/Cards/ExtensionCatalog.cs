@@ -429,6 +429,11 @@ public static class ExtensionCatalog
                 error = "Card '" + card.id + "' has a negative pile size.";
                 return false;
             }
+            if (card.returnsToPileAfterPlay && !CardDefinitionRules.HasType(card, "Consommable"))
+            {
+                error = "Card '" + card.id + "' returns to its pile after play but is not a Consommable.";
+                return false;
+            }
 
             if (card.abilities == null)
             {

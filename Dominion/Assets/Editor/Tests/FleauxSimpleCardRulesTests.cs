@@ -1,5 +1,6 @@
 #if UNITY_INCLUDE_TESTS
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 
@@ -21,6 +22,98 @@ public sealed class FleauxSimpleCardRulesTests
 
         Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
         Assert.That(player.Hand.Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Tonique_ReturnsItsPhysicalInstanceToSpecialPileAfterPlay()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        AddOwned(state, player, "base:argent", CardZone.Deck);
+        CardInstance tonique = AddOwned(state, player, "fleaux:tonique", CardZone.Hand);
+        SpecialPileSnapshot pile = new SpecialPileSnapshot("fleaux:toniques", "Toniques");
+        state.SpecialPiles.Add(pile);
+
+        GameRuleResult result = GameRules.TryPlayCard(state, player.PlayerId, tonique.InstanceId, Resolve, new Random(1));
+
+        Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
+        Assert.That(player.InPlay.Contains(tonique.InstanceId), Is.False);
+        Assert.That(player.Discard.Contains(tonique.InstanceId), Is.False);
+        Assert.That(pile.CardInstanceIds.Contains(tonique.InstanceId), Is.True);
+        Assert.That(tonique.OwnerPlayerId, Is.Empty);
+        Assert.That(state.CardInstances.Contains(tonique), Is.True);
+        Assert.That(GameStateValidator.TryValidate(state, out string validationError), Is.True, validationError);
+    }
+
+    [Test]
+    public void Soeurs_PlayingToniqueAlsoReturnsItToSpecialPile()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        CardInstance tonique = AddOwned(state, player, "fleaux:tonique", CardZone.Hand);
+        CardInstance sisters = AddOwned(state, player, "fleaux:soeurs", CardZone.Hand);
+        SpecialPileSnapshot pile = new SpecialPileSnapshot("fleaux:toniques", "Toniques");
+        state.SpecialPiles.Add(pile);
+
+        GameRuleResult waiting = GameRules.TryPlayCard(state, player.PlayerId, sisters.InstanceId, Resolve, new Random(1));
+        Assert.That(waiting.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), waiting.Error);
+
+        GameRuleResult finished = GameRules.TrySubmitDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { tonique.InstanceId }, Resolve, new Random(1));
+
+        Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
+        Assert.That(player.InPlay.Contains(sisters.InstanceId), Is.True);
+        Assert.That(player.InPlay.Contains(tonique.InstanceId), Is.False);
+        Assert.That(pile.CardInstanceIds.Contains(tonique.InstanceId), Is.True);
+        Assert.That(tonique.OwnerPlayerId, Is.Empty);
+    }
+
+    [Test]
+    public void Heritage_GainsEstateAndReturnsWhileGainEventsFinishResolving()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        state.SupplyPiles.Add(new SupplyPileSnapshot("base:domaine", 8));
+        CardInstance heritage = AddOwned(state, player, "fleaux:heritage", CardZone.Hand);
+        SpecialPileSnapshot pile = new SpecialPileSnapshot("fleaux:heritages", "Héritages");
+        state.SpecialPiles.Add(pile);
+
+        GameRuleResult result = GameRules.TryPlayCard(state, player.PlayerId, heritage.InstanceId, Resolve, new Random(1));
+
+        Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
+        Assert.That(player.Coins, Is.EqualTo(2));
+        Assert.That(player.Discard.Select(id => state.CardInstances.Find(card => card.InstanceId == id).DefinitionId),
+            Does.Contain("base:domaine"));
+        Assert.That(pile.CardInstanceIds.Contains(heritage.InstanceId), Is.True);
+        Assert.That(heritage.OwnerPlayerId, Is.Empty);
+        Assert.That(state.Resolution.IsActive, Is.False);
+    }
+
+    [Test]
+    public void KingdomConsumable_WaitsForItsDecisionThenRestoresSupplyPile()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        const string definitionId = "test:consumable";
+        CardInstance consumable = AddOwned(state, player, definitionId, CardZone.Hand);
+        SupplyPileSnapshot pile = new SupplyPileSnapshot(definitionId, 0);
+        state.SupplyPiles.Add(pile);
+        ExtensionCardData definition = DecisionConsumableDefinition();
+        Func<string, ExtensionCardData> resolve = id =>
+            string.Equals(id, definitionId, StringComparison.OrdinalIgnoreCase) ? definition : Resolve(id);
+
+        GameRuleResult waiting = GameRules.TryPlayCard(state, player.PlayerId, consumable.InstanceId, resolve, new Random(1));
+
+        Assert.That(waiting.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), waiting.Error);
+        Assert.That(player.InPlay.Contains(consumable.InstanceId), Is.True);
+        Assert.That(pile.RemainingCount, Is.EqualTo(0));
+        GameRuleResult finished = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "coins" }, resolve, new Random(1));
+
+        Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
+        Assert.That(player.Coins, Is.EqualTo(1));
+        Assert.That(player.InPlay.Contains(consumable.InstanceId), Is.False);
+        Assert.That(pile.RemainingCount, Is.EqualTo(1));
+        Assert.That(state.CardInstances.Contains(consumable), Is.False);
+        Assert.That(GameStateValidator.TryValidate(state, out string validationError), Is.True, validationError);
     }
 
     [Test]
@@ -228,6 +321,47 @@ public sealed class FleauxSimpleCardRulesTests
     private static ExtensionCardData Resolve(string definitionId)
     {
         return RoomGameSetup.TryResolveCard(definitionId, out _, out ExtensionCardData card) ? card : null;
+    }
+
+    private static ExtensionCardData DecisionConsumableDefinition()
+    {
+        return new ExtensionCardData
+        {
+            id = "consumable",
+            name = "Test consumable",
+            types = new List<string> { "Action", "Consommable" },
+            returnsToPileAfterPlay = true,
+            abilities = new List<CardAbilityData>
+            {
+                new CardAbilityData
+                {
+                    when = "play",
+                    effects = new List<CardEffectData>
+                    {
+                        new CardEffectData
+                        {
+                            op = "choose_options",
+                            target = "self",
+                            min = 1,
+                            max = 1,
+                            prompt = "Choisissez.",
+                            options = new List<CardChoiceOptionData>
+                            {
+                                new CardChoiceOptionData { id = "coins", label = "+1 pièce" }
+                            }
+                        },
+                        new CardEffectData
+                        {
+                            op = "add_resource",
+                            target = "self",
+                            resource = "coins",
+                            amount = 1,
+                            requiresSelectedOption = "coins"
+                        }
+                    }
+                }
+            }
+        };
     }
 }
 #endif

@@ -74,6 +74,8 @@ public static class TriggerResolver
                 return RejectAndAbort(state, eventsProcessed, abilitiesMatched, effectsResolved, listenerResult.Error);
             if (listenerResult.Status == EffectResolutionStatus.WaitingForChoice)
                 return TriggerResolutionResult.WaitingForChoice(eventsProcessed, abilitiesMatched, effectsResolved);
+            if (!ReturnToPileRules.TryReturnAfterResolvedPlay(state, gameEvent, resolveCardDefinition, out string returnError))
+                return RejectAndAbort(state, eventsProcessed, abilitiesMatched, effectsResolved, returnError);
         }
 
         return TriggerResolutionResult.Applied(eventsProcessed, abilitiesMatched, effectsResolved);
@@ -139,6 +141,9 @@ public static class TriggerResolver
             return RejectAndAbort(state, 0, matched, resolved, listeners.Error);
         if (listeners.Status == EffectResolutionStatus.WaitingForChoice)
             return TriggerResolutionResult.WaitingForChoice(0, matched, resolved);
+
+        if (!ReturnToPileRules.TryReturnAfterResolvedPlay(state, gameEvent, resolveCardDefinition, out string returnError))
+            return RejectAndAbort(state, 0, matched, resolved, returnError);
 
         TriggerResolutionResult remaining = ResolvePending(resolution, state, resolveCardDefinition, random);
         matched += remaining.AbilitiesMatched;

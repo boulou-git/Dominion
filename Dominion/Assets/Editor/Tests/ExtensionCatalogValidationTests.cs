@@ -96,6 +96,18 @@ public sealed class ExtensionCatalogValidationTests
         StringAssert.Contains("unknown or not-yet-selected option", error);
     }
 
+    [Test]
+    public void ReturnAfterPlay_RequiresConsumableType()
+    {
+        ExtensionPackageData package = CreatePackage("play", "draw", "self");
+        package.cards[0].returnsToPileAfterPlay = true;
+
+        bool valid = ExtensionCatalog.TryValidatePackage(package, out string error);
+
+        Assert.That(valid, Is.False);
+        StringAssert.Contains("is not a Consommable", error);
+    }
+
     private static ExtensionPackageData CreatePackage(string timing, string operation, string target)
     {
         ExtensionPackageData package = new ExtensionPackageData
