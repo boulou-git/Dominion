@@ -10,6 +10,8 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class GameScreenController : MonoBehaviour
 {
+    public event Action BoardPlayerChanged;
+
     [Header("Top bar")]
     [SerializeField] private RectTransform _playersRoot;
     [SerializeField] private Text _turnText;
@@ -48,12 +50,14 @@ public sealed class GameScreenController : MonoBehaviour
     private readonly List<GameObject> _handCards = new List<GameObject>();
     private readonly List<int> _localHandOrder = new List<int>();
     private readonly List<int> _renderedHandIds = new List<int>();
+    private readonly PlayerBoardSelectionModel _boardSelection = new PlayerBoardSelectionModel();
+    private GameObject _playerTabPrefab;
+    private GameObject _followActiveToggleObject;
+    private Toggle _followActiveToggle;
     private bool _kingdomBuilt;
     private bool _dynamicRootsLogged;
-
-    private static readonly Color Panel = new Color(0.11f, 0.105f, 0.095f, 1f);
-    private static readonly Color Active = new Color(0.40f, 0.32f, 0.17f, 1f);
-    private static readonly Color Local = new Color(0.20f, 0.29f, 0.32f, 1f);
+    private bool _missingPlayerTabLogged;
+    private bool _missingFollowToggleLogged;
 
     private void Awake()
     {
@@ -61,6 +65,7 @@ public sealed class GameScreenController : MonoBehaviour
             gameObject.AddComponent<TrashPileViewController>();
 
         ResolveDynamicRoots();
+        EnsureBoardControls();
 
         if (_nextPhaseButton != null)
             _nextPhaseButton.onClick.AddListener(RequestNextPhase);
@@ -91,11 +96,17 @@ public sealed class GameScreenController : MonoBehaviour
     private void OnDestroy()
     {
         NetworkGameState.StateChanged -= Refresh;
+        if (_followActiveToggle != null)
+            _followActiveToggle.onValueChanged.RemoveListener(HandleFollowActiveChanged);
     }
 
     private void Refresh(GameStateSnapshot state)
     {
         ResolveDynamicRoots();
+        EnsureBoardControls();
+        _boardSelection.Synchronise(state);
+        if (_followActiveToggle != null)
+            _followActiveToggle.SetIsOnWithoutNotify(_boardSelection.FollowActivePlayer);
         RefreshPlayerPills(state);
 
         if (!_kingdomBuilt)
@@ -119,6 +130,7 @@ public sealed class GameScreenController : MonoBehaviour
 
         PlayerStateSnapshot activePlayer = state.Players.Find(p => p != null && p.PlayerId == state.ActivePlayerId);
         PlayerStateSnapshot localPlayer = ResolveLocalPlayer(state);
+        PlayerStateSnapshot viewedPlayer = _boardSelection.ResolvePlayer(state) ?? activePlayer;
 
         if (_turnText != null)
         {
@@ -127,11 +139,11 @@ public sealed class GameScreenController : MonoBehaviour
         }
 
         if (_boardTitle != null)
-            _boardTitle.text = activePlayer != null ? "PLATEAU — " + activePlayer.NickName : "PLATEAU";
+            _boardTitle.text = viewedPlayer != null ? "PLATEAU — " + viewedPlayer.NickName : "PLATEAU";
 
         if (_phaseText != null) _phaseText.text = "PHASE  " + PhaseLabel(state.Phase);
 
-        PlayerStateSnapshot counters = localPlayer ?? activePlayer;
+        PlayerStateSnapshot counters = viewedPlayer ?? activePlayer ?? localPlayer;
         if (counters != null)
         {
             if (_actionsText != null) _actionsText.text = "Actions  " + counters.Actions;
@@ -155,6 +167,8 @@ public sealed class GameScreenController : MonoBehaviour
         {
             if (state.IsPaused)
                 _statusText.text = state.PauseReason;
+            else if (viewedPlayer != null && activePlayer != null && viewedPlayer.PlayerId != activePlayer.PlayerId)
+                _statusText.text = "Consultation — " + viewedPlayer.NickName;
             else if (localTurn)
                 _statusText.text = "À vous de jouer";
             else
@@ -192,36 +206,104 @@ public sealed class GameScreenController : MonoBehaviour
         if (_playersRoot == null || state == null || state.Players == null)
             return;
 
+        PlayerStateSnapshot localPlayer = ResolveLocalPlayer(state);
+
         foreach (PlayerStateSnapshot player in state.Players)
         {
             if (player == null)
                 continue;
 
             bool active = player.PlayerId == state.ActivePlayerId;
-            bool local = player.PlayerId == NetworkGameState.LocalPlayerId;
-            GameObject pill = new GameObject("Player_" + player.ActorNumber, typeof(RectTransform), typeof(Image), typeof(LayoutElement));
-            pill.transform.SetParent(_playersRoot, false);
+            bool local = localPlayer != null && player.PlayerId == localPlayer.PlayerId;
+            bool viewed = player.PlayerId == _boardSelection.ViewedPlayerId;
+            if (_playerTabPrefab == null)
+            {
+                if (!_missingPlayerTabLogged)
+                {
+                    _missingPlayerTabLogged = true;
+                    Debug.LogError("Required UI prefab Resources/UI/PlayerBoardTab.prefab is missing.", this);
+                }
+                return;
+            }
 
-            Image background = pill.GetComponent<Image>();
-            background.color = active ? Active : local ? Local : Panel;
-
-            LayoutElement layout = pill.GetComponent<LayoutElement>();
-            layout.preferredWidth = 180f;
-            layout.minWidth = 150f;
-
-            GameObject labelObject = new GameObject("Name", typeof(RectTransform), typeof(Text));
-            labelObject.transform.SetParent(pill.transform, false);
-            Stretch(labelObject.GetComponent<RectTransform>(), 8f);
-
-            Text label = labelObject.GetComponent<Text>();
-            label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            label.fontSize = 18;
-            label.alignment = TextAnchor.MiddleCenter;
-            label.color = Color.white;
-            label.raycastTarget = false;
-            label.text = player.NickName + (active ? "  ★" : string.Empty) + (!player.IsConnected ? "  • hors ligne" : string.Empty);
+            GameObject pill = Instantiate(_playerTabPrefab, _playersRoot, false);
+            pill.name = "Player_" + player.ActorNumber;
+            Transform labelTransform = FindDeepChild(pill.transform, "Label");
+            Text label = labelTransform != null ? labelTransform.GetComponent<Text>() : null;
+            if (label != null)
+                label.text = player.NickName + (local ? "  • vous" : string.Empty) +
+                             (!player.IsConnected ? "  • hors ligne" : string.Empty);
+            Transform activeIndicator = FindDeepChild(pill.transform, "ActiveIndicator");
+            if (activeIndicator != null) activeIndicator.gameObject.SetActive(active);
+            Transform viewedIndicator = FindDeepChild(pill.transform, "ViewedIndicator");
+            if (viewedIndicator != null) viewedIndicator.gameObject.SetActive(viewed);
+            Button button = pill.GetComponent<Button>();
+            string capturedPlayerId = player.PlayerId;
+            if (button != null)
+                button.onClick.AddListener(() => SelectBoardPlayer(capturedPlayerId));
 
             _playerPills.Add(pill);
+        }
+    }
+
+    public PlayerStateSnapshot ResolveViewedPlayer(GameStateSnapshot state)
+    {
+        return _boardSelection.ResolvePlayer(state);
+    }
+
+    public string ViewedPlayerId => _boardSelection.ViewedPlayerId;
+
+    private void SelectBoardPlayer(string playerId)
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (!_boardSelection.SelectPlayer(state, playerId))
+            return;
+        Refresh(state);
+        BoardPlayerChanged?.Invoke();
+    }
+
+    private void HandleFollowActiveChanged(bool follow)
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (!_boardSelection.SetFollowActivePlayer(state, follow))
+            return;
+        Refresh(state);
+        BoardPlayerChanged?.Invoke();
+    }
+
+    private void EnsureBoardControls()
+    {
+        if (_playerTabPrefab == null)
+            _playerTabPrefab = Resources.Load<GameObject>("UI/PlayerBoardTab");
+        if (_followActiveToggle == null)
+        {
+            Transform existing = FindDeepChild(transform, "FollowActivePlayerToggle");
+            if (existing == null)
+            {
+                GameObject prefab = Resources.Load<GameObject>("UI/FollowActivePlayerToggle");
+                Transform inPlayPanel = FindDeepChild(transform, "InPlayPanel");
+                if (prefab != null && inPlayPanel != null)
+                {
+                    _followActiveToggleObject = Instantiate(prefab, inPlayPanel, false);
+                    existing = _followActiveToggleObject.transform;
+                }
+            }
+            if (existing != null)
+            {
+                _followActiveToggleObject = existing.gameObject;
+                _followActiveToggle = existing.GetComponent<Toggle>() ?? existing.GetComponentInChildren<Toggle>(true);
+                if (_followActiveToggle != null)
+                {
+                    _followActiveToggle.SetIsOnWithoutNotify(_boardSelection.FollowActivePlayer);
+                    _followActiveToggle.onValueChanged.RemoveListener(HandleFollowActiveChanged);
+                    _followActiveToggle.onValueChanged.AddListener(HandleFollowActiveChanged);
+                }
+            }
+            if (_followActiveToggle == null && !_missingFollowToggleLogged)
+            {
+                _missingFollowToggleLogged = true;
+                Debug.LogError("Required UI prefab Resources/UI/FollowActivePlayerToggle.prefab is missing or invalid.", this);
+            }
         }
     }
 
@@ -580,11 +662,4 @@ public sealed class GameScreenController : MonoBehaviour
         objects.Clear();
     }
 
-    private static void Stretch(RectTransform rect, float inset)
-    {
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = new Vector2(inset, inset);
-        rect.offsetMax = new Vector2(-inset, -inset);
-    }
 }

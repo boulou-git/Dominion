@@ -1,4 +1,3 @@
-using Photon.Pun;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,10 +10,14 @@ public sealed class DeckPileVisualController : MonoBehaviour
     private RectTransform _deckPanel;
     private Image _cardBackImage;
     private Text _deckText;
+    private GameScreenController _screenController;
 
     private void Awake()
     {
         ResolveVisuals();
+        _screenController = GetComponent<GameScreenController>();
+        if (_screenController != null)
+            _screenController.BoardPlayerChanged += HandleBoardPlayerChanged;
         NetworkGameState.StateChanged += Refresh;
         Refresh(NetworkGameState.State);
     }
@@ -22,6 +25,8 @@ public sealed class DeckPileVisualController : MonoBehaviour
     private void OnDestroy()
     {
         NetworkGameState.StateChanged -= Refresh;
+        if (_screenController != null)
+            _screenController.BoardPlayerChanged -= HandleBoardPlayerChanged;
     }
 
     private void Refresh(GameStateSnapshot state)
@@ -30,14 +35,16 @@ public sealed class DeckPileVisualController : MonoBehaviour
         if (_deckPanel == null)
             return;
 
-        PlayerStateSnapshot localPlayer = ResolveLocalPlayer(state);
-        int count = localPlayer != null && localPlayer.Deck != null ? localPlayer.Deck.Count : 0;
+        PlayerStateSnapshot viewedPlayer = _screenController != null
+            ? _screenController.ResolveViewedPlayer(state)
+            : ResolveActivePlayer(state);
+        int count = viewedPlayer != null && viewedPlayer.Deck != null ? viewedPlayer.Deck.Count : 0;
 
         if (_cardBackImage != null)
             _cardBackImage.gameObject.SetActive(count > 0 && _cardBackImage.sprite != null);
 
         if (_deckText != null)
-            _deckText.text = "PIOCHE\n" + (localPlayer != null ? count.ToString() : "—");
+            _deckText.text = "PIOCHE\n" + (viewedPlayer != null ? count.ToString() : "—");
     }
 
     private void ResolveVisuals()
@@ -76,25 +83,16 @@ public sealed class DeckPileVisualController : MonoBehaviour
         }
     }
 
-    private static PlayerStateSnapshot ResolveLocalPlayer(GameStateSnapshot state)
+    private void HandleBoardPlayerChanged()
+    {
+        Refresh(NetworkGameState.State);
+    }
+
+    private static PlayerStateSnapshot ResolveActivePlayer(GameStateSnapshot state)
     {
         if (state == null || state.Players == null)
             return null;
-
-        string localId = NetworkGameState.LocalPlayerId;
-        PlayerStateSnapshot localPlayer = state.Players.Find(player => player != null && player.PlayerId == localId);
-        if (localPlayer != null)
-            return localPlayer;
-
-        if (PhotonNetwork.LocalPlayer != null)
-        {
-            int actorNumber = PhotonNetwork.LocalPlayer.ActorNumber;
-            localPlayer = state.Players.Find(player => player != null && player.ActorNumber == actorNumber);
-            if (localPlayer != null)
-                return localPlayer;
-        }
-
-        return state.Players.Count == 1 ? state.Players[0] : null;
+        return state.Players.Find(player => player != null && player.PlayerId == state.ActivePlayerId);
     }
 
     private static Transform FindDirectChild(Transform parent, string childName)

@@ -26,14 +26,19 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
     private GameObject _zoomOverlay;
     private Image _zoomImage;
     private Button _nextPhaseButton;
+    private GameScreenController _screenController;
+    private GameObject _artifactTilePrefab;
 
     private bool _reserveLayoutReady;
     private bool _cleanupAnimating;
     private int _lastAutoCleanupVersion = -1;
+    private bool _missingArtifactTileLogged;
 
     private void Awake()
     {
         ResolveUi();
+        if (_screenController != null)
+            _screenController.BoardPlayerChanged += HandleBoardPlayerChanged;
         EnsureReserveLayout();
         HookCleanupButton();
 
@@ -54,6 +59,8 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
     private void OnDestroy()
     {
         NetworkGameState.StateChanged -= Refresh;
+        if (_screenController != null)
+            _screenController.BoardPlayerChanged -= HandleBoardPlayerChanged;
     }
 
     private void Refresh(GameStateSnapshot state)
@@ -66,11 +73,14 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         PlayerStateSnapshot activePlayer = state != null && state.Players != null
             ? state.Players.Find(player => player != null && player.PlayerId == state.ActivePlayerId)
             : null;
+        PlayerStateSnapshot viewedPlayer = _screenController != null
+            ? _screenController.ResolveViewedPlayer(state)
+            : activePlayer;
 
         RefreshSupplyStates(state, localPlayer);
         BindHandGameplay(state, localPlayer);
-        RenderInPlay(state, activePlayer);
-        RenderDiscardTop(state, localPlayer);
+        RenderInPlay(state, viewedPlayer ?? activePlayer);
+        RenderDiscardTop(state, viewedPlayer ?? activePlayer);
 
         if (state == null || localPlayer == null || state.IsPaused || _cleanupAnimating)
             return;
@@ -93,6 +103,11 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
 
     private void ResolveUi()
     {
+        if (_screenController == null)
+            _screenController = GetComponent<GameScreenController>();
+        if (_artifactTilePrefab == null)
+            _artifactTilePrefab = Resources.Load<GameObject>("UI/ArtifactTile");
+
         Transform baseSupply = FindDeepChild(transform, "BaseSupply");
         if (baseSupply is RectTransform baseRect)
             _baseSupplyRoot = baseRect;
@@ -310,27 +325,30 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         }
     }
 
-    private void RenderInPlay(GameStateSnapshot state, PlayerStateSnapshot activePlayer)
+    private void RenderInPlay(GameStateSnapshot state, PlayerStateSnapshot viewedPlayer)
     {
         Clear(_inPlayObjects);
-        if (_inPlayRoot == null || state == null || activePlayer == null || activePlayer.InPlay == null)
+        if (_inPlayRoot == null || state == null || viewedPlayer == null)
             return;
 
         Dictionary<string, List<CardInstance>> groups = new Dictionary<string, List<CardInstance>>(StringComparer.OrdinalIgnoreCase);
         List<string> order = new List<string>();
 
-        foreach (int instanceId in activePlayer.InPlay)
+        if (viewedPlayer.InPlay != null)
         {
-            CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
-            if (instance == null || string.IsNullOrEmpty(instance.DefinitionId))
-                continue;
-
-            if (!groups.ContainsKey(instance.DefinitionId))
+            foreach (int instanceId in viewedPlayer.InPlay)
             {
-                groups[instance.DefinitionId] = new List<CardInstance>();
-                order.Add(instance.DefinitionId);
+                CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
+                if (instance == null || string.IsNullOrEmpty(instance.DefinitionId))
+                    continue;
+
+                if (!groups.ContainsKey(instance.DefinitionId))
+                {
+                    groups[instance.DefinitionId] = new List<CardInstance>();
+                    order.Add(instance.DefinitionId);
+                }
+                groups[instance.DefinitionId].Add(instance);
             }
-            groups[instance.DefinitionId].Add(instance);
         }
 
         foreach (string definitionId in order)
@@ -346,7 +364,58 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             _inPlayObjects.Add(stack);
         }
 
+        RenderArtifacts(state, viewedPlayer);
+
         LayoutRebuilder.ForceRebuildLayoutImmediate(_inPlayRoot);
+    }
+
+    private void RenderArtifacts(GameStateSnapshot state, PlayerStateSnapshot viewedPlayer)
+    {
+        if (viewedPlayer == null || viewedPlayer.Artifacts == null || viewedPlayer.Artifacts.Count == 0)
+            return;
+        if (_artifactTilePrefab == null)
+        {
+            if (!_missingArtifactTileLogged)
+            {
+                _missingArtifactTileLogged = true;
+                Debug.LogError("Required UI prefab Resources/UI/ArtifactTile.prefab is missing.", this);
+            }
+            return;
+        }
+
+        foreach (int instanceId in viewedPlayer.Artifacts)
+        {
+            CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
+            if (instance == null || !RoomGameSetup.TryResolveCard(instance.DefinitionId,
+                    out ExtensionPackageData extension, out ExtensionCardData definition))
+                continue;
+
+            GameObject tile = Instantiate(_artifactTilePrefab, _inPlayRoot, false);
+            tile.name = "Artifact_" + definition.id;
+            Transform labelTransform = FindDeepChild(tile.transform, "Label");
+            Text label = labelTransform != null ? labelTransform.GetComponent<Text>() : null;
+            if (label != null) label.text = definition.name;
+            Transform artworkTransform = FindDeepChild(tile.transform, "Artwork");
+            Image artwork = artworkTransform != null ? artworkTransform.GetComponent<Image>() : null;
+            Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition);
+            if (artwork != null)
+            {
+                artwork.sprite = sprite;
+                artwork.gameObject.SetActive(sprite != null);
+            }
+            Button button = tile.GetComponent<Button>();
+            if (button != null)
+            {
+                button.interactable = sprite != null;
+                if (sprite != null)
+                {
+                    Sprite capturedSprite = sprite;
+                    ExtensionCardData capturedDefinition = definition;
+                    button.onClick.AddListener(() => ShowZoom(capturedSprite, capturedDefinition));
+                }
+            }
+            _inPlayObjects.Add(tile);
+        }
     }
 
     private GameObject CreateInPlayStack(string cardId, Sprite sprite, ExtensionCardData definition, int count)
@@ -390,16 +459,16 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         return stack;
     }
 
-    private void RenderDiscardTop(GameStateSnapshot state, PlayerStateSnapshot localPlayer)
+    private void RenderDiscardTop(GameStateSnapshot state, PlayerStateSnapshot viewedPlayer)
     {
         if (_discardTopObject != null)
             Destroy(_discardTopObject);
         _discardTopObject = null;
 
-        if (_discardPanel == null || state == null || localPlayer == null || localPlayer.Discard == null || localPlayer.Discard.Count == 0)
+        if (_discardPanel == null || state == null || viewedPlayer == null || viewedPlayer.Discard == null || viewedPlayer.Discard.Count == 0)
             return;
 
-        int topInstanceId = localPlayer.Discard[localPlayer.Discard.Count - 1];
+        int topInstanceId = viewedPlayer.Discard[viewedPlayer.Discard.Count - 1];
         CardInstance instance = NetworkGameState.FindCardInstance(state, topInstanceId);
         if (instance == null)
             return;
@@ -489,11 +558,12 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             }
         }
 
-        foreach (GameObject inPlay in _inPlayObjects)
-        {
-            if (inPlay != null && inPlay.transform is RectTransform rect)
-                visuals.Add(rect);
-        }
+        if (_screenController == null || _screenController.ViewedPlayerId == localPlayer.PlayerId)
+            foreach (GameObject inPlay in _inPlayObjects)
+            {
+                if (inPlay != null && inPlay.transform is RectTransform rect)
+                    visuals.Add(rect);
+            }
 
         RectTransform animationRoot = transform as RectTransform;
         Vector3 targetWorld = _discardPanel.TransformPoint(_discardPanel.rect.center);
@@ -558,6 +628,11 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         DynamicCardCostView.Attach(_zoomImage.gameObject, definition);
         _zoomOverlay.SetActive(true);
         _zoomOverlay.transform.SetAsLastSibling();
+    }
+
+    private void HandleBoardPlayerChanged()
+    {
+        Refresh(NetworkGameState.State);
     }
 
     private static PlayerStateSnapshot ResolveLocalPlayer(GameStateSnapshot state)

@@ -104,6 +104,28 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(rankingRow.transform.Find("Score/Value")?.GetComponent<Text>());
     }
 
+    [Test]
+    public void PlayerBoardControlsAndArtifacts_ArePrefabAuthored()
+    {
+        GameObject playerTab = Load("PlayerBoardTab");
+        Assert.NotNull(playerTab.GetComponent<Button>());
+        Assert.NotNull(playerTab.GetComponent<LayoutElement>());
+        Assert.NotNull(playerTab.transform.Find("Label")?.GetComponent<Text>());
+        Assert.NotNull(playerTab.transform.Find("ActiveIndicator")?.GetComponent<Image>());
+        Assert.NotNull(playerTab.transform.Find("ViewedIndicator")?.GetComponent<Image>());
+
+        GameObject followToggle = Load("FollowActivePlayerToggle");
+        Assert.NotNull(followToggle.GetComponent<Toggle>());
+        Assert.NotNull(followToggle.transform.Find("Box/Checkmark")?.GetComponent<Image>());
+        Assert.NotNull(followToggle.transform.Find("Label")?.GetComponent<Text>());
+
+        GameObject artifact = Load("ArtifactTile");
+        Assert.NotNull(artifact.GetComponent<Button>());
+        Assert.NotNull(artifact.GetComponent<LayoutElement>());
+        Assert.NotNull(artifact.transform.Find("Artwork")?.GetComponent<Image>());
+        Assert.NotNull(artifact.transform.Find("Label")?.GetComponent<Text>());
+    }
+
     private static GameObject Load(string name)
     {
         GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/UI/" + name + ".prefab");
