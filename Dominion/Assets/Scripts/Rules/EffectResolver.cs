@@ -46,8 +46,9 @@ public static class EffectResolver
     private static readonly Dictionary<string, Handler> H = new Dictionary<string, Handler>(StringComparer.OrdinalIgnoreCase)
     {
         {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection}, {"reduce_costs_this_turn", ReduceCostsThisTurn},
-        {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount}, {"draw_to_hand_size_skipping_type", DrawToHandSizeSkippingType},
+        {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount}, {"draw_to_hand_size", DrawToHandSize}, {"draw_to_hand_size_skipping_type", DrawToHandSizeSkippingType},
         {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile}, {"choose_options", ChooseOptions},
+        {"choose_options_repeated_per_empty_kingdom_pile", ChooseOptionsRepeatedPerEmptyKingdomPile},
         {"choose_options_per_selected_card_types", ChooseOptionsPerSelectedCardTypes}, {"name_card", NameCard},
         {"choose_each_other_cards", ChooseEachOtherCards}, {"reveal_each_other_cards", RevealEachOtherCards},
         {"reveal_each_other_top_trash_type_except", RevealEachOtherTopTrashTypeExcept},
@@ -55,7 +56,7 @@ public static class EffectResolver
         {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard}, {"reveal_selected", RevealSelected},
         {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_source_card", DiscardSourceCard}, {"discard_others_down_to", DiscardOthersDownTo},
         {"move_selected", MoveSelected}, {"move_last_moved", MoveLastMoved}, {"move_all_matching_types", MoveAllMatchingTypes},
-        {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected}, {"insert_selected_into_deck", InsertSelectedIntoDeck},
+        {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected}, {"play_selected_twice_then_trash", PlaySelectedTwiceThenTrash}, {"insert_selected_into_deck", InsertSelectedIntoDeck},
         {"choose_supply", ChooseSupply}, {"gain_card", GainCard}, {"gain_selected_supply", GainSelectedSupply},
         {"gain_selected_trash", GainSelectedTrash}, {"trash_selected_supply", TrashSelectedSupply},
         {"reveal_zone", RevealZone}, {"trash_source_card", TrashSourceCard},
@@ -65,6 +66,10 @@ public static class EffectResolver
         {"gain_trigger_card_from_trash", GainTriggerCardFromTrash},
         {"add_resource_per_distinct_type_in_play", AddResourcePerDistinctTypeInPlay},
         {"set_next_cleanup_draw_penalty", SetNextCleanupDrawPenalty}, {"mark_duration_resolved", MarkDurationResolved},
+        {"set_aside_selected_until_next_turn", SetAsideSelectedUntilNextTurn},
+        {"set_aside_top_until_next_turn", SetAsideTopUntilNextTurn},
+        {"set_aside_trigger_until_turn_end", SetAsideTriggerUntilTurnEnd},
+        {"discard_others_named_card", DiscardOthersNamedCard}, {"end_action_phase", EndActionPhase},
         {ReactionRules.DrawDiscardOperation, AttackReactionDrawDiscard}
     };
 
@@ -112,8 +117,13 @@ public static class EffectResolver
         if (e.requiresMinDiscardedOrTrashedThisTurn > 0 &&
             c.Actor.CardsDiscardedThisTurn + c.Actor.CardsTrashedThisTurn < e.requiresMinDiscardedOrTrashedThisTurn)
             return EffectResolutionResult.Applied();
+        if (e.requiresMinTrashedThisTurn > 0 && c.Actor.CardsTrashedThisTurn < e.requiresMinTrashedThisTurn)
+            return EffectResolutionResult.Applied();
         if (e.requiresMinDistinctTypesInHand > 0 &&
             CountDistinctTypes(c.State, c.Actor.Hand) < e.requiresMinDistinctTypesInHand)
+            return EffectResolutionResult.Applied();
+        if (e.requiresMinMatchingCardsInHand > 0 &&
+            CountMatchingTypes(c.State, c.Actor.Hand, e.matchingCardTypes) < e.requiresMinMatchingCardsInHand)
             return EffectResolutionResult.Applied();
         if (e.requiresArtifactIds != null)
             foreach (string artifactId in e.requiresArtifactIds)
@@ -170,6 +180,15 @@ public static class EffectResolver
     {
         if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("draw_last_selection_count requires self and an active resolution.");
         return CardZoneRules.DrawCards(c.Actor, c.Resolution.LastSelectionCount, c.Random, out string err) ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(err);
+    }
+
+    private static EffectResolutionResult DrawToHandSize(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || e.amount < 0 || c.Actor.Hand == null)
+            return EffectResolutionResult.Rejected("Invalid draw_to_hand_size effect.");
+        int count = Math.Max(0, e.amount - c.Actor.Hand.Count);
+        return CardZoneRules.DrawCards(c.Actor, count, c.Random, out string error)
+            ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(error);
     }
 
     private static EffectResolutionResult DrawToHandSizeSkippingType(CardEffectData e, EffectExecutionContext c)
@@ -237,6 +256,19 @@ public static class EffectResolver
             ? EffectResolutionResult.WaitingForChoice() : EffectResolutionResult.Rejected(err);
     }
 
+    private static EffectResolutionResult ChooseOptionsRepeatedPerEmptyKingdomPile(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || !Cursor(c))
+            return EffectResolutionResult.Rejected("Invalid repeated Kingdom-pile option effect.");
+        int empty = 0;
+        if (c.State.SupplyPiles != null)
+            foreach (SupplyPileSnapshot pile in c.State.SupplyPiles)
+                if (pile != null && pile.IsKingdom && pile.RemainingCount <= 0) empty++;
+        return FromGameRuleResult(AdvancedActionRules.TryStartRepeatedOptions(c.State, c.Actor, c.Resolution,
+            e, 1 + empty, c.SourceCardInstanceId, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId,
+            c.AbilityIndex, c.EffectIndex));
+    }
+
     private static EffectResolutionResult ChooseOptionsPerSelectedCardTypes(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null || !Cursor(c) || c.Resolution.SelectedInstanceIds.Count != 1 ||
@@ -271,6 +303,7 @@ public static class EffectResolver
             if (string.IsNullOrWhiteSpace(definitionId) || !seen.Add(definitionId)) return;
             ExtensionCardData definition = Def(definitionId);
             if (definition == null || string.IsNullOrWhiteSpace(definition.name)) return;
+            if (!string.IsNullOrWhiteSpace(e.cardType) && !CardDefinitionRules.HasAnyType(definition, e.cardType)) return;
             ids.Add(definitionId);
             labels.Add(definition.name);
         };
@@ -558,6 +591,96 @@ public static class EffectResolver
         c.EventBus.Publish(GameEvent.CardPlayed(c.Actor.PlayerId, i.InstanceId, i.DefinitionId)); return EffectResolutionResult.Applied();
     }
 
+    private static EffectResolutionResult PlaySelectedTwiceThenTrash(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || c.EventBus == null ||
+            !CardZoneRules.TryParseZone(e.sourceZone, out CardZone source))
+            return EffectResolutionResult.Rejected("Invalid play_selected_twice_then_trash effect.");
+        List<int> selected = c.Resolution.TakeSelectedInstanceIds();
+        if (selected.Count == 0) return EffectResolutionResult.Applied();
+        if (selected.Count != 1) return EffectResolutionResult.Rejected("Double play requires exactly one card.");
+        int id = selected[0];
+        CardInstance card = Find(c.State, id); ExtensionCardData definition = card != null ? Def(card.DefinitionId) : null;
+        if (definition == null || !CardDefinitionRules.HasType(definition, "Action"))
+            return EffectResolutionResult.Rejected("Double-play selection is not an Action card.");
+        if (!CardZoneRules.MoveCard(c.Actor, source, CardZone.InPlay, id))
+            return EffectResolutionResult.Rejected("Double-play card could not enter play.");
+        c.Actor.ActionsPlayedThisTurn += 2;
+        c.EventBus.Publish(GameEvent.CardPlayed(c.Actor.PlayerId, id, card.DefinitionId));
+        c.EventBus.Publish(GameEvent.CardPlayed(c.Actor.PlayerId, id, card.DefinitionId));
+        if (!TrashRules.TryTrashFromZone(c.State, c.Actor, CardZone.InPlay, id, c.SourceCardInstanceId, c.EventBus, out string error))
+            return EffectResolutionResult.Rejected(error);
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult SetAsideSelectedUntilNextTurn(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || !CardZoneRules.TryParseZone(e.sourceZone, out CardZone source))
+            return EffectResolutionResult.Rejected("Invalid set_aside_selected_until_next_turn effect.");
+        string mode = string.IsNullOrWhiteSpace(e.returnMode) ? SetAsideRules.ReturnToHand : e.returnMode;
+        List<int> selected = c.Resolution.TakeSelectedInstanceIds();
+        foreach (int id in selected)
+            if (!SetAsideRules.TryScheduleFromZone(c.State, c.Actor, source, id, c.SourceCardInstanceId, mode, out string error))
+                return EffectResolutionResult.Rejected(error);
+        if (selected.Count == 0 && c.Actor.InPlay != null && c.Actor.InPlay.Contains(c.SourceCardInstanceId))
+            DurationRules.TryMarkResolved(c.State, c.Actor, c.SourceCardInstanceId, Def, out _);
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult SetAsideTopUntilNextTurn(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e)) return EffectResolutionResult.Rejected("Invalid set_aside_top_until_next_turn effect.");
+        string mode = string.IsNullOrWhiteSpace(e.returnMode) ? SetAsideRules.ReturnToHand : e.returnMode;
+        if (!SetAsideRules.TryScheduleTopDeck(c.State, c.Actor, c.Random, c.SourceCardInstanceId, mode, out string error))
+            return EffectResolutionResult.Rejected(error);
+        if ((c.State.SetAsideCards == null || !c.State.SetAsideCards.Exists(entry => entry != null &&
+                entry.SourceCardInstanceId == c.SourceCardInstanceId)) && c.Actor.InPlay != null &&
+                c.Actor.InPlay.Contains(c.SourceCardInstanceId))
+            DurationRules.TryMarkResolved(c.State, c.Actor, c.SourceCardInstanceId, Def, out _);
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult SetAsideTriggerUntilTurnEnd(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.TriggerEvent == null || c.TriggerEvent.CardInstanceId <= 0)
+            return EffectResolutionResult.Rejected("Invalid set_aside_trigger_until_turn_end effect.");
+        return SetAsideRules.TryScheduleFromZone(c.State, c.Actor, CardZone.Trash, c.TriggerEvent.CardInstanceId,
+            c.SourceCardInstanceId, SetAsideRules.ReturnToSupplyAtTurnEnd, out string error)
+            ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(error);
+    }
+
+    private static EffectResolutionResult DiscardOthersNamedCard(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Others(e) || c.Resolution == null || c.Resolution.SelectedOptionIds.Count != 1)
+            return EffectResolutionResult.Rejected("discard_others_named_card requires one named card.");
+        string namedId = c.Resolution.TakeSelectedOptionIds()[0];
+        int discarded = 0;
+        if (c.State.Players != null)
+            foreach (PlayerStateSnapshot target in c.State.Players)
+            {
+                if (target == null || target.PlayerId == c.Actor.PlayerId || SkipAttackTarget(c, target)) continue;
+                int match = target.Hand != null ? target.Hand.Find(id =>
+                {
+                    CardInstance card = Find(c.State, id);
+                    return card != null && string.Equals(card.DefinitionId, namedId, StringComparison.OrdinalIgnoreCase);
+                }) : 0;
+                if (match <= 0) { JournalRules.RecordRevealZone(c.State, target, CardZone.Hand); continue; }
+                if (!DiscardRules.TryDiscardSelectedFromHand(c.State, target, new[] { match }, c.SourceCardInstanceId,
+                        c.EventBus, out string error)) return EffectResolutionResult.Rejected(error);
+                discarded++;
+            }
+        c.Resolution.SetLastSelectionCount(discarded);
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult EndActionPhase(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e)) return EffectResolutionResult.Rejected("end_action_phase requires target self.");
+        if (string.Equals(c.State.Phase, GameRules.ActionPhase, StringComparison.OrdinalIgnoreCase))
+            c.State.Phase = GameRules.BuyPhase;
+        return EffectResolutionResult.Applied();
+    }
+
     private static EffectResolutionResult GainCard(CardEffectData e, EffectExecutionContext c)
     {
         if ((!Self(e) && !Others(e)) || string.IsNullOrWhiteSpace(e.cardId) || e.amount < 0) return EffectResolutionResult.Rejected("Invalid gain_card effect.");
@@ -809,6 +932,19 @@ public static class EffectResolver
                 if (!string.IsNullOrWhiteSpace(type)) types.Add(type.Trim());
         }
         return types.Count;
+    }
+    private static int CountMatchingTypes(GameStateSnapshot state, List<int> instanceIds, List<string> requestedTypes)
+    {
+        if (instanceIds == null || requestedTypes == null || requestedTypes.Count == 0) return 0;
+        int count = 0;
+        foreach (int id in instanceIds)
+        {
+            CardInstance instance = Find(state, id);
+            ExtensionCardData definition = instance != null ? Def(instance.DefinitionId) : null;
+            foreach (string type in requestedTypes)
+                if (CardDefinitionRules.HasType(definition, type)) { count++; break; }
+        }
+        return count;
     }
     private static bool Cursor(EffectExecutionContext c) => c.AbilityIndex >= 0 && c.EffectIndex >= 0 && c.ListenerCardInstanceId > 0 && c.TriggerEvent != null && c.TriggerEvent.CardInstanceId == c.ListenerCardInstanceId;
     private static CardInstance Find(GameStateSnapshot s, int id) => s != null && s.CardInstances != null && id > 0 ? s.CardInstances.Find(x => x != null && x.InstanceId == id) : null;

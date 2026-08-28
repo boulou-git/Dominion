@@ -69,6 +69,9 @@ public sealed class CardChoiceOptionData
 {
     public string id;
     public string label;
+    public string resource;
+    public int amount;
+    public string artifactId;
 }
 
 [Serializable]
@@ -86,6 +89,7 @@ public sealed class CardEffectData
 
     public string sourceZone;
     public string destinationZone;
+    public string returnMode;
 
     public string cardId;
     public string excludedCardId;
@@ -114,7 +118,10 @@ public sealed class CardEffectData
     public string artifactId;
     public bool drawForMissing;
     public int requiresMinDiscardedOrTrashedThisTurn;
+    public int requiresMinTrashedThisTurn;
     public int requiresMinDistinctTypesInHand;
+    public int requiresMinMatchingCardsInHand;
+    public List<string> matchingCardTypes = new List<string>();
     public List<string> requiresArtifactIds = new List<string>();
 }
 
@@ -595,6 +602,7 @@ public static class ExtensionCatalog
         string op = effect.op.Trim();
         bool isBlockAttack = string.Equals(op, ReactionRules.BlockAttackOperation, StringComparison.OrdinalIgnoreCase);
         bool isDrawDiscardReaction = string.Equals(op, ReactionRules.DrawDiscardOperation, StringComparison.OrdinalIgnoreCase);
+        bool isSetAsideReaction = string.Equals(op, ReactionRules.SetAsideAndPlayNextTurnOperation, StringComparison.OrdinalIgnoreCase);
         if (!DeclarativeRuleVocabulary.IsSupportedOperation(op))
         {
             error = prefix + " uses unsupported operation '" + effect.op + "'.";
@@ -602,7 +610,7 @@ public static class ExtensionCatalog
         }
 
         bool isAttackReaction = string.Equals(timing, ReactionRules.AttackReactionTiming, StringComparison.OrdinalIgnoreCase);
-        if (isAttackReaction && !isBlockAttack && !isDrawDiscardReaction)
+        if (isAttackReaction && !isBlockAttack && !isDrawDiscardReaction && !isSetAsideReaction)
         {
             error = prefix + " uses operation '" + effect.op + "', but attack_reaction does not support it.";
             return false;
@@ -615,6 +623,11 @@ public static class ExtensionCatalog
         if (isDrawDiscardReaction && !isAttackReaction)
         {
             error = prefix + " uses '" + ReactionRules.DrawDiscardOperation + "' outside attack_reaction timing.";
+            return false;
+        }
+        if (isSetAsideReaction && !isAttackReaction)
+        {
+            error = prefix + " uses '" + ReactionRules.SetAsideAndPlayNextTurnOperation + "' outside attack_reaction timing.";
             return false;
         }
 
@@ -654,7 +667,8 @@ public static class ExtensionCatalog
         }
 
         if (effect.requiresMinActionsPlayedThisTurn < 0 || effect.requiresMaxHandSize < -1 || effect.minHandSize < 0 ||
-            effect.requiresMinDiscardedOrTrashedThisTurn < 0 || effect.requiresMinDistinctTypesInHand < 0)
+            effect.requiresMinDiscardedOrTrashedThisTurn < 0 || effect.requiresMinTrashedThisTurn < 0 ||
+            effect.requiresMinDistinctTypesInHand < 0 || effect.requiresMinMatchingCardsInHand < 0)
         {
             error = prefix + " has an invalid turn/hand-size condition.";
             return false;
@@ -665,6 +679,7 @@ public static class ExtensionCatalog
             return false;
 
         if (string.Equals(op, "choose_options", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(op, "choose_options_repeated_per_empty_kingdom_pile", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(op, "choose_options_per_selected_card_types", StringComparison.OrdinalIgnoreCase))
         {
             if (effect.options == null || effect.options.Count == 0)

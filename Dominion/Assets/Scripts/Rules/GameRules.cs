@@ -169,6 +169,12 @@ public static class GameRules
                 return GameRuleResult.Rejected("Selected Attack reaction is no longer valid.", q.Events.SnapshotHistory());
             if (string.Equals(effect.op, ReactionRules.BlockAttackOperation, StringComparison.OrdinalIgnoreCase))
                 q.MarkAttackProtected(responder.PlayerId);
+            else if (string.Equals(effect.op, ReactionRules.SetAsideAndPlayNextTurnOperation, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!SetAsideRules.TryScheduleFromZone(s, responder, CardZone.Hand, reaction.InstanceId,
+                        c.SourceCardInstanceId, SetAsideRules.PlayAtTurnStart, out string setAsideError))
+                    return GameRuleResult.Rejected(setAsideError, q.Events.SnapshotHistory());
+            }
             else
             {
                 if (effect.amount < 0 || effect.max < 0)

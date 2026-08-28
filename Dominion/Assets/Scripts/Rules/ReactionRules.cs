@@ -10,6 +10,7 @@ public static class ReactionRules
     public const string AttackReactionTiming = "attack_reaction";
     public const string BlockAttackOperation = "block_attack";
     public const string DrawDiscardOperation = "attack_reaction_draw_discard";
+    public const string SetAsideAndPlayNextTurnOperation = "attack_reaction_set_aside_play_next_turn";
 
     public static List<int> FindAttackReactionCandidates(
         GameStateSnapshot state,
@@ -50,7 +51,8 @@ public static class ReactionRules
             if (ability.effects == null) continue;
             foreach (CardEffectData effect in ability.effects)
                 if (effect != null && (string.Equals(effect.op, BlockAttackOperation, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(effect.op, DrawDiscardOperation, StringComparison.OrdinalIgnoreCase)))
+                    string.Equals(effect.op, DrawDiscardOperation, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(effect.op, SetAsideAndPlayNextTurnOperation, StringComparison.OrdinalIgnoreCase)))
                 { reactionEffect = effect; return true; }
         }
         return false;

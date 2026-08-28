@@ -124,7 +124,14 @@
       { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 3 } ] },
       { "when": "card_trashed", "effects": [ { "op": "gain_card", "target": "self", "cardId": "base:duche", "amount": 1, "destinationZone": "discard" } ] }
     ] },
-    { "id": "pilleur_de_tombes", "name": "Pilleur de tombes", "cost": 3, "types": ["Action"], "image": "pilleur_de_tombes.png", "text": "Choisissez 1 + le nombre de piles Royaume vides. Vous pouvez choisir plusieurs fois la même option : prenez la Dent en or ; +1 Carte ; +1 Action ; +1 Achat." },
+    { "id": "pilleur_de_tombes", "name": "Pilleur de tombes", "cost": 3, "types": ["Action"], "image": "pilleur_de_tombes.png", "text": "Choisissez 1 + le nombre de piles Royaume vides. Vous pouvez choisir plusieurs fois la même option : prenez la Dent en or ; +1 Carte ; +1 Action ; +1 Achat.", "abilities": [ { "when": "play", "effects": [
+      { "op": "choose_options_repeated_per_empty_kingdom_pile", "target": "self", "min": 1, "max": 1, "prompt": "Choisissez un avantage.", "options": [
+        { "id": "artifact", "label": "Prendre la Dent en or", "artifactId": "fleaux:dent_en_or" },
+        { "id": "card", "label": "+1 Carte", "resource": "cards", "amount": 1 },
+        { "id": "action", "label": "+1 Action", "resource": "actions", "amount": 1 },
+        { "id": "buy", "label": "+1 Achat", "resource": "buys", "amount": 1 }
+      ] }
+    ] } ] },
     { "id": "ossuaire", "name": "Ossuaire", "cost": 5, "types": ["Action"], "image": "ossuaire.png", "text": "Choisissez une option : +2 🪙 ; prenez dans votre main une carte coûtant jusqu’à 3 🪙 du Rebut ; prenez le Sac d’ossements.", "abilities": [ { "when": "play", "effects": [
       { "op": "choose_options", "target": "self", "min": 1, "max": 1, "prompt": "Choisissez une option.", "options": [
         { "id": "coins", "label": "+2 🪙" }, { "id": "trash", "label": "Prendre une carte du Rebut" }, { "id": "artifact", "label": "Prendre le Sac d’ossements" }
@@ -134,7 +141,13 @@
       { "op": "gain_selected_trash", "target": "self", "destinationZone": "hand", "requiresSelectedOption": "trash" },
       { "op": "take_artifact", "target": "self", "artifactId": "fleaux:sac_d_ossements", "requiresSelectedOption": "artifact" }
     ] } ] },
-    { "id": "necromancien", "name": "Nécromancien", "cost": 5, "types": ["Action"], "image": "necromancien.png", "text": "+1 Carte\n+1 Action\n\nVous pouvez écarter une carte de votre main. Si vous aviez déjà écarté une autre carte ce tour-ci, prenez le Nécronomicon." },
+    { "id": "necromancien", "name": "Nécromancien", "cost": 5, "types": ["Action"], "image": "necromancien.png", "text": "+1 Carte\n+1 Action\n\nVous pouvez écarter une carte de votre main. Si vous aviez déjà écarté une autre carte ce tour-ci, prenez le Nécronomicon.", "abilities": [ { "when": "play", "effects": [
+      { "op": "draw", "target": "self", "amount": 1 },
+      { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+      { "op": "take_artifact", "target": "self", "artifactId": "fleaux:necronomicon", "requiresMinTrashedThisTurn": 1 },
+      { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez écarter une carte de votre main." },
+      { "op": "trash_selected", "target": "self", "sourceZone": "hand" }
+    ] } ] },
     { "id": "alchimiste", "name": "Alchimiste", "cost": 3, "types": ["Action"], "image": "alchimiste.png", "text": "+1 Action\n\nRegardez les 3 cartes du dessus de votre deck. Défaussez-les toutes ou replacez-les dans l’ordre de votre choix.\n\nSi votre main contient au moins 3 types différents, prenez le Phylactère.", "abilities": [ { "when": "play", "effects": [
       { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
       { "op": "inspect_top_cards", "target": "self", "amount": 3 },
@@ -160,8 +173,32 @@
         { "op": "mark_duration_resolved", "target": "self" }
       ] }
     ] },
-    { "id": "cloitre", "name": "Cloître", "cost": 3, "types": ["Action", "Réaction", "Durée"], "image": "cloitre.png", "text": "+3 Cartes\n\nDéfaussez 2 cartes.\n\nMettez de côté, face cachée sous cette carte, une carte de votre main. Au début de votre prochain tour, prenez-la dans votre main.\n\nRéaction : lorsqu’un autre joueur joue une carte Attaque, vous pouvez révéler Cloître depuis votre main et le mettre de côté. Au début de votre prochain tour, jouez-le." },
-    { "id": "cachot", "name": "Cachot", "cost": 4, "types": ["Action", "Durée"], "image": "cachot.png", "text": "+1 Action\n\nMettez de côté la carte du dessus de votre deck. Au début de votre prochain tour, révélez-la : si c’est une Action, jouez-la ; sinon, prenez-la dans votre main.\n\nLorsque vous défaussez ou écartez cette carte autrement que pendant votre phase d’Ajustement, vous pouvez mettre une carte de votre main sur votre deck." },
+    { "id": "cloitre", "name": "Cloître", "cost": 3, "types": ["Action", "Réaction", "Durée"], "image": "cloitre.png", "text": "+3 Cartes\n\nDéfaussez 2 cartes.\n\nMettez de côté, face cachée sous cette carte, une carte de votre main. Au début de votre prochain tour, prenez-la dans votre main.\n\nRéaction : lorsqu’un autre joueur joue une carte Attaque, vous pouvez révéler Cloître depuis votre main et le mettre de côté. Au début de votre prochain tour, jouez-le.", "abilities": [
+      { "when": "play", "effects": [
+        { "op": "draw", "target": "self", "amount": 3 },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 2, "max": 2, "minUpToAvailable": true, "prompt": "Défaussez 2 cartes." },
+        { "op": "discard_selected", "target": "self", "sourceZone": "hand" },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "minUpToAvailable": true, "prompt": "Mettez une carte de côté sous Cloître." },
+        { "op": "set_aside_selected_until_next_turn", "target": "self", "sourceZone": "hand", "returnMode": "hand" }
+      ] },
+      { "when": "attack_reaction", "scope": "in_hand", "filter": { "cardType": "Attaque" }, "effects": [
+        { "op": "attack_reaction_set_aside_play_next_turn", "target": "self" }
+      ] }
+    ] },
+    { "id": "cachot", "name": "Cachot", "cost": 4, "types": ["Action", "Durée"], "image": "cachot.png", "text": "+1 Action\n\nMettez de côté la carte du dessus de votre deck. Au début de votre prochain tour, révélez-la : si c’est une Action, jouez-la ; sinon, prenez-la dans votre main.\n\nLorsque vous défaussez ou écartez cette carte autrement que pendant votre phase d’Ajustement, vous pouvez mettre une carte de votre main sur votre deck.", "abilities": [
+      { "when": "play", "effects": [
+        { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
+        { "op": "set_aside_top_until_next_turn", "target": "self", "returnMode": "play_action_or_hand" }
+      ] },
+      { "when": "card_discarded", "effects": [
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez mettre une carte de votre main sur votre deck." },
+        { "op": "move_selected", "target": "self", "sourceZone": "hand", "destinationZone": "deck" }
+      ] },
+      { "when": "card_trashed", "effects": [
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez mettre une carte de votre main sur votre deck." },
+        { "op": "move_selected", "target": "self", "sourceZone": "hand", "destinationZone": "deck" }
+      ] }
+    ] },
     { "id": "pestifere", "name": "Pestiféré", "cost": 5, "types": ["Action", "Attaque", "Durée"], "image": "pestifere.png", "text": "+2 Cartes\n\nChaque joueur, vous compris, reçoit une Maladie.\n\nAu début de votre prochain tour : +1 Carte. Puis vous pouvez jouer une Maladie de votre main.", "abilities": [
       { "when": "play", "effects": [
         { "op": "draw", "target": "self", "amount": 2 },
@@ -175,13 +212,29 @@
         { "op": "mark_duration_resolved", "target": "self" }
       ] }
     ] },
-    { "id": "inquisiteur", "name": "Inquisiteur", "cost": 4, "types": ["Action", "Attaque"], "image": "inquisiteur.png", "text": "+2 🪙\n\nNommez une carte Trésor. Chaque autre joueur ayant cette carte en main en défausse un exemplaire, ou révèle une main qui n’en contient pas.\n\nSi au moins une carte a été défaussée ainsi : +1 🪙." },
-    { "id": "mort_vivant", "name": "Mort-vivant", "cost": 2, "types": ["Action"], "image": "mortvivant.png", "text": "+2 Actions\n\nLorsque vous écartez cette carte : +2 Cartes. Puis mettez-la de côté. À la fin du tour, replacez-la sur sa pile dans la Réserve." },
+    { "id": "inquisiteur", "name": "Inquisiteur", "cost": 4, "types": ["Action", "Attaque"], "image": "inquisiteur.png", "text": "+2 🪙\n\nNommez une carte Trésor. Chaque autre joueur ayant cette carte en main en défausse un exemplaire, ou révèle une main qui n’en contient pas.\n\nSi au moins une carte a été défaussée ainsi : +1 🪙.", "abilities": [ { "when": "play", "effects": [
+      { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
+      { "op": "name_card", "target": "self", "cardType": "Trésor", "prompt": "Nommez une carte Trésor." },
+      { "op": "discard_others_named_card", "target": "others" },
+      { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1, "requiresLastSelection": true }
+    ] } ] },
+    { "id": "mort_vivant", "name": "Mort-vivant", "cost": 2, "types": ["Action"], "image": "mortvivant.png", "text": "+2 Actions\n\nLorsque vous écartez cette carte : +2 Cartes. Puis mettez-la de côté. À la fin du tour, replacez-la sur sa pile dans la Réserve.", "abilities": [
+      { "when": "play", "effects": [ { "op": "add_resource", "target": "self", "resource": "actions", "amount": 2 } ] },
+      { "when": "card_trashed", "effects": [
+        { "op": "draw", "target": "self", "amount": 2 },
+        { "op": "set_aside_trigger_until_turn_end", "target": "self" }
+      ] }
+    ] },
     { "id": "cimetiere", "name": "Cimetière", "cost": 6, "types": ["Action", "Victoire"], "image": "cimetiere.png", "text": "+1 Action\n\nSi vous avez écarté ou défaussé une carte ce tour-ci : +2 Cartes\n\n———\n\nVaut 1 VP par tranche de 6 cartes dans le Rebut.", "abilities": [ { "when": "play", "effects": [
       { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
       { "op": "draw", "target": "self", "amount": 2, "requiresMinDiscardedOrTrashedThisTurn": 1 }
     ] } ] },
-    { "id": "execution_publique", "name": "Exécution publique", "cost": 5, "types": ["Action"], "image": "execution_publique.png", "text": "Piochez jusqu’à avoir 8 cartes en main.\n\nSi vous avez au moins 3 cartes Victoire, Malédiction ou Maladie en main, vous pouvez jouer une carte Action de votre main.\n\nPuis terminez votre phase d’Action." },
+    { "id": "execution_publique", "name": "Exécution publique", "cost": 5, "types": ["Action"], "image": "execution_publique.png", "text": "Piochez jusqu’à avoir 8 cartes en main.\n\nSi vous avez au moins 3 cartes Victoire, Malédiction ou Maladie en main, vous pouvez jouer une carte Action de votre main.\n\nPuis terminez votre phase d’Action.", "abilities": [ { "when": "play", "effects": [
+      { "op": "draw_to_hand_size", "target": "self", "amount": 8 },
+      { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "allowPass": true, "cardType": "Action", "prompt": "Vous pouvez jouer une carte Action de votre main.", "requiresMinMatchingCardsInHand": 3, "matchingCardTypes": ["Victoire", "Malédiction", "Maladie"] },
+      { "op": "play_selected", "target": "self", "sourceZone": "hand", "requiresMinMatchingCardsInHand": 3, "matchingCardTypes": ["Victoire", "Malédiction", "Maladie"] },
+      { "op": "end_action_phase", "target": "self" }
+    ] } ] },
     { "id": "confesseur", "name": "Confesseur", "cost": 2, "types": ["Action"], "image": "confesseur.png", "text": "+1 Carte\n+1 Action\n\nRegardez la carte du dessus de votre deck. Si c’est une carte Victoire, Malédiction ou Maladie, prenez-la dans votre main.", "abilities": [ { "when": "play", "effects": [
       { "op": "draw", "target": "self", "amount": 1 },
       { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
@@ -233,7 +286,19 @@
       { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
       { "op": "add_resource_per_distinct_type_in_play", "target": "self", "resource": "coins", "amount": 1, "max": 6 }
     ] } ] },
-    { "id": "elixir", "name": "Élixir", "cost": 5, "types": ["Action", "Consommable"], "image": "elixir.png", "returnsToPileAfterPlay": true, "text": "Choisissez deux : +1 Carte, +1 Action, +1 Achat ; +3 🪙 ; jouez une carte Action de votre main deux fois puis écartez-la.\n\nAprès utilisation, Élixir retourne sur sa pile." },
+    { "id": "elixir", "name": "Élixir", "cost": 5, "types": ["Action", "Consommable"], "image": "elixir.png", "returnsToPileAfterPlay": true, "text": "Choisissez deux : +1 Carte, +1 Action, +1 Achat ; +3 🪙 ; jouez une carte Action de votre main deux fois puis écartez-la.\n\nAprès utilisation, Élixir retourne sur sa pile.", "abilities": [ { "when": "play", "effects": [
+      { "op": "choose_options", "target": "self", "min": 2, "max": 2, "prompt": "Choisissez deux options.", "options": [
+        { "id": "versatile", "label": "+1 Carte, +1 Action, +1 Achat" },
+        { "id": "coins", "label": "+3 🪙" },
+        { "id": "double", "label": "Jouer une Action deux fois puis l’écarter" }
+      ] },
+      { "op": "draw", "target": "self", "amount": 1, "requiresSelectedOption": "versatile" },
+      { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1, "requiresSelectedOption": "versatile" },
+      { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1, "requiresSelectedOption": "versatile" },
+      { "op": "add_resource", "target": "self", "resource": "coins", "amount": 3, "requiresSelectedOption": "coins" },
+      { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "minUpToAvailable": true, "cardType": "Action", "prompt": "Choisissez une carte Action à jouer deux fois puis écarter.", "requiresSelectedOption": "double" },
+      { "op": "play_selected_twice_then_trash", "target": "self", "sourceZone": "hand", "requiresSelectedOption": "double" }
+    ] } ] },
     { "id": "paladin", "name": "Paladin", "cost": 4, "types": ["Action"], "image": "paladin.png", "text": "+2 🪙\n\nLorsque vous recevez ou écartez cette carte, prenez l’Étendard divin.", "abilities": [
       { "when": "play", "effects": [ { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 } ] },
       { "when": "card_gained", "effects": [ { "op": "take_artifact", "target": "self", "artifactId": "fleaux:etendard_divin" } ] },

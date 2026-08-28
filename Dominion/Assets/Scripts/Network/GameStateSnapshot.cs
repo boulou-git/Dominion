@@ -9,7 +9,7 @@ using System.Collections.Generic;
 [Serializable]
 public class GameStateSnapshot
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     // Version of the serialized snapshot shape. This is deliberately separate from
     // Version, which is the monotonic revision number of one running match.
@@ -115,15 +115,17 @@ public class SupplyPileSnapshot
 {
     public string DefinitionId;
     public int RemainingCount;
+    public bool IsKingdom;
 
     public SupplyPileSnapshot()
     {
     }
 
-    public SupplyPileSnapshot(string definitionId, int remainingCount)
+    public SupplyPileSnapshot(string definitionId, int remainingCount, bool isKingdom = false)
     {
         DefinitionId = definitionId;
         RemainingCount = remainingCount;
+        IsKingdom = isKingdom;
     }
 }
 

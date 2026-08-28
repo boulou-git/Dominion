@@ -268,6 +268,7 @@ public sealed class ResolutionQueue
 
     public void SetLastSelectedCardCost(int cost) => _snapshot.LastSelectedCardCost = cost;
     public void SetLastMovedCardInstanceId(int instanceId) => _snapshot.LastMovedCardInstanceId = Math.Max(0, instanceId);
+    public void SetLastSelectionCount(int count) => _snapshot.LastSelectionCount = Math.Max(0, count);
     public void ClearSelection() { _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedDefinitionIds.Clear(); _snapshot.LastSelectionCount = 0; }
     public void ClearAttackProtection() => _snapshot.AttackProtectedPlayerIds.Clear();
     public bool TryStageCardSelection(string playerId, int instanceId, out string error)

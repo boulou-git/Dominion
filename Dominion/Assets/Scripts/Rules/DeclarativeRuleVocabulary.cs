@@ -89,7 +89,8 @@ public static class DeclarativeRuleVocabulary
             return false;
         string operation = value.Trim();
         return EffectResolver.IsSupported(operation) ||
-               string.Equals(operation, ReactionRules.BlockAttackOperation, StringComparison.OrdinalIgnoreCase);
+               string.Equals(operation, ReactionRules.BlockAttackOperation, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(operation, ReactionRules.SetAsideAndPlayNextTurnOperation, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool Contains(HashSet<string> values, string candidate)

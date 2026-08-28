@@ -35,6 +35,8 @@ public static class GameStateSnapshotMigration
             UpgradeV1ToV2(state);
         if (state.SchemaVersion == 2)
             UpgradeV2ToV3(state);
+        if (state.SchemaVersion == 3)
+            UpgradeV3ToV4(state);
 
         return state.SchemaVersion == GameStateSnapshot.CurrentSchemaVersion;
     }
@@ -58,5 +60,16 @@ public static class GameStateSnapshotMigration
                 if (player != null && player.ResolvedDurationCards == null)
                     player.ResolvedDurationCards = new System.Collections.Generic.List<int>();
         state.SchemaVersion = 3;
+    }
+
+    private static void UpgradeV3ToV4(GameStateSnapshot state)
+    {
+        // Reserve creation has always appended the ten Kingdom piles after the
+        // seven base piles, so old snapshots can recover this metadata losslessly.
+        if (state.SupplyPiles != null)
+            for (int index = 7; index < state.SupplyPiles.Count; index++)
+                if (state.SupplyPiles[index] != null)
+                    state.SupplyPiles[index].IsKingdom = true;
+        state.SchemaVersion = 4;
     }
 }

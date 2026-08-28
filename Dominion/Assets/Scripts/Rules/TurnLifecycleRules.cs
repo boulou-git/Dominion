@@ -14,6 +14,9 @@ public static class TurnLifecycleRules
         if (!ResolutionQueue.TryBegin(state, player.PlayerId, out ResolutionQueue queue, out string beginError))
             return GameRuleResult.Rejected(beginError);
 
+        if (!SetAsideRules.TryResolveTurnStart(state, player, queue, resolve, out string setAsideError))
+            return GameRuleResult.Rejected(setAsideError, queue.Events.SnapshotHistory());
+
         queue.Events.Publish(GameEvent.TurnStarted(player.PlayerId));
         TriggerResolutionResult resolved = TriggerResolver.ResolvePending(queue, state, resolve, random);
         List<GameEvent> events = queue.Events.SnapshotHistory();

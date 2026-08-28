@@ -268,7 +268,7 @@ public static class NetworkGameState
                 {
                     ExtensionCardData definition = ResolveCardDefinition(definitionId);
                     int count = definition != null && definition.pileSize > 0 ? definition.pileSize : KingdomPileCount;
-                    AddSupplyPile(state, definitionId, count);
+                    AddSupplyPile(state, definitionId, count, true);
                 }
     }
 
@@ -325,10 +325,10 @@ public static class NetworkGameState
         return playerCount * 3;
     }
 
-    private static void AddSupplyPile(GameStateSnapshot state, string definitionId, int remainingCount)
+    private static void AddSupplyPile(GameStateSnapshot state, string definitionId, int remainingCount, bool isKingdom = false)
     {
         if (state.SupplyPiles.Any(pile => pile != null && string.Equals(pile.DefinitionId, definitionId, StringComparison.OrdinalIgnoreCase))) return;
-        state.SupplyPiles.Add(new SupplyPileSnapshot(definitionId, Math.Max(0, remainingCount)));
+        state.SupplyPiles.Add(new SupplyPileSnapshot(definitionId, Math.Max(0, remainingCount), isKingdom));
     }
 
     private static bool CreateStarterDecksAndOpeningHands(GameStateSnapshot state)
@@ -369,6 +369,8 @@ public static class NetworkGameState
         if (state == null || state.Players == null || state.Players.Count == 0) return false;
         PlayerStateSnapshot current = FindPlayer(state, state.ActivePlayerId);
         if (current == null) return false;
+        if (!SetAsideRules.TryResolveTurnEnd(state, current, out string setAsideError))
+        { Debug.LogError("Could not resolve end-of-turn set-aside cards: " + setAsideError); return false; }
         DurationRules.MoveCleanupInPlayCards(state, current, ResolveCardDefinition);
         CardZoneRules.MoveAll(current, CardZone.Hand, CardZone.Discard, true);
         current.Actions = 1; current.Buys = 1; current.Coins = 0; current.ActionsPlayedThisTurn = 0; CostRules.ResetForTurn(current);
