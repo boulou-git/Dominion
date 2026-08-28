@@ -229,7 +229,7 @@ public static class NetworkGameState
         GameStateSnapshot next = Clone(_state);
         GameRuleResult result = GameRules.TrySubmitDecision(next, requesterPlayerId, decisionId, selectedInstanceIds, ResolveCardDefinition, NewRandom());
         if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning("Rejected SubmitDecision command: " + result.Error); return false; }
-        return CommitState(next);
+        return CompleteCleanupAfterDecision(next, result) && CommitState(next);
     }
 
     public static bool TrySubmitSupplyDecision(string requesterPlayerId, string decisionId, string[] selectedDefinitionIds,
@@ -239,7 +239,7 @@ public static class NetworkGameState
         GameStateSnapshot next = Clone(_state);
         GameRuleResult result = GameRules.TrySubmitSupplyDecision(next, requesterPlayerId, decisionId, selectedDefinitionIds, ResolveCardDefinition, NewRandom());
         if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning("Rejected SubmitSupplyDecision command: " + result.Error); return false; }
-        return CommitState(next);
+        return CompleteCleanupAfterDecision(next, result) && CommitState(next);
     }
 
     public static bool TrySubmitOptionDecision(string requesterPlayerId, string decisionId, string[] selectedOptionIds,
@@ -249,7 +249,7 @@ public static class NetworkGameState
         GameStateSnapshot next = Clone(_state);
         GameRuleResult result = GameRules.TrySubmitOptionDecision(next, requesterPlayerId, decisionId, selectedOptionIds, ResolveCardDefinition, NewRandom());
         if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning("Rejected SubmitOptionDecision command: " + result.Error); return false; }
-        return CommitState(next);
+        return CompleteCleanupAfterDecision(next, result) && CommitState(next);
     }
 
     private static void CreateSupply(GameStateSnapshot state, int playerCount)
@@ -369,13 +369,17 @@ public static class NetworkGameState
         if (state == null || state.Players == null || state.Players.Count == 0) return false;
         PlayerStateSnapshot current = FindPlayer(state, state.ActivePlayerId);
         if (current == null) return false;
+        state.Phase = CleanupPhase;
+        GameRuleResult ended = TurnLifecycleRules.TryResolveTurnEnded(state, current, ResolveCardDefinition, NewRandom());
+        if (ended.Status == GameRuleStatus.Rejected)
+        { Debug.LogError("Could not resolve end-of-turn effects: " + ended.Error); return false; }
+        if (ended.Status == GameRuleStatus.WaitingForChoice) return true;
         if (!SetAsideRules.TryResolveTurnEnd(state, current, out string setAsideError))
         { Debug.LogError("Could not resolve end-of-turn set-aside cards: " + setAsideError); return false; }
         DurationRules.MoveCleanupInPlayCards(state, current, ResolveCardDefinition);
         CardZoneRules.MoveAll(current, CardZone.Hand, CardZone.Discard, true);
         current.Actions = 1; current.Buys = 1; current.Coins = 0; current.ActionsPlayedThisTurn = 0; CostRules.ResetForTurn(current);
         int cleanupDraw = StartingHandSize + current.NextCleanupDrawModifier;
-        if (ArtifactRules.Controls(state, current, "fleaux:etendard_divin")) cleanupDraw++;
         current.NextCleanupDrawModifier = 0;
         CardZoneRules.DrawCards(current, Math.Max(0, cleanupDraw), NewRandom(), out _);
         current.CardsDiscardedThisTurn = 0;
@@ -399,6 +403,14 @@ public static class NetworkGameState
             return false;
         }
         return true;
+    }
+
+    private static bool CompleteCleanupAfterDecision(GameStateSnapshot state, GameRuleResult result)
+    {
+        if (state == null || result == null) return false;
+        if (result.Status != GameRuleStatus.Applied || !string.Equals(state.Phase, CleanupPhase, StringComparison.Ordinal) ||
+            (state.Resolution != null && state.Resolution.IsActive)) return true;
+        return PerformCleanupAndAdvance(state);
     }
 
     private static System.Random NewRandom() => new System.Random(Guid.NewGuid().GetHashCode());

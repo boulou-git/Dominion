@@ -31,6 +31,7 @@ public readonly struct TriggerResolutionResult
 public static class TriggerResolver
 {
     private const int MaxEventsPerResolution = 512;
+    private const string ReplacementScopePrefix = "replacement:";
 
     public static TriggerResolutionResult ResolvePending(
         ResolutionQueue resolution,
@@ -59,6 +60,17 @@ public static class TriggerResolver
             if (string.IsNullOrEmpty(timing))
                 continue;
 
+            AbilityResolutionResult replacementResult = ResolveReplacementListeners(gameEvent, timing, resolution,
+                state, resolveCardDefinition, random);
+            abilitiesMatched += replacementResult.AbilitiesMatched;
+            effectsResolved += replacementResult.EffectsResolved;
+            if (replacementResult.Status == EffectResolutionStatus.Rejected)
+                return RejectAndAbort(state, eventsProcessed, abilitiesMatched, effectsResolved, replacementResult.Error);
+            if (replacementResult.Status == EffectResolutionStatus.WaitingForChoice)
+                return TriggerResolutionResult.WaitingForChoice(eventsProcessed, abilitiesMatched, effectsResolved);
+            if (WasReplaced(state, gameEvent))
+                continue;
+
             AbilityResolutionResult subjectResult = ResolveSubjectAbility(gameEvent, timing, resolution, state, resolveCardDefinition, random);
             abilitiesMatched += subjectResult.AbilitiesMatched;
             effectsResolved += subjectResult.EffectsResolved;
@@ -67,7 +79,7 @@ public static class TriggerResolver
             if (subjectResult.Status == EffectResolutionStatus.WaitingForChoice)
                 return TriggerResolutionResult.WaitingForChoice(eventsProcessed, abilitiesMatched, effectsResolved);
 
-            AbilityResolutionResult listenerResult = ResolveExternalListeners(gameEvent, timing, resolution, state, resolveCardDefinition, random);
+            AbilityResolutionResult listenerResult = ResolveExternalListeners(gameEvent, timing, resolution, state, resolveCardDefinition, random, false);
             abilitiesMatched += listenerResult.AbilitiesMatched;
             effectsResolved += listenerResult.EffectsResolved;
             if (listenerResult.Status == EffectResolutionStatus.Rejected)
@@ -105,10 +117,15 @@ public static class TriggerResolver
         if (definition == null)
             return RejectAndAbort(state, 0, 0, 0, "Decision source card definition was not found.");
 
-        bool subject = continuation.ListenerCardInstanceId == gameEvent.CardInstanceId &&
+        bool replacement = !string.IsNullOrEmpty(continuation.ListenerScope) &&
+            continuation.ListenerScope.StartsWith(ReplacementScopePrefix, StringComparison.OrdinalIgnoreCase);
+        string storedScope = replacement
+            ? continuation.ListenerScope.Substring(ReplacementScopePrefix.Length)
+            : continuation.ListenerScope;
+        bool subject = !replacement && continuation.ListenerCardInstanceId == gameEvent.CardInstanceId &&
             (string.IsNullOrEmpty(continuation.ListenerScope) ||
              string.Equals(continuation.ListenerScope, DeclarativeRuleVocabulary.SubjectScope, StringComparison.OrdinalIgnoreCase));
-        string listenerScope = subject ? DeclarativeRuleVocabulary.SubjectScope : continuation.ListenerScope;
+        string listenerScope = subject ? DeclarativeRuleVocabulary.SubjectScope : storedScope;
         if (!subject && string.IsNullOrWhiteSpace(listenerScope))
             return RejectAndAbort(state, 0, 0, 0, "External listener scope is missing from the decision continuation.");
 
@@ -117,6 +134,7 @@ public static class TriggerResolver
             continuation.Timing,
             BuildContext(state, owner, instance.InstanceId, random, resolution, gameEvent),
             ability => (subject ? IsSubjectScope(ability) : ScopeEquals(ability, listenerScope)) &&
+                ability.replacement == replacement &&
                 FilterMatches(ability != null ? ability.filter : null, gameEvent, owner, resolveCardDefinition),
             continuation.AbilityIndex,
             continuation.EffectIndex + 1);
@@ -125,15 +143,16 @@ public static class TriggerResolver
             return RejectAndAbort(state, 0, resumed.AbilitiesMatched, resumed.EffectsResolved, resumed.Error);
         if (resumed.Status == EffectResolutionStatus.WaitingForChoice)
         {
-            PreserveListenerContinuation(resolution.PendingDecision, listenerScope,
+            PreserveListenerContinuation(resolution.PendingDecision,
+                replacement ? ReplacementScopePrefix + listenerScope : listenerScope,
                 continuation.RemainingListenerInstanceIds, continuation.RemainingListenerScopes);
             return TriggerResolutionResult.WaitingForChoice(0, resumed.AbilitiesMatched, resumed.EffectsResolved);
         }
 
         AbilityResolutionResult listeners = subject
-            ? ResolveExternalListeners(gameEvent, continuation.Timing, resolution, state, resolveCardDefinition, random)
+            ? ResolveExternalListeners(gameEvent, continuation.Timing, resolution, state, resolveCardDefinition, random, false)
             : ResolveRemainingListeners(gameEvent, continuation.Timing, resolution, state, resolveCardDefinition, random,
-                continuation.RemainingListenerInstanceIds, continuation.RemainingListenerScopes);
+                continuation.RemainingListenerInstanceIds, continuation.RemainingListenerScopes, replacement);
 
         int matched = resumed.AbilitiesMatched + listeners.AbilitiesMatched;
         int resolved = resumed.EffectsResolved + listeners.EffectsResolved;
@@ -141,6 +160,26 @@ public static class TriggerResolver
             return RejectAndAbort(state, 0, matched, resolved, listeners.Error);
         if (listeners.Status == EffectResolutionStatus.WaitingForChoice)
             return TriggerResolutionResult.WaitingForChoice(0, matched, resolved);
+
+        if (replacement && !WasReplaced(state, gameEvent))
+        {
+            AbilityResolutionResult subjectResult = ResolveSubjectAbility(gameEvent, continuation.Timing, resolution,
+                state, resolveCardDefinition, random);
+            matched += subjectResult.AbilitiesMatched;
+            resolved += subjectResult.EffectsResolved;
+            if (subjectResult.Status == EffectResolutionStatus.Rejected)
+                return RejectAndAbort(state, 0, matched, resolved, subjectResult.Error);
+            if (subjectResult.Status == EffectResolutionStatus.WaitingForChoice)
+                return TriggerResolutionResult.WaitingForChoice(0, matched, resolved);
+            AbilityResolutionResult normalListeners = ResolveExternalListeners(gameEvent, continuation.Timing,
+                resolution, state, resolveCardDefinition, random, false);
+            matched += normalListeners.AbilitiesMatched;
+            resolved += normalListeners.EffectsResolved;
+            if (normalListeners.Status == EffectResolutionStatus.Rejected)
+                return RejectAndAbort(state, 0, matched, resolved, normalListeners.Error);
+            if (normalListeners.Status == EffectResolutionStatus.WaitingForChoice)
+                return TriggerResolutionResult.WaitingForChoice(0, matched, resolved);
+        }
 
         if (!ReturnToPileRules.TryReturnAfterResolvedPlay(state, gameEvent, resolveCardDefinition, out string returnError))
             return RejectAndAbort(state, 0, matched, resolved, returnError);
@@ -224,7 +263,8 @@ public static class TriggerResolver
         ResolutionQueue resolution,
         GameStateSnapshot state,
         Func<string, ExtensionCardData> resolveCardDefinition,
-        System.Random random)
+        System.Random random,
+        bool replacementOnly)
     {
         if (gameEvent == null || state.Players == null)
             return AbilityResolutionResult.Applied(0, 0);
@@ -234,11 +274,23 @@ public static class TriggerResolver
         {
             if (owner == null)
                 continue;
-            AddListeners(listeners, owner, owner.Hand, DeclarativeRuleVocabulary.InHandScope);
-            AddListeners(listeners, owner, owner.InPlay, DeclarativeRuleVocabulary.InPlayScope);
+            if (!replacementOnly)
+            {
+                AddListeners(listeners, owner, owner.Hand, DeclarativeRuleVocabulary.InHandScope);
+                AddListeners(listeners, owner, owner.InPlay, DeclarativeRuleVocabulary.InPlayScope);
+            }
             AddListeners(listeners, owner, owner.Artifacts, DeclarativeRuleVocabulary.ArtifactScope);
         }
-        return ResolveListenerEntries(listeners, gameEvent, timing, resolution, state, resolveCardDefinition, random);
+        return ResolveListenerEntries(listeners, gameEvent, timing, resolution, state, resolveCardDefinition, random, replacementOnly);
+    }
+
+    private static AbilityResolutionResult ResolveReplacementListeners(GameEvent gameEvent, string timing,
+        ResolutionQueue resolution, GameStateSnapshot state, Func<string, ExtensionCardData> resolveCardDefinition,
+        System.Random random)
+    {
+        if (gameEvent == null || (gameEvent.Type != GameEventType.CardDiscarded && gameEvent.Type != GameEventType.CardTrashed))
+            return AbilityResolutionResult.Applied(0, 0);
+        return ResolveExternalListeners(gameEvent, timing, resolution, state, resolveCardDefinition, random, true);
     }
 
     private static AbilityResolutionResult ResolveRemainingListeners(
@@ -249,7 +301,8 @@ public static class TriggerResolver
         Func<string, ExtensionCardData> resolveCardDefinition,
         System.Random random,
         List<int> listenerInstanceIds,
-        List<string> listenerScopes)
+        List<string> listenerScopes,
+        bool replacementOnly)
     {
         if (listenerInstanceIds == null || listenerScopes == null || listenerInstanceIds.Count != listenerScopes.Count)
             return AbilityResolutionResult.Rejected(0, 0, "External listener continuation is malformed.");
@@ -261,7 +314,7 @@ public static class TriggerResolver
             if (owner != null)
                 listeners.Add(new ListenerEntry(owner, listenerInstanceIds[index], listenerScopes[index]));
         }
-        return ResolveListenerEntries(listeners, gameEvent, timing, resolution, state, resolveCardDefinition, random);
+        return ResolveListenerEntries(listeners, gameEvent, timing, resolution, state, resolveCardDefinition, random, replacementOnly);
     }
 
     private static AbilityResolutionResult ResolveListenerEntries(
@@ -271,7 +324,8 @@ public static class TriggerResolver
         ResolutionQueue resolution,
         GameStateSnapshot state,
         Func<string, ExtensionCardData> resolveCardDefinition,
-        System.Random random)
+        System.Random random,
+        bool replacementOnly)
     {
         int matched = 0;
         int resolved = 0;
@@ -294,7 +348,8 @@ public static class TriggerResolver
                 definition,
                 timing,
                 BuildContext(state, listener.Owner, listener.InstanceId, random, resolution, gameEvent),
-                ability => ScopeEquals(ability, listener.Scope) && FilterMatches(ability != null ? ability.filter : null, gameEvent, listener.Owner, resolveCardDefinition));
+                ability => ability.replacement == replacementOnly && ScopeEquals(ability, listener.Scope) &&
+                    FilterMatches(ability != null ? ability.filter : null, gameEvent, listener.Owner, resolveCardDefinition));
 
             matched += result.AbilitiesMatched;
             resolved += result.EffectsResolved;
@@ -309,7 +364,9 @@ public static class TriggerResolver
                     remainingIds.Add(listeners[remaining].InstanceId);
                     remainingScopes.Add(listeners[remaining].Scope);
                 }
-                PreserveListenerContinuation(resolution.PendingDecision, listener.Scope, remainingIds, remainingScopes);
+                PreserveListenerContinuation(resolution.PendingDecision,
+                    replacementOnly ? ReplacementScopePrefix + listener.Scope : listener.Scope,
+                    remainingIds, remainingScopes);
                 return AbilityResolutionResult.WaitingForChoice(matched, resolved);
             }
         }
@@ -322,6 +379,12 @@ public static class TriggerResolver
         if (target == null || owner == null || zone == null) return;
         foreach (int instanceId in zone.ToArray())
             target.Add(new ListenerEntry(owner, instanceId, scope));
+    }
+
+    private static bool WasReplaced(GameStateSnapshot state, GameEvent gameEvent)
+    {
+        return state != null && gameEvent != null && gameEvent.CardInstanceId > 0 && state.SetAsideCards != null &&
+            state.SetAsideCards.Exists(entry => entry != null && entry.CardInstanceId == gameEvent.CardInstanceId);
     }
 
     private static List<int> ResolveListenerZone(PlayerStateSnapshot owner, string scope)
@@ -410,6 +473,13 @@ public static class TriggerResolver
                 return false;
             ExtensionCardData eventCard = resolveCardDefinition(gameEvent.CardDefinitionId);
             if (!CardDefinitionRules.HasType(eventCard, filter.cardType))
+                return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.destinationZone))
+        {
+            if (!CardZoneRules.TryParseZone(filter.destinationZone, out CardZone destination) ||
+                gameEvent.DestinationZone != destination)
                 return false;
         }
 

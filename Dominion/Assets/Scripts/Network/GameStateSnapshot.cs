@@ -9,7 +9,7 @@ using System.Collections.Generic;
 [Serializable]
 public class GameStateSnapshot
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     // Version of the serialized snapshot shape. This is deliberately separate from
     // Version, which is the monotonic revision number of one running match.
@@ -97,6 +97,7 @@ public class AbilityUsageSnapshot
     public int CardInstanceId;
     public int AbilityIndex;
     public int TurnNumber;
+    public string UsageGroup;
 
     public AbilityUsageSnapshot()
     {

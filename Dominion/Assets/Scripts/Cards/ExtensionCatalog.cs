@@ -52,6 +52,8 @@ public sealed class CardAbilityData
     public string scope;
     public CardTriggerFilterData filter;
     public bool oncePerTurn;
+    public string usageGroup;
+    public bool replacement;
     public int minHandSize;
     public List<CardEffectData> effects = new List<CardEffectData>();
 }
@@ -62,6 +64,7 @@ public sealed class CardTriggerFilterData
     public string eventPlayer;
     public string cardId;
     public string cardType;
+    public string destinationZone;
 }
 
 [Serializable]
@@ -343,11 +346,13 @@ public static class ExtensionCatalog
 
                 ability.when = (ability.when ?? string.Empty).Trim();
                 ability.scope = (ability.scope ?? string.Empty).Trim();
+                ability.usageGroup = (ability.usageGroup ?? string.Empty).Trim();
                 if (ability.filter != null)
                 {
                     ability.filter.eventPlayer = (ability.filter.eventPlayer ?? string.Empty).Trim();
                     ability.filter.cardId = (ability.filter.cardId ?? string.Empty).Trim();
                     ability.filter.cardType = (ability.filter.cardType ?? string.Empty).Trim();
+                    ability.filter.destinationZone = (ability.filter.destinationZone ?? string.Empty).Trim();
                 }
                 if (ability.effects == null)
                     ability.effects = new List<CardEffectData>();
@@ -476,6 +481,22 @@ public static class ExtensionCatalog
                     return false;
                 }
 
+                if (!string.IsNullOrWhiteSpace(ability.usageGroup) && !ability.oncePerTurn)
+                {
+                    error = "Card '" + card.id + "' ability[" + abilityIndex + "] has a usageGroup without oncePerTurn.";
+                    return false;
+                }
+
+                if (ability.replacement &&
+                    (!string.Equals(ability.scope, DeclarativeRuleVocabulary.ArtifactScope, StringComparison.OrdinalIgnoreCase) ||
+                     (!string.Equals(timing, DeclarativeRuleVocabulary.CardDiscardedTiming, StringComparison.OrdinalIgnoreCase) &&
+                      !string.Equals(timing, DeclarativeRuleVocabulary.CardTrashedTiming, StringComparison.OrdinalIgnoreCase))))
+                {
+                    error = "Card '" + card.id + "' ability[" + abilityIndex +
+                            "] uses replacement outside an artifact discard/trash trigger.";
+                    return false;
+                }
+
                 if (!ValidateTriggerFilter(card.id, abilityIndex, ability.filter, out error))
                     return false;
 
@@ -584,6 +605,10 @@ public static class ExtensionCatalog
             error = "Card '" + cardId + "' ability[" + abilityIndex + "] has malformed filter.cardId '" + filter.cardId + "'.";
             return false;
         }
+
+        if (!ValidateOptionalZone("Card '" + cardId + "' ability[" + abilityIndex + "]", "filter.destinationZone",
+                filter.destinationZone, out error))
+            return false;
 
         return true;
     }

@@ -127,4 +127,9 @@ public sealed class GameEvent
     {
         return new GameEvent(GameEventType.TurnStarted, playerId);
     }
+
+    public static GameEvent TurnEnded(string playerId)
+    {
+        return new GameEvent(GameEventType.TurnEnded, playerId);
+    }
 }

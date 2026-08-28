@@ -36,7 +36,7 @@ public sealed class FleauxFoundationRulesTests
         state.Players.Add(new PlayerStateSnapshot { PlayerId = "p1", Artifacts = null });
 
         Assert.That(GameStateSnapshotMigration.TryUpgradeToCurrent(state, out string error), Is.True, error);
-        Assert.That(state.SchemaVersion, Is.EqualTo(4));
+        Assert.That(state.SchemaVersion, Is.EqualTo(GameStateSnapshot.CurrentSchemaVersion));
         Assert.That(state.SpecialPiles, Is.Not.Null);
         Assert.That(state.UnownedArtifacts, Is.Not.Null);
         Assert.That(state.SetAsideCards, Is.Not.Null);

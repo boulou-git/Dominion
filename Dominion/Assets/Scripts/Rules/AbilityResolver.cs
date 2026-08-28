@@ -78,7 +78,7 @@ public static class AbilityResolver
             {
                 if (context.SourceCardInstanceId <= 0)
                     return AbilityResolutionResult.Rejected(matched, resolved, "oncePerTurn ability requires a physical source card instance.");
-                if (WasUsedThisTurn(context.State, context.SourceCardInstanceId, abilityIndex))
+                if (WasUsedThisTurn(context.State, context.SourceCardInstanceId, abilityIndex, ability.usageGroup))
                     continue;
             }
 
@@ -86,7 +86,7 @@ public static class AbilityResolver
             if (ability.effects == null || ability.effects.Count == 0)
             {
                 if (ability.oncePerTurn)
-                    MarkUsedThisTurn(context.State, context.SourceCardInstanceId, abilityIndex);
+                    MarkUsedThisTurn(context.State, context.SourceCardInstanceId, abilityIndex, ability.usageGroup);
                 continue;
             }
 
@@ -120,7 +120,7 @@ public static class AbilityResolver
             }
 
             if (ability.oncePerTurn)
-                MarkUsedThisTurn(context.State, context.SourceCardInstanceId, abilityIndex);
+                MarkUsedThisTurn(context.State, context.SourceCardInstanceId, abilityIndex, ability.usageGroup);
         }
 
         return AbilityResolutionResult.Applied(matched, resolved);
@@ -131,27 +131,37 @@ public static class AbilityResolver
         return ResolveTiming(card, "play", context);
     }
 
-    private static bool WasUsedThisTurn(GameStateSnapshot state, int cardInstanceId, int abilityIndex)
+    private static bool WasUsedThisTurn(GameStateSnapshot state, int cardInstanceId, int abilityIndex, string usageGroup)
     {
         EnsureCurrentTurnUsages(state);
         return state.AbilityUsages.Exists(usage =>
             usage != null &&
             usage.CardInstanceId == cardInstanceId &&
-            usage.AbilityIndex == abilityIndex &&
+            UsageMatches(usage, abilityIndex, usageGroup) &&
             usage.TurnNumber == state.TurnNumber);
     }
 
-    private static void MarkUsedThisTurn(GameStateSnapshot state, int cardInstanceId, int abilityIndex)
+    private static void MarkUsedThisTurn(GameStateSnapshot state, int cardInstanceId, int abilityIndex, string usageGroup)
     {
         EnsureCurrentTurnUsages(state);
         if (state.AbilityUsages.Exists(usage =>
                 usage != null &&
                 usage.CardInstanceId == cardInstanceId &&
-                usage.AbilityIndex == abilityIndex &&
+                UsageMatches(usage, abilityIndex, usageGroup) &&
                 usage.TurnNumber == state.TurnNumber))
             return;
 
-        state.AbilityUsages.Add(new AbilityUsageSnapshot(cardInstanceId, abilityIndex, state.TurnNumber));
+        state.AbilityUsages.Add(new AbilityUsageSnapshot(cardInstanceId, abilityIndex, state.TurnNumber)
+        {
+            UsageGroup = usageGroup ?? string.Empty
+        });
+    }
+
+    private static bool UsageMatches(AbilityUsageSnapshot usage, int abilityIndex, string usageGroup)
+    {
+        return !string.IsNullOrWhiteSpace(usageGroup)
+            ? string.Equals(usage.UsageGroup, usageGroup, StringComparison.OrdinalIgnoreCase)
+            : string.IsNullOrWhiteSpace(usage.UsageGroup) && usage.AbilityIndex == abilityIndex;
     }
 
     private static void EnsureCurrentTurnUsages(GameStateSnapshot state)

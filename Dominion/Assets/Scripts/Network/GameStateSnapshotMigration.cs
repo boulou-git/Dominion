@@ -37,6 +37,8 @@ public static class GameStateSnapshotMigration
             UpgradeV2ToV3(state);
         if (state.SchemaVersion == 3)
             UpgradeV3ToV4(state);
+        if (state.SchemaVersion == 4)
+            UpgradeV4ToV5(state);
 
         return state.SchemaVersion == GameStateSnapshot.CurrentSchemaVersion;
     }
@@ -71,5 +73,12 @@ public static class GameStateSnapshotMigration
                 if (state.SupplyPiles[index] != null)
                     state.SupplyPiles[index].IsKingdom = true;
         state.SchemaVersion = 4;
+    }
+
+    private static void UpgradeV4ToV5(GameStateSnapshot state)
+    {
+        // Ability usage groups are additive. Existing entries keep their original
+        // per-ability identity through AbilityIndex when UsageGroup is empty.
+        state.SchemaVersion = 5;
     }
 }

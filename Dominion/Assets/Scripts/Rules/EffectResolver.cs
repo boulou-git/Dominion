@@ -69,7 +69,10 @@ public static class EffectResolver
         {"set_aside_selected_until_next_turn", SetAsideSelectedUntilNextTurn},
         {"set_aside_top_until_next_turn", SetAsideTopUntilNextTurn},
         {"set_aside_trigger_until_turn_end", SetAsideTriggerUntilTurnEnd},
+        {"set_aside_trigger_until_next_turn", SetAsideTriggerUntilNextTurn},
+        {"move_trigger_card", MoveTriggerCard},
         {"discard_others_named_card", DiscardOthersNamedCard}, {"end_action_phase", EndActionPhase},
+        {"modify_next_cleanup_draw", ModifyNextCleanupDraw},
         {ReactionRules.DrawDiscardOperation, AttackReactionDrawDiscard}
     };
 
@@ -649,6 +652,32 @@ public static class EffectResolver
             ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected(error);
     }
 
+    private static EffectResolutionResult SetAsideTriggerUntilNextTurn(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.TriggerEvent == null || c.TriggerEvent.CardInstanceId <= 0)
+            return EffectResolutionResult.Rejected("Invalid set_aside_trigger_until_next_turn effect.");
+        CardZone source = c.TriggerEvent.Type == GameEventType.CardDiscarded ? CardZone.Discard :
+            c.TriggerEvent.Type == GameEventType.CardTrashed ? CardZone.Trash : CardZone.None;
+        if (source == CardZone.None)
+            return EffectResolutionResult.Rejected("Only discarded or trashed cards can be replaced by set-aside.");
+        if (!SetAsideRules.TryScheduleFromZone(c.State, c.Actor, source, c.TriggerEvent.CardInstanceId,
+                c.SourceCardInstanceId, SetAsideRules.ReturnToHand, out string error))
+            return EffectResolutionResult.Rejected(error);
+        if (source == CardZone.Discard) c.Actor.CardsDiscardedThisTurn = Math.Max(0, c.Actor.CardsDiscardedThisTurn - 1);
+        else c.Actor.CardsTrashedThisTurn = Math.Max(0, c.Actor.CardsTrashedThisTurn - 1);
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult MoveTriggerCard(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.TriggerEvent == null || c.TriggerEvent.CardInstanceId <= 0 ||
+            !CardZoneRules.TryParseZone(e.sourceZone, out CardZone source) ||
+            !CardZoneRules.TryParseZone(e.destinationZone, out CardZone destination) || source == destination)
+            return EffectResolutionResult.Rejected("Invalid move_trigger_card effect.");
+        return CardZoneRules.MoveCard(c.State, c.Actor, source, destination, c.TriggerEvent.CardInstanceId)
+            ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected("Trigger card is no longer in its expected zone.");
+    }
+
     private static EffectResolutionResult DiscardOthersNamedCard(CardEffectData e, EffectExecutionContext c)
     {
         if (!Others(e) || c.Resolution == null || c.Resolution.SelectedOptionIds.Count != 1)
@@ -790,6 +819,13 @@ public static class EffectResolver
     {
         if (!Self(e) || e.amount < 0) return EffectResolutionResult.Rejected("Invalid cleanup draw penalty.");
         c.Actor.NextCleanupDrawModifier -= e.amount;
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult ModifyNextCleanupDraw(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e)) return EffectResolutionResult.Rejected("modify_next_cleanup_draw requires target self.");
+        c.Actor.NextCleanupDrawModifier += e.amount;
         return EffectResolutionResult.Applied();
     }
 

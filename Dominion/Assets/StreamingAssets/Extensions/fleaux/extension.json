@@ -40,15 +40,38 @@
     ] } ] }
   ],
   "artifacts": [
-    { "id": "etendard_divin", "name": "Étendard divin", "cost": 0, "types": ["Artefact"], "image": "", "text": "Pendant votre phase d’Ajustement, piochez 1 carte supplémentaire pour votre nouvelle main." },
+    { "id": "etendard_divin", "name": "Étendard divin", "cost": 0, "types": ["Artefact"], "image": "", "text": "Pendant votre phase d’Ajustement, piochez 1 carte supplémentaire pour votre nouvelle main.", "abilities": [
+      { "when": "turn_ended", "scope": "artifact", "filter": { "eventPlayer": "self" }, "oncePerTurn": true, "effects": [
+        { "op": "modify_next_cleanup_draw", "target": "self", "amount": 1 }
+      ] }
+    ] },
     { "id": "dent_en_or", "name": "Dent en or", "cost": 0, "types": ["Artefact"], "image": "", "text": "Au début de chacun de vos tours : +1 🪙.", "abilities": [
       { "when": "turn_started", "scope": "artifact", "filter": { "eventPlayer": "self" }, "effects": [
         { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
       ] }
     ] },
-    { "id": "sac_d_ossements", "name": "Sac d’ossements", "cost": 0, "types": ["Artefact"], "image": "", "text": "La première fois que vous recevez une carte à chacun de vos tours, vous pouvez la placer sur votre deck plutôt que dans votre défausse." },
-    { "id": "necronomicon", "name": "Nécronomicon", "cost": 0, "types": ["Artefact"], "image": "", "text": "À la fin de votre tour, vous pouvez placer une carte coûtant jusqu’à 3 🪙 de votre défausse sur votre deck." },
-    { "id": "phylactere", "name": "Phylactère", "cost": 0, "types": ["Artefact"], "image": "", "text": "La première fois à chacun de vos tours qu’une ou plusieurs de vos cartes devraient être défaussées ou écartées, vous pouvez en mettre une de côté à la place. Au début de votre prochain tour, prenez-la dans votre main. Cet effet ne peut pas se déclencher pendant votre phase d’Ajustement." },
+    { "id": "sac_d_ossements", "name": "Sac d’ossements", "cost": 0, "types": ["Artefact"], "image": "", "text": "La première fois que vous recevez une carte à chacun de vos tours, vous pouvez la placer sur votre deck plutôt que dans votre défausse.", "abilities": [
+      { "when": "card_gained", "scope": "artifact", "filter": { "eventPlayer": "self", "destinationZone": "discard" }, "oncePerTurn": true, "effects": [
+        { "op": "choose_options", "target": "self", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez placer la carte reçue sur votre deck.", "options": [ { "id": "top", "label": "Placer sur le deck" } ] },
+        { "op": "move_trigger_card", "target": "self", "sourceZone": "discard", "destinationZone": "deck", "requiresSelectedOption": "top" }
+      ] }
+    ] },
+    { "id": "necronomicon", "name": "Nécronomicon", "cost": 0, "types": ["Artefact"], "image": "", "text": "À la fin de votre tour, vous pouvez placer une carte coûtant jusqu’à 3 🪙 de votre défausse sur votre deck.", "abilities": [
+      { "when": "turn_ended", "scope": "artifact", "filter": { "eventPlayer": "self" }, "oncePerTurn": true, "effects": [
+        { "op": "choose_cards", "target": "self", "zone": "discard", "min": 0, "max": 1, "allowPass": true, "maxCost": 3, "prompt": "Vous pouvez placer une carte coûtant jusqu’à 3 🪙 de votre défausse sur votre deck." },
+        { "op": "move_selected", "target": "self", "sourceZone": "discard", "destinationZone": "deck" }
+      ] }
+    ] },
+    { "id": "phylactere", "name": "Phylactère", "cost": 0, "types": ["Artefact"], "image": "", "text": "La première fois à chacun de vos tours qu’une ou plusieurs de vos cartes devraient être défaussées ou écartées, vous pouvez en mettre une de côté à la place. Au début de votre prochain tour, prenez-la dans votre main. Cet effet ne peut pas se déclencher pendant votre phase d’Ajustement.", "abilities": [
+      { "when": "card_discarded", "scope": "artifact", "filter": { "eventPlayer": "self" }, "oncePerTurn": true, "usageGroup": "phylactere_replacement", "replacement": true, "effects": [
+        { "op": "choose_options", "target": "self", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez mettre cette carte de côté jusqu’à votre prochain tour.", "options": [ { "id": "save", "label": "Mettre de côté" } ] },
+        { "op": "set_aside_trigger_until_next_turn", "target": "self", "requiresSelectedOption": "save" }
+      ] },
+      { "when": "card_trashed", "scope": "artifact", "filter": { "eventPlayer": "self" }, "oncePerTurn": true, "usageGroup": "phylactere_replacement", "replacement": true, "effects": [
+        { "op": "choose_options", "target": "self", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez mettre cette carte de côté jusqu’à votre prochain tour.", "options": [ { "id": "save", "label": "Mettre de côté" } ] },
+        { "op": "set_aside_trigger_until_next_turn", "target": "self", "requiresSelectedOption": "save" }
+      ] }
+    ] },
     { "id": "encens_noir", "name": "Encens noir", "cost": 0, "types": ["Artefact"], "image": "", "text": "Lorsque vous prenez cet Artefact : +1 Carte. Au début de votre tour, regardez la carte du dessus de votre deck.", "abilities": [
       { "when": "artifact_gained", "effects": [ { "op": "draw", "target": "self", "amount": 1 } ] },
       { "when": "turn_started", "scope": "artifact", "filter": { "eventPlayer": "self" }, "effects": [
