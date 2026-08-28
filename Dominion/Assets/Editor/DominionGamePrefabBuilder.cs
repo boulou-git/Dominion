@@ -28,7 +28,8 @@ public static class DominionGamePrefabBuilder
             return;
         }
 
-        GameObject root = UiObject("GameScreen", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(GameScreenController));
+        GameObject root = UiObject("GameScreen", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster),
+            typeof(GameScreenController), typeof(ReserveExtrasController));
         Stretch(root.GetComponent<RectTransform>());
 
         Canvas canvas = root.GetComponent<Canvas>();
@@ -76,13 +77,13 @@ public static class DominionGamePrefabBuilder
         baseLabel.color = Muted;
         RectTransform baseSupply = EmptyRect(supplyPanel, "BaseSupply", new Vector2(0.025f, 0.055f), new Vector2(0.405f, 0.81f));
         GridLayoutGroup baseGrid = baseSupply.gameObject.AddComponent<GridLayoutGroup>();
-        ConfigureSupplyGrid(baseGrid, 4);
+        ConfigureSupplyGrid(baseGrid, 4, 100f);
 
         Text kingdomLabel = ChildText(supplyPanel, "KingdomLabel", "ROYAUME", 13, TextAnchor.MiddleLeft, new Vector2(0.43f, 0.82f), new Vector2(0.975f, 0.89f));
         kingdomLabel.color = Muted;
         RectTransform kingdomSupply = EmptyRect(supplyPanel, "KingdomSupply", new Vector2(0.43f, 0.055f), new Vector2(0.975f, 0.81f));
         GridLayoutGroup kingdomGrid = kingdomSupply.gameObject.AddComponent<GridLayoutGroup>();
-        ConfigureSupplyGrid(kingdomGrid, 5);
+        ConfigureSupplyGrid(kingdomGrid, 5, 170f);
 
         RectTransform inPlayPanel = PanelRect(center, "InPlayPanel", new Vector2(0f, 0f), new Vector2(1f, 0.355f), Panel);
         Text boardTitle = ChildText(inPlayPanel, "Header", "PLATEAU", 20, TextAnchor.MiddleLeft, new Vector2(0.025f, 0.80f), new Vector2(0.975f, 0.97f));
@@ -140,6 +141,7 @@ public static class DominionGamePrefabBuilder
         zoomClose.targetGraphic = zoomBackground;
 
         Image zoomImage = ChildImage(zoomOverlay.transform, "Card", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Color.white);
+        zoomImage.gameObject.AddComponent<AdaptiveCardZoomView>();
         RectTransform zoomRect = zoomImage.rectTransform;
         zoomRect.sizeDelta = new Vector2(500f, 771f);
         zoomRect.anchoredPosition = Vector2.zero;
@@ -171,6 +173,12 @@ public static class DominionGamePrefabBuilder
         SetSerialized(controller, "_zoomImage", zoomImage);
         SetSerialized(controller, "_zoomCloseButton", zoomClose);
 
+        ReserveExtrasController extrasController = root.GetComponent<ReserveExtrasController>();
+        SetSerialized(extrasController, "_supplyPanel", supplyPanel);
+        SetSerialized(extrasController, "_kingdomGrid", kingdomGrid);
+        SetSerialized(extrasController, "_zoomOverlay", zoomOverlay);
+        SetSerialized(extrasController, "_zoomImage", zoomImage);
+
         PrefabUtility.SaveAsPrefabAsset(root, GamePrefabPath);
         Object.DestroyImmediate(root);
 
@@ -196,9 +204,9 @@ public static class DominionGamePrefabBuilder
         return new GameObject(name, all);
     }
 
-    private static void ConfigureSupplyGrid(GridLayoutGroup grid, int columns)
+    private static void ConfigureSupplyGrid(GridLayoutGroup grid, int columns, float squareSize)
     {
-        grid.cellSize = new Vector2(82f, 127f);
+        grid.cellSize = new Vector2(squareSize, squareSize);
         grid.spacing = new Vector2(7f, 7f);
         grid.padding = new RectOffset(4, 4, 4, 4);
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;

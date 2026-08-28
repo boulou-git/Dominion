@@ -34,11 +34,14 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(prefab.GetComponent<RuntimeCardView>());
         Assert.NotNull(prefab.GetComponent<CardPointerInteraction>());
         Assert.NotNull(prefab.GetComponent<DynamicCardCostView>());
+        TopTwoThirdsCardCrop crop = prefab.GetComponent<TopTwoThirdsCardCrop>();
+        Assert.NotNull(crop);
+        Assert.AreEqual(1.5f, crop.FullArtworkHeightToWidth, 0.001f);
         RectTransform root = prefab.GetComponent<RectTransform>();
         Assert.AreEqual(root.sizeDelta.x, root.sizeDelta.y, 0.01f);
         RectTransform artwork = prefab.transform.Find("CropViewport/Artwork") as RectTransform;
         Assert.NotNull(artwork?.GetComponent<Image>());
-        Assert.Greater(artwork.sizeDelta.y, root.sizeDelta.y);
+        Assert.AreEqual(root.sizeDelta.x * 1.5f, artwork.sizeDelta.y, 0.01f);
         Assert.NotNull(prefab.transform.Find("DynamicCost")?.GetComponent<Text>());
         Assert.NotNull(prefab.transform.Find("RemainingCount/Text")?.GetComponent<Text>());
     }
@@ -99,6 +102,11 @@ public sealed class PrefabUiContractTests
         Assert.AreEqual(5, revealGrid.constraintCount);
         Assert.NotNull(lobby.transform.Find("HostSelection/CardsPanel/BackButton")?.GetComponent<Button>());
 
+        GameObject zoom = Load("CardZoomOverlay");
+        AdaptiveCardZoomView adaptiveZoom = zoom.transform.Find("ZoomedCard")?.GetComponent<AdaptiveCardZoomView>();
+        Assert.NotNull(adaptiveZoom);
+        Assert.GreaterOrEqual(adaptiveZoom.MaximumSize.x / adaptiveZoom.MaximumSize.y, 1f);
+
         GameObject flow = Load("EndGameFlow");
         Assert.NotNull(flow.GetComponent<Canvas>());
         Assert.NotNull(flow.transform.Find("EndGameSurface"));
@@ -138,8 +146,29 @@ public sealed class PrefabUiContractTests
 
         GridLayoutGroup kingdomGrid = gameScreen.transform
             .Find("SupplyPanel/KingdomSupply")?.GetComponent<GridLayoutGroup>();
+        GridLayoutGroup baseGrid = gameScreen.transform
+            .Find("SupplyPanel/BaseSupply")?.GetComponent<GridLayoutGroup>();
+        Assert.NotNull(baseGrid);
         Assert.NotNull(kingdomGrid);
         Assert.AreEqual(kingdomGrid.cellSize.x, kingdomGrid.cellSize.y, 0.01f);
+        Assert.Less(baseGrid.cellSize.x, kingdomGrid.cellSize.x);
+        Assert.Less(baseGrid.cellSize.y, kingdomGrid.cellSize.y);
+        Assert.NotNull(gameScreen.GetComponent<ReserveExtrasController>());
+        Assert.NotNull(gameScreen.transform.Find("CardZoomOverlay/Card")?.GetComponent<AdaptiveCardZoomView>());
+
+        GameObject extras = Load("ReserveExtrasUi");
+        GridLayoutGroup specialPiles = extras.transform.Find("SpecialPiles")?.GetComponent<GridLayoutGroup>();
+        GridLayoutGroup availableArtifacts = extras.transform.Find("AvailableArtifacts")?.GetComponent<GridLayoutGroup>();
+        Assert.NotNull(specialPiles);
+        Assert.NotNull(availableArtifacts);
+        Assert.AreEqual(1, specialPiles.constraintCount);
+        Assert.AreEqual(2, availableArtifacts.constraintCount);
+
+        GameObject specialPile = Load("SpecialPileTile");
+        Assert.NotNull(specialPile.GetComponent<LayoutElement>());
+        Assert.NotNull(specialPile.GetComponent<CardPointerInteraction>());
+        Assert.NotNull(specialPile.transform.Find("Name")?.GetComponent<Text>());
+        Assert.NotNull(specialPile.transform.Find("Count")?.GetComponent<Text>());
 
         GameObject playerTab = Load("PlayerBoardTab");
         Assert.NotNull(playerTab.GetComponent<Button>());
@@ -157,8 +186,11 @@ public sealed class PrefabUiContractTests
         GameObject artifact = Load("ArtifactTile");
         Assert.NotNull(artifact.GetComponent<Button>());
         Assert.NotNull(artifact.GetComponent<LayoutElement>());
+        Assert.NotNull(artifact.GetComponent<CardPointerInteraction>());
         Assert.NotNull(artifact.transform.Find("Artwork")?.GetComponent<Image>());
         Assert.NotNull(artifact.transform.Find("Label")?.GetComponent<Text>());
+        RectTransform artifactRect = artifact.GetComponent<RectTransform>();
+        Assert.AreEqual(3f, artifactRect.sizeDelta.x / artifactRect.sizeDelta.y, 0.01f);
     }
 
     private static GameObject Load(string name)

@@ -96,6 +96,7 @@ GameObject:
   - component: {fileID: 4115521395666602065}
   - component: {fileID: 1789138618365087407}
   - component: {fileID: 5367388085205101272}
+  - component: {fileID: 987654321098765432}
   m_Layer: 0
   m_Name: Card
   m_TagString: Untagged
@@ -160,6 +161,19 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &987654321098765432
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 239733576538386876}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6835ba91292b4be08e795c29d870eba8, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::AdaptiveCardZoomView
+  _maximumSize: {x: 920, y: 800}
 --- !u!1 &610316942923230497
 GameObject:
   m_ObjectHideFlags: 0
@@ -1169,6 +1183,7 @@ GameObject:
   - component: {fileID: 8535092503388633829}
   - component: {fileID: 6466854311493773546}
   - component: {fileID: 2391512759971289598}
+  - component: {fileID: 9123456789012345678}
   - component: {fileID: 6936765835813527678}
   m_Layer: 0
   m_Name: GameScreen
@@ -1313,6 +1328,22 @@ MonoBehaviour:
   _zoomOverlay: {fileID: 9046615813456756668}
   _zoomImage: {fileID: 5367388085205101272}
   _zoomCloseButton: {fileID: 124631557397848838}
+--- !u!114 &9123456789012345678
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3062384660545965052}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b197b3112f5249a7b1930f282ac86659, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ReserveExtrasController
+  _supplyPanel: {fileID: 3524281935965480367}
+  _kingdomGrid: {fileID: 6462228523253410388}
+  _zoomOverlay: {fileID: 9046615813456756668}
+  _zoomImage: {fileID: 5367388085205101272}
 --- !u!114 &6936765835813527678
 MonoBehaviour:
   m_ObjectHideFlags: 0

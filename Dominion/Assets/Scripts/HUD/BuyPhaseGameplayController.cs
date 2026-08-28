@@ -411,8 +411,16 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
                 {
                     Sprite capturedSprite = sprite;
                     ExtensionCardData capturedDefinition = definition;
-                    button.onClick.AddListener(() => ShowZoom(capturedSprite, capturedDefinition));
+                    button.onClick.AddListener(() => ShowZoom(capturedSprite, capturedDefinition, false));
                 }
+            }
+            CardPointerInteraction pointer = tile.GetComponent<CardPointerInteraction>();
+            if (pointer != null && sprite != null)
+            {
+                pointer.InspectOnLongPress = false;
+                Sprite capturedSprite = sprite;
+                ExtensionCardData capturedDefinition = definition;
+                pointer.InspectRequested += () => ShowZoom(capturedSprite, capturedDefinition, false);
             }
             _inPlayObjects.Add(tile);
         }
@@ -618,14 +626,17 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         _cleanupAnimating = false;
     }
 
-    private void ShowZoom(Sprite sprite, ExtensionCardData definition)
+    private void ShowZoom(Sprite sprite, ExtensionCardData definition, bool showCost = true)
     {
         if (_zoomOverlay == null || _zoomImage == null || sprite == null)
             return;
 
         _zoomImage.sprite = sprite;
         _zoomImage.preserveAspect = true;
-        DynamicCardCostView.Attach(_zoomImage.gameObject, definition);
+        DynamicCardCostView costView = DynamicCardCostView.Attach(_zoomImage.gameObject,
+            showCost ? definition : null);
+        if (costView != null)
+            costView.Bind(showCost ? definition : null);
         _zoomOverlay.SetActive(true);
         _zoomOverlay.transform.SetAsLastSibling();
     }
