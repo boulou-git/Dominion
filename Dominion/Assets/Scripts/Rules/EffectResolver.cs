@@ -946,7 +946,12 @@ public static class EffectResolver
         }
         return count;
     }
-    private static bool Cursor(EffectExecutionContext c) => c.AbilityIndex >= 0 && c.EffectIndex >= 0 && c.ListenerCardInstanceId > 0 && c.TriggerEvent != null && c.TriggerEvent.CardInstanceId == c.ListenerCardInstanceId;
+    // A durable decision may belong either to the event's subject card or to an
+    // external listener in hand/in play. The listener id therefore does not have
+    // to equal TriggerEvent.CardInstanceId; that relationship is preserved
+    // separately by TriggerResolver through ListenerScope and its continuation.
+    private static bool Cursor(EffectExecutionContext c) =>
+        c.AbilityIndex >= 0 && c.EffectIndex >= 0 && c.ListenerCardInstanceId > 0 && c.TriggerEvent != null;
     private static CardInstance Find(GameStateSnapshot s, int id) => s != null && s.CardInstances != null && id > 0 ? s.CardInstances.Find(x => x != null && x.InstanceId == id) : null;
     private static ExtensionCardData Def(string id)
     {

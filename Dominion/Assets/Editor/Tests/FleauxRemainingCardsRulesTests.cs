@@ -145,7 +145,8 @@ public sealed class FleauxRemainingCardsRulesTests
         AddOwned(state, player, "base:domaine", CardZone.Hand);
         AddOwned(state, player, "base:duche", CardZone.Hand);
         AddOwned(state, player, "base:malediction", CardZone.Hand);
-        for (int index = 0; index < 5; index++) AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        AddOwned(state, player, "base:village", CardZone.Deck);
+        for (int index = 0; index < 4; index++) AddOwned(state, player, "base:cuivre", CardZone.Deck);
         CardInstance execution = AddOwned(state, player, "fleaux:execution_publique", CardZone.Hand);
 
         GameRuleResult waiting = GameRules.TryPlayCard(state, player.PlayerId, execution.InstanceId, Resolve, new Random(1));
