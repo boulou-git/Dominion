@@ -80,8 +80,8 @@
       "abilities": [ { "when": "play", "effects": [
         { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "cardType": "Action", "prompt": "Vous pouvez choisir une carte Action de votre main à jouer deux fois." },
         { "op": "remember_selected_card", "target": "self", "requiresLastSelection": true },
-        { "op": "play_selected", "target": "self", "sourceZone": "hand", "lastMovedOnly": true },
-        { "op": "play_selected", "target": "self", "sourceZone": "in_play", "lastMovedOnly": true }
+        { "op": "play_selected", "target": "self", "sourceZone": "hand", "lastMovedOnly": true, "requiresLastSelection": true },
+        { "op": "play_selected", "target": "self", "sourceZone": "in_play", "lastMovedOnly": true, "requiresLastSelection": true }
       ] } ]
     },
     {

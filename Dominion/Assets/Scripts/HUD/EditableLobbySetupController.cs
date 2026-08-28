@@ -9,7 +9,7 @@ using Hashtable = ExitGames.Client.Photon.Hashtable;
 
 /// <summary>
 /// Binds the editable lobby UI to extension data and Photon room state.
-/// Flow: host selects cards -> host draws 10 -> everybody sees the same 10 -> host starts.
+/// Flow: host selects cards -> host draws 10 -> everybody inspects and readies -> host starts.
 /// </summary>
 public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 {
@@ -33,6 +33,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private readonly List<GameObject> _spawnedExtensions = new List<GameObject>();
     private readonly List<GameObject> _spawnedCards = new List<GameObject>();
     private readonly List<GameObject> _spawnedRevealCards = new List<GameObject>();
+    private readonly List<GameObject> _spawnedReadyPlayers = new List<GameObject>();
     private readonly Dictionary<RectTransform, float> _extensionTileAspectRatios = new Dictionary<RectTransform, float>();
 
     private GameSetupConfig _config;
@@ -49,7 +50,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private Coroutine _panelTransition;
     private bool _cardsPanelOpen;
     private bool _selectionFlowConfigured;
-    private bool _startWhenRevealIsPublished;
 
     private const float PanelSlideDuration = 0.24f;
 
@@ -58,6 +58,12 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
     private RectTransform _revealCardsRoot;
     private Text _revealStatus;
     private Button _revealStartButton;
+    private Button _revealReadyButton;
+    private Button _revealResetButton;
+    private Text _revealReadyLabel;
+    private RectTransform _revealPlayersRoot;
+    private GameObject _readyPlayerRowPrefab;
+    private string _renderedRevealSignature = string.Empty;
 
     // Local-only card inspection for the reveal screen.
     private GameObject _revealZoomOverlay;
@@ -139,6 +145,26 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         RefreshAll();
     }
 
+    public override void OnPlayerEnteredRoom(Player newPlayer)
+    {
+        if (_config != null && string.Equals(_config.stage, RoomGameSetup.RevealStage, StringComparison.Ordinal))
+            RefreshRevealPlayers();
+    }
+
+    public override void OnPlayerLeftRoom(Player otherPlayer)
+    {
+        if (_config != null && string.Equals(_config.stage, RoomGameSetup.RevealStage, StringComparison.Ordinal))
+            RefreshRevealPlayers();
+    }
+
+    public override void OnPlayerPropertiesUpdate(Player targetPlayer, Hashtable changedProps)
+    {
+        if (changedProps == null || !changedProps.ContainsKey(RoomGameSetup.ReadyPlayerPropertyKey))
+            return;
+        if (_config != null && string.Equals(_config.stage, RoomGameSetup.RevealStage, StringComparison.Ordinal))
+            RefreshRevealPlayers();
+    }
+
     public override void OnRoomPropertiesUpdate(Hashtable propertiesThatChanged)
     {
         if (propertiesThatChanged == null || !propertiesThatChanged.ContainsKey(RoomGameSetup.RoomPropertyKey))
@@ -147,20 +173,6 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         _config = RoomGameSetup.ReadCurrent();
         CapturePhotonState();
         RefreshAll();
-
-        // ValidateSelection publishes the chosen Kingdom asynchronously through
-        // Photon. Never initialise the match before that room property is visible,
-        // otherwise the authoritative Reserve is created without Kingdom piles.
-        if (_startWhenRevealIsPublished &&
-            PhotonNetwork.IsMasterClient &&
-            _config != null &&
-            string.Equals(_config.stage, RoomGameSetup.RevealStage, StringComparison.Ordinal) &&
-            _config.kingdomCardIds != null &&
-            _config.kingdomCardIds.Count == RoomGameSetup.KingdomCardCount)
-        {
-            _startWhenRevealIsPublished = false;
-            StartGame();
-        }
     }
 
     private void CapturePhotonState()
@@ -201,6 +213,7 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         if (reveal)
         {
             RebuildReveal();
+            RefreshRevealPlayers();
             return;
         }
 
@@ -309,9 +322,14 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
 
         _revealScreen.SetActive(true);
         _revealScreen.transform.SetAsLastSibling();
-        Clear(_spawnedRevealCards);
+        string signature = _config.kingdomCardIds != null
+            ? string.Join("|", _config.kingdomCardIds)
+            : string.Empty;
+        if (string.Equals(signature, _renderedRevealSignature, StringComparison.Ordinal))
+            return;
 
-        int shown = 0;
+        _renderedRevealSignature = signature;
+        Clear(_spawnedRevealCards);
 
         if (_config.kingdomCardIds != null)
         {
@@ -329,27 +347,62 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
                 GameObject cardObject = CreateRevealCard(card, sprite);
                 if (cardObject == null) continue;
                 _spawnedRevealCards.Add(cardObject);
-                shown++;
-
-                Image visibleImage = cardObject.GetComponent<Image>();
-                Debug.Log(
-                    "Reveal card " + cardRef
-                    + " -> object=" + cardObject.name
-                    + ", imageInstance=" + visibleImage.GetInstanceID()
-                    + ", sprite=" + (visibleImage.sprite != null ? visibleImage.sprite.name : "NULL"));
             }
+        }
+    }
+
+    private void RefreshRevealPlayers()
+    {
+        if (_revealPlayersRoot == null || _readyPlayerRowPrefab == null || !PhotonNetwork.InRoom)
+            return;
+
+        Clear(_spawnedReadyPlayers);
+        Player[] players = PhotonNetwork.PlayerList;
+        Array.Sort(players, (left, right) => left.ActorNumber.CompareTo(right.ActorNumber));
+        int readyCount = 0;
+        int masterActorNumber = PhotonNetwork.CurrentRoom != null ? PhotonNetwork.CurrentRoom.MasterClientId : -1;
+        foreach (Player player in players)
+        {
+            bool ready = RoomGameSetup.IsPlayerReady(player, _config);
+            if (ready) readyCount++;
+            GameObject row = Instantiate(_readyPlayerRowPrefab, _revealPlayersRoot);
+            row.name = "ReadyPlayer_" + player.ActorNumber;
+            Text nameText = row.transform.Find("Name")?.GetComponent<Text>();
+            Text statusText = row.transform.Find("Status")?.GetComponent<Text>();
+            Text hostText = row.transform.Find("Host")?.GetComponent<Text>();
+            bool local = PhotonNetwork.LocalPlayer != null && player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber;
+            if (nameText != null)
+            {
+                string displayName = string.IsNullOrWhiteSpace(player.NickName) ? "Joueur " + player.ActorNumber : player.NickName;
+                nameText.text = local ? displayName + " • vous" : displayName;
+            }
+            if (statusText != null)
+            {
+                statusText.text = ready ? "PRÊT" : "EN ATTENTE";
+                statusText.color = ready ? new Color(0.42f, 0.78f, 0.48f) : new Color(0.72f, 0.68f, 0.58f);
+            }
+            if (hostText != null)
+                hostText.gameObject.SetActive(player.ActorNumber == masterActorNumber);
+            _spawnedReadyPlayers.Add(row);
         }
 
         bool host = PhotonNetwork.IsMasterClient;
+        bool localReady = RoomGameSetup.IsPlayerReady(PhotonNetwork.LocalPlayer, _config);
+        bool allReady = RoomGameSetup.AreAllCurrentPlayersReady(_config);
+        if (_revealReadyLabel != null)
+            _revealReadyLabel.text = localReady ? "ANNULER PRÊT" : "JE SUIS PRÊT";
+        if (_revealResetButton != null)
+            _revealResetButton.gameObject.SetActive(host);
         if (_revealStartButton != null)
-            _revealStartButton.gameObject.SetActive(host);
-
-        if (_revealStatus != null)
         {
-            _revealStatus.text = host
-                ? shown + "/10 cartes — cliquez sur une carte pour l’agrandir."
-                : shown + "/10 cartes — cliquez sur une carte pour l’agrandir. En attente de l’hôte.";
+            _revealStartButton.gameObject.SetActive(host);
+            _revealStartButton.interactable = allReady && _config.kingdomCardIds != null &&
+                _config.kingdomCardIds.Count == RoomGameSetup.KingdomCardCount;
         }
+        if (_revealStatus != null)
+            _revealStatus.text = allReady
+                ? "Tout le monde est prêt. L’hôte peut lancer la partie."
+                : readyCount + "/" + players.Length + " joueurs prêts — cliquez sur une carte pour l’agrandir.";
     }
 
     private GameObject CreateRevealCard(ExtensionCardData card, Sprite sprite)
@@ -382,14 +435,36 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         Transform revealCards = _revealScreen.transform.Find("RevealCards");
         _revealCardsRoot = revealCards != null ? revealCards.Find("Content") as RectTransform : null;
         _revealStatus = _revealScreen.transform.Find("Status")?.GetComponent<Text>();
-        //_revealStartButton = _revealScreen.transform.Find("ValidateButton")?.GetComponent<Button>();
-        //if (_revealCardsRoot == null || _revealStatus == null || _revealStartButton == null)
-        if (_revealCardsRoot == null || _revealStatus == null )
+        if (_revealCardsRoot == null || _revealStatus == null)
         {
             Debug.LogError("LobbySetupScreen Reveal contract is incomplete.", _revealScreen);
             return;
         }
-        //_revealStartButton.onClick.AddListener(StartGame);
+
+        GameObject controlsPrefab = Resources.Load<GameObject>("UI/LobbyRevealControls");
+        _readyPlayerRowPrefab = Resources.Load<GameObject>("UI/LobbyReadyPlayerRow");
+        if (controlsPrefab == null || _readyPlayerRowPrefab == null)
+        {
+            Debug.LogError("Lobby reveal prefabs are missing from Resources/UI.", this);
+            return;
+        }
+        GameObject controls = Instantiate(controlsPrefab, _revealScreen.transform);
+        controls.name = "LobbyRevealControls";
+        _revealPlayersRoot = controls.transform.Find("Players/Content") as RectTransform;
+        _revealReadyButton = controls.transform.Find("ReadyButton")?.GetComponent<Button>();
+        _revealResetButton = controls.transform.Find("ResetButton")?.GetComponent<Button>();
+        _revealStartButton = controls.transform.Find("StartButton")?.GetComponent<Button>();
+        _revealReadyLabel = controls.transform.Find("ReadyButton/Label")?.GetComponent<Text>();
+        if (_revealPlayersRoot == null || _revealReadyButton == null || _revealResetButton == null ||
+            _revealStartButton == null || _revealReadyLabel == null)
+        {
+            Debug.LogError("LobbyRevealControls prefab contract is incomplete.", controls);
+            return;
+        }
+        _revealReadyButton.onClick.AddListener(ToggleLocalReady);
+        _revealResetButton.onClick.AddListener(ResetKingdom);
+        _revealStartButton.onClick.AddListener(StartGame);
+
         GameObject zoomPrefab = Resources.Load<GameObject>("UI/CardZoomOverlay");
         if (zoomPrefab == null)
         {
@@ -485,12 +560,25 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         if (!PhotonNetwork.IsMasterClient)
             return;
 
-        _startWhenRevealIsPublished = RoomGameSetup.FinaliseKingdom(_config);
+        RoomGameSetup.FinaliseKingdom(_config);
+    }
+
+    private void ToggleLocalReady()
+    {
+        bool ready = RoomGameSetup.IsPlayerReady(PhotonNetwork.LocalPlayer, _config);
+        RoomGameSetup.SetLocalReady(_config, !ready);
+    }
+
+    private void ResetKingdom()
+    {
+        if (PhotonNetwork.IsMasterClient)
+            RoomGameSetup.RerollKingdom(_config);
     }
 
     private void StartGame()
     {
-        if (PhotonNetwork.IsMasterClient && RoomConnectionHandler.Instance != null)
+        if (PhotonNetwork.IsMasterClient && RoomGameSetup.AreAllCurrentPlayersReady(_config) &&
+            RoomConnectionHandler.Instance != null)
             RoomConnectionHandler.Instance.StartGameMaster();
     }
 

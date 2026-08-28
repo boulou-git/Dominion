@@ -102,6 +102,16 @@ public sealed class PrefabUiContractTests
         Assert.AreEqual(5, revealGrid.constraintCount);
         Assert.NotNull(lobby.transform.Find("HostSelection/CardsPanel/BackButton")?.GetComponent<Button>());
 
+        GameObject revealControls = Load("LobbyRevealControls");
+        Assert.NotNull(revealControls.transform.Find("Players/Content")?.GetComponent<VerticalLayoutGroup>());
+        Assert.NotNull(revealControls.transform.Find("ReadyButton")?.GetComponent<Button>());
+        Assert.NotNull(revealControls.transform.Find("ResetButton")?.GetComponent<Button>());
+        Assert.NotNull(revealControls.transform.Find("StartButton")?.GetComponent<Button>());
+        GameObject readyRow = Load("LobbyReadyPlayerRow");
+        Assert.NotNull(readyRow.GetComponent<LayoutElement>());
+        Assert.NotNull(readyRow.transform.Find("Name")?.GetComponent<Text>());
+        Assert.NotNull(readyRow.transform.Find("Status")?.GetComponent<Text>());
+
         GameObject zoom = Load("CardZoomOverlay");
         AdaptiveCardZoomView adaptiveZoom = zoom.transform.Find("ZoomedCard")?.GetComponent<AdaptiveCardZoomView>();
         Assert.NotNull(adaptiveZoom);

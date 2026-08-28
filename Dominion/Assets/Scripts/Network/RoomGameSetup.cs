@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Photon.Pun;
+using Photon.Realtime;
 using ExitGames.Client.Photon;
 using UnityEngine;
 
@@ -8,6 +9,7 @@ using UnityEngine;
 public sealed class GameSetupConfig
 {
     public string stage = RoomGameSetup.SelectionStage;
+    public int revealRevision;
     public List<ExtensionSetupSelection> extensions = new List<ExtensionSetupSelection>();
     public List<string> kingdomCardIds = new List<string>();
 }
@@ -27,6 +29,7 @@ public sealed class ExtensionSetupSelection
 public static class RoomGameSetup
 {
     public const string RoomPropertyKey = "dominion.setup";
+    public const string ReadyPlayerPropertyKey = "dominion.setupReadyRevision";
     public const string SelectionStage = "Selection";
     public const string RevealStage = "Reveal";
     public const int KingdomCardCount = 10;
@@ -97,18 +100,79 @@ public static class RoomGameSetup
             return false;
         }
 
-        System.Random random = new System.Random(unchecked(Environment.TickCount * 397 ^ PhotonNetwork.CurrentRoom.Name.GetHashCode()));
-        for (int i = pool.Count - 1; i > 0; i--)
-        {
-            int j = random.Next(i + 1);
-            string temp = pool[i];
-            pool[i] = pool[j];
-            pool[j] = temp;
-        }
-
+        Shuffle(pool, CreateRandom());
         config.kingdomCardIds = pool.GetRange(0, KingdomCardCount);
         config.stage = RevealStage;
+        config.revealRevision = Math.Max(0, config.revealRevision) + 1;
         return Publish(config);
+    }
+
+    public static bool RerollKingdom(GameSetupConfig config)
+    {
+        if (!PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient || config == null)
+            return false;
+
+        List<string> pool = BuildEnabledCardPool(config);
+        if (pool.Count < KingdomCardCount)
+            return false;
+
+        HashSet<string> previous = new HashSet<string>(config.kingdomCardIds ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+        System.Random random = CreateRandom();
+        List<string> next = null;
+        for (int attempt = 0; attempt < 16; attempt++)
+        {
+            Shuffle(pool, random);
+            next = pool.GetRange(0, KingdomCardCount);
+            if (pool.Count == KingdomCardCount || !previous.SetEquals(next))
+                break;
+        }
+
+        // A different set is possible whenever the pool contains more than ten cards.
+        // Guarantee it even if the random retries happened to return the same set.
+        if (pool.Count > KingdomCardCount && previous.SetEquals(next))
+        {
+            string replacement = pool.Find(cardRef => !previous.Contains(cardRef));
+            if (!string.IsNullOrEmpty(replacement))
+                next[KingdomCardCount - 1] = replacement;
+        }
+
+        config.kingdomCardIds = next;
+        config.stage = RevealStage;
+        config.revealRevision = Math.Max(0, config.revealRevision) + 1;
+        return Publish(config);
+    }
+
+    public static bool SetLocalReady(GameSetupConfig config, bool ready)
+    {
+        if (!PhotonNetwork.InRoom || PhotonNetwork.LocalPlayer == null || config == null)
+            return false;
+
+        Hashtable properties = new Hashtable
+        {
+            { ReadyPlayerPropertyKey, ready ? config.revealRevision : -1 }
+        };
+        return PhotonNetwork.LocalPlayer.SetCustomProperties(properties);
+    }
+
+    public static bool IsPlayerReady(Player player, GameSetupConfig config)
+    {
+        if (player == null || config == null || config.revealRevision <= 0 ||
+            !string.Equals(config.stage, RevealStage, StringComparison.Ordinal) ||
+            player.CustomProperties == null || !player.CustomProperties.TryGetValue(ReadyPlayerPropertyKey, out object value))
+            return false;
+
+        try { return Convert.ToInt32(value) == config.revealRevision; }
+        catch { return false; }
+    }
+
+    public static bool AreAllCurrentPlayersReady(GameSetupConfig config)
+    {
+        if (!PhotonNetwork.InRoom || PhotonNetwork.PlayerList == null || PhotonNetwork.PlayerList.Length == 0)
+            return false;
+        foreach (Player player in PhotonNetwork.PlayerList)
+            if (!IsPlayerReady(player, config))
+                return false;
+        return true;
     }
 
     public static ExtensionSetupSelection FindExtension(GameSetupConfig config, string extensionId)
@@ -190,6 +254,8 @@ public static class RoomGameSetup
             config.extensions = new List<ExtensionSetupSelection>();
         if (config.kingdomCardIds == null)
             config.kingdomCardIds = new List<string>();
+        if (string.Equals(config.stage, RevealStage, StringComparison.Ordinal) && config.revealRevision <= 0)
+            config.revealRevision = 1;
 
         foreach (ExtensionPackageData package in ExtensionCatalog.All)
         {
@@ -209,6 +275,23 @@ public static class RoomGameSetup
 
         config.kingdomCardIds = NormaliseKingdomCardRefs(config.kingdomCardIds);
         return config;
+    }
+
+    private static System.Random CreateRandom()
+    {
+        string roomName = PhotonNetwork.CurrentRoom != null ? PhotonNetwork.CurrentRoom.Name : string.Empty;
+        return new System.Random(unchecked(Environment.TickCount * 397 ^ roomName.GetHashCode()));
+    }
+
+    private static void Shuffle(List<string> values, System.Random random)
+    {
+        for (int i = values.Count - 1; i > 0; i--)
+        {
+            int j = random.Next(i + 1);
+            string temp = values[i];
+            values[i] = values[j];
+            values[j] = temp;
+        }
     }
 
     private static List<string> NormaliseKingdomCardRefs(List<string> cardRefs)
