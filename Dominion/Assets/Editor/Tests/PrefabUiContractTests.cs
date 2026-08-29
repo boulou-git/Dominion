@@ -7,6 +7,28 @@ using UnityEngine.UI;
 public sealed class PrefabUiContractTests
 {
     [Test]
+    public void JournalChatAndEntries_ArePrefabAuthored()
+    {
+        GameObject surface = Load("JournalSurface");
+        Transform scroll = surface.transform.Find("EntriesScroll");
+        Transform viewport = scroll?.Find("Viewport");
+        Transform content = viewport?.Find("Content");
+        Assert.NotNull(scroll?.GetComponent<ScrollRect>());
+        Assert.NotNull(viewport?.GetComponent<Mask>());
+        Assert.NotNull(content?.GetComponent<VerticalLayoutGroup>());
+        Assert.NotNull(content?.GetComponent<ContentSizeFitter>());
+        InputField input = surface.transform.Find("Composer/MessageInput")?.GetComponent<InputField>();
+        Assert.NotNull(input);
+        Assert.AreEqual(JournalRules.MaxChatLength, input.characterLimit);
+        Assert.NotNull(surface.transform.Find("Composer/SendButton")?.GetComponent<Button>());
+
+        GameObject entry = Load("JournalEntry");
+        Assert.NotNull(entry.GetComponent<Text>());
+        Assert.NotNull(entry.GetComponent<Button>());
+        Assert.NotNull(entry.GetComponent<ContentSizeFitter>());
+    }
+
+    [Test]
     public void RuntimeCard_IsTheSharedCompleteCardVisual()
     {
         GameObject prefab = Load("RuntimeCard");

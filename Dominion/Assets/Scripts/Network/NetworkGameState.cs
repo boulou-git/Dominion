@@ -210,6 +210,7 @@ public static class NetworkGameState
         GameStateSnapshot next = Clone(_state);
         GameRuleResult result = GameRules.TryPlayCard(next, requesterPlayerId, instanceId, ResolveCardDefinition, NewRandom());
         if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning("Rejected PlayCard command: " + result.Error); return false; }
+        JournalRules.RecordEvents(next, result.Events);
         return CommitState(next);
     }
 
@@ -219,6 +220,7 @@ public static class NetworkGameState
         GameStateSnapshot next = Clone(_state);
         GameRuleResult result = GameRules.TryBuyCard(next, requesterPlayerId, definitionId, ResolveCardDefinition, NewRandom());
         if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning("Rejected BuyCard command: " + result.Error); return false; }
+        JournalRules.RecordEvents(next, result.Events);
         return CommitState(next);
     }
 
@@ -227,8 +229,11 @@ public static class NetworkGameState
     {
         if (!ValidateDecisionCommand(requesterPlayerId, decisionId, expectedVersion, expectedAuthorityEpoch)) return false;
         GameStateSnapshot next = Clone(_state);
+        PendingDecisionSnapshot decision = CloneDecision(next.Resolution.PendingDecision);
+        JournalRules.RecordInstanceChoice(next, decision, selectedInstanceIds);
         GameRuleResult result = GameRules.TrySubmitDecision(next, requesterPlayerId, decisionId, selectedInstanceIds, ResolveCardDefinition, NewRandom());
         if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning("Rejected SubmitDecision command: " + result.Error); return false; }
+        JournalRules.RecordEvents(next, result.Events);
         return CompleteCleanupAfterDecision(next, result) && CommitState(next);
     }
 
@@ -237,8 +242,11 @@ public static class NetworkGameState
     {
         if (!ValidateDecisionCommand(requesterPlayerId, decisionId, expectedVersion, expectedAuthorityEpoch)) return false;
         GameStateSnapshot next = Clone(_state);
+        PendingDecisionSnapshot decision = CloneDecision(next.Resolution.PendingDecision);
+        JournalRules.RecordDefinitionChoice(next, decision, selectedDefinitionIds);
         GameRuleResult result = GameRules.TrySubmitSupplyDecision(next, requesterPlayerId, decisionId, selectedDefinitionIds, ResolveCardDefinition, NewRandom());
         if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning("Rejected SubmitSupplyDecision command: " + result.Error); return false; }
+        JournalRules.RecordEvents(next, result.Events);
         return CompleteCleanupAfterDecision(next, result) && CommitState(next);
     }
 
@@ -247,9 +255,25 @@ public static class NetworkGameState
     {
         if (!ValidateDecisionCommand(requesterPlayerId, decisionId, expectedVersion, expectedAuthorityEpoch)) return false;
         GameStateSnapshot next = Clone(_state);
+        PendingDecisionSnapshot decision = CloneDecision(next.Resolution.PendingDecision);
+        JournalRules.RecordOptionChoice(next, decision, selectedOptionIds);
         GameRuleResult result = GameRules.TrySubmitOptionDecision(next, requesterPlayerId, decisionId, selectedOptionIds, ResolveCardDefinition, NewRandom());
         if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning("Rejected SubmitOptionDecision command: " + result.Error); return false; }
+        JournalRules.RecordEvents(next, result.Events);
         return CompleteCleanupAfterDecision(next, result) && CommitState(next);
+    }
+
+    public static bool TrySendChatMessage(string requesterPlayerId, string message, int expectedAuthorityEpoch)
+    {
+        if (!CanWrite() || _state == null || !_state.IsStarted || _state.AuthorityEpoch != expectedAuthorityEpoch) return false;
+        GameStateSnapshot next = Clone(_state);
+        if (!JournalRules.TryRecordChat(next, requesterPlayerId, message,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), out string error))
+        {
+            Debug.LogWarning("Rejected chat message: " + error);
+            return false;
+        }
+        return CommitState(next);
     }
 
     private static void CreateSupply(GameStateSnapshot state, int playerCount)
@@ -372,6 +396,7 @@ public static class NetworkGameState
         GameRuleResult ended = TurnLifecycleRules.TryResolveTurnEnded(state, current, ResolveCardDefinition, NewRandom());
         if (ended.Status == GameRuleStatus.Rejected)
         { Debug.LogError("Could not resolve end-of-turn effects: " + ended.Error); return false; }
+        JournalRules.RecordEvents(state, ended.Events);
         if (ended.Status == GameRuleStatus.WaitingForChoice) return true;
         if (!SetAsideRules.TryResolveTurnEnd(state, current, out string setAsideError))
         { Debug.LogError("Could not resolve end-of-turn set-aside cards: " + setAsideError); return false; }
@@ -401,6 +426,7 @@ public static class NetworkGameState
             Debug.LogError("Could not resolve start-of-turn effects: " + start.Error);
             return false;
         }
+        JournalRules.RecordEvents(state, start.Events);
         return true;
     }
 
@@ -518,6 +544,13 @@ public static class NetworkGameState
         if (state == null) return null;
         GameStateSnapshot clone = JsonUtility.FromJson<GameStateSnapshot>(JsonUtility.ToJson(state));
         NormaliseCollections(clone); return clone;
+    }
+
+    private static PendingDecisionSnapshot CloneDecision(PendingDecisionSnapshot decision)
+    {
+        return decision != null
+            ? JsonUtility.FromJson<PendingDecisionSnapshot>(JsonUtility.ToJson(decision))
+            : null;
     }
 
     private static void NormaliseCollections(GameStateSnapshot state)

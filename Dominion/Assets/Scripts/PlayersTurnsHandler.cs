@@ -81,6 +81,17 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
 
     public void FinishTurn() => AdvancePhase();
 
+    public void SendChatMessage(string message)
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (state == null || !state.IsStarted || string.IsNullOrWhiteSpace(message)) return;
+        message = message.Trim();
+        if (message.Length > JournalRules.MaxChatLength)
+            message = message.Substring(0, JournalRules.MaxChatLength);
+        photonView.RPC(nameof(RpcRequestChatMessage), RpcTarget.MasterClient,
+            NetworkGameState.LocalPlayerId, message, state.AuthorityEpoch);
+    }
+
     [PunRPC]
     private void RpcRequestAdvancePhase(string requesterPlayerId, int[] visualHandOrder, int expectedVersion, int expectedAuthorityEpoch, PhotonMessageInfo info)
     {
@@ -130,6 +141,14 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
         if (!ValidateSender(requesterPlayerId, info)) return;
         if (!NetworkGameState.TrySubmitOptionDecision(requesterPlayerId, decisionId, selectedOptionIds, expectedVersion, expectedAuthorityEpoch))
             Debug.LogWarning("Rejected stale or invalid SubmitOptionDecision command.");
+    }
+
+    [PunRPC]
+    private void RpcRequestChatMessage(string requesterPlayerId, string message, int expectedAuthorityEpoch,
+        PhotonMessageInfo info)
+    {
+        if (!ValidateSender(requesterPlayerId, info)) return;
+        NetworkGameState.TrySendChatMessage(requesterPlayerId, message, expectedAuthorityEpoch);
     }
 
     private static bool CanSendActivePlayerCommand(GameStateSnapshot state)

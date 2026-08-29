@@ -39,6 +39,8 @@ public static class GameStateSnapshotMigration
             UpgradeV3ToV4(state);
         if (state.SchemaVersion == 4)
             UpgradeV4ToV5(state);
+        if (state.SchemaVersion == 5)
+            UpgradeV5ToV6(state);
 
         return state.SchemaVersion == GameStateSnapshot.CurrentSchemaVersion;
     }
@@ -80,5 +82,10 @@ public static class GameStateSnapshotMigration
         // Ability usage groups are additive. Existing entries keep their original
         // per-ability identity through AbilityIndex when UsageGroup is empty.
         state.SchemaVersion = 5;
+    }
+
+    private static void UpgradeV5ToV6(GameStateSnapshot state)
+    {
+        state.SchemaVersion = 6;
     }
 }

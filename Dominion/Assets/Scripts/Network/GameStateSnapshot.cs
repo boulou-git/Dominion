@@ -9,7 +9,7 @@ using System.Collections.Generic;
 [Serializable]
 public class GameStateSnapshot
 {
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
 
     // Version of the serialized snapshot shape. This is deliberately separate from
     // Version, which is the monotonic revision number of one running match.
@@ -89,6 +89,8 @@ public class GameJournalEntrySnapshot
     public string PlayerId;
     public string PlayerName;
     public string CardDefinitionId;
+    public string SourceCardDefinitionId;
+    public string Message;
 }
 
 [Serializable]
@@ -168,6 +170,7 @@ public class PlayerStateSnapshot
     public int ActorNumber;
     public string NickName;
     public bool IsConnected = true;
+    public long LastChatMessageUnixMilliseconds;
 
     // All zones contain CardInstance.InstanceId values.
     public List<int> Deck = new List<int>();
