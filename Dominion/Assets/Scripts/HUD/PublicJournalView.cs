@@ -25,12 +25,15 @@ public sealed class PublicJournalView : MonoBehaviour, IPointerClickHandler
 
     private readonly List<CardLink> _cardLinks = new List<CardLink>();
 
+    private GameScreenController _screen;
     private Text _journalText;
     private GameObject _zoomOverlay;
     private Image _zoomImage;
 
     private void Awake()
     {
+        _screen = GetComponent<GameScreenController>();
+
         Transform journalPanel = transform.Find("JournalPanel");
         Transform journalTextTransform = journalPanel != null ? journalPanel.Find("JournalText") : null;
         _journalText = journalTextTransform != null ? journalTextTransform.GetComponent<Text>() : null;
@@ -53,12 +56,29 @@ public sealed class PublicJournalView : MonoBehaviour, IPointerClickHandler
         _journalText.supportRichText = true;
 
         NetworkGameState.StateChanged += Refresh;
+        if (_screen != null)
+            _screen.BoardPlayerChanged += HandleBoardPlayerChanged;
+
+        Refresh(NetworkGameState.State);
+    }
+
+    private void Start()
+    {
+        // GameScreenController also performs a final Start-time refresh. This view has
+        // a later execution order so the styled journal remains the final presentation.
         Refresh(NetworkGameState.State);
     }
 
     private void OnDestroy()
     {
         NetworkGameState.StateChanged -= Refresh;
+        if (_screen != null)
+            _screen.BoardPlayerChanged -= HandleBoardPlayerChanged;
+    }
+
+    private void HandleBoardPlayerChanged()
+    {
+        Refresh(NetworkGameState.State);
     }
 
     public void OnPointerClick(PointerEventData eventData)
