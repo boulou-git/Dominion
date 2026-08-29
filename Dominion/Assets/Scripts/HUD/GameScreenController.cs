@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Photon.Pun;
 using UnityEngine;
 using UnityEngine.UI;
@@ -11,6 +12,8 @@ using static UnityEngine.GraphicsBuffer;
 /// </summary>
 public sealed class GameScreenController : MonoBehaviour
 {
+    private const int MaxJournalEntries = 32;
+
     [Serializable]
     private sealed class PlayerColorTarget
     {
@@ -163,6 +166,7 @@ public sealed class GameScreenController : MonoBehaviour
             if (_discardText != null) _discardText.text = "DÉFAUSSE\n—";
             if (_handCountText != null) _handCountText.text = "Main  —";
             if (_statusText != null) _statusText.text = "Synchronisation du GameState…";
+            if (_journalText != null) _journalText.text = "En attente de la partie…";
             if (_nextPhaseButton != null) _nextPhaseButton.interactable = false;
             return;
         }
@@ -215,8 +219,84 @@ public sealed class GameScreenController : MonoBehaviour
                 _statusText.text = "En attente du joueur actif";
         }
 
-        if (_journalText != null && activePlayer != null)
-            _journalText.text = "Tour " + state.TurnNumber + "\n\n" + activePlayer.NickName + " — phase " + PhaseLabel(state.Phase) + ".";
+        RefreshJournal(state, activePlayer);
+    }
+
+    private void RefreshJournal(GameStateSnapshot state, PlayerStateSnapshot activePlayer)
+    {
+        if (_journalText == null)
+            return;
+
+        string activeName = activePlayer != null && !string.IsNullOrWhiteSpace(activePlayer.NickName)
+            ? activePlayer.NickName
+            : "Joueur";
+
+        StringBuilder text = new StringBuilder();
+        text.Append("Tour ")
+            .Append(state.TurnNumber)
+            .Append(" — ")
+            .Append(activeName)
+            .Append(" — ")
+            .Append(PhaseLabel(state.Phase));
+
+        int visible = 0;
+        List<GameJournalEntrySnapshot> journal = state.Journal;
+        if (journal != null)
+        {
+            for (int index = journal.Count - 1; index >= 0 && visible < MaxJournalEntries; index--)
+            {
+                string line = FormatJournalEntry(journal[index]);
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                text.Append('\n').Append(line);
+                visible++;
+            }
+        }
+
+        if (visible == 0)
+            text.Append("\nAucune activité publique.");
+
+        _journalText.text = text.ToString();
+    }
+
+    private static string FormatJournalEntry(GameJournalEntrySnapshot entry)
+    {
+        if (entry == null)
+            return string.Empty;
+
+        string player = string.IsNullOrWhiteSpace(entry.PlayerName) ? "Joueur" : entry.PlayerName;
+        string cardName = ResolveJournalCardName(entry.CardDefinitionId);
+        string sourceName = ResolveJournalCardName(entry.SourceCardDefinitionId);
+
+        switch (entry.Kind)
+        {
+            case JournalRules.ChatKind:
+                return player + " : " + entry.Message;
+            case JournalRules.PlayedKind:
+                return "T" + entry.TurnNumber + " · " + player + " joue " + cardName + ".";
+            case JournalRules.GainedKind:
+                return "T" + entry.TurnNumber + " · " + player + " reçoit " + cardName + ".";
+            case JournalRules.ChoiceKind:
+                return "T" + entry.TurnNumber + " · " + player + " choisit « " + entry.Message + " »" +
+                       (!string.IsNullOrWhiteSpace(sourceName) ? " pour " + sourceName : string.Empty) + ".";
+            case JournalRules.RevealKind:
+                return "T" + entry.TurnNumber + " · " + player + " révèle " + cardName + ".";
+            default:
+                return string.Empty;
+        }
+    }
+
+    private static string ResolveJournalCardName(string definitionId)
+    {
+        if (string.IsNullOrWhiteSpace(definitionId))
+            return string.Empty;
+
+        ExtensionPackageData extension;
+        ExtensionCardData definition;
+        return RoomGameSetup.TryResolveCard(definitionId, out extension, out definition) && definition != null
+            ? definition.name
+            : definitionId;
     }
 
     private PlayerStateSnapshot ResolveLocalPlayer(GameStateSnapshot state)
