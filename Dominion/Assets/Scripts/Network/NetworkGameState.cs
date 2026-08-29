@@ -74,13 +74,13 @@ public static class NetworkGameState
     {
         if (!PhotonNetwork.InRoom || PhotonNetwork.CurrentRoom == null) return false;
         if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(StatePropertyKey)) return false;
-        return ApplyJson(PhotonNetwork.CurrentRoom.CustomProperties[StatePropertyKey] as string, force);
+        return ApplyPayload(PhotonNetwork.CurrentRoom.CustomProperties[StatePropertyKey], force);
     }
 
     public static bool ApplyRoomProperties(Hashtable changedProperties)
     {
         if (changedProperties == null || !changedProperties.ContainsKey(StatePropertyKey)) return false;
-        return ApplyJson(changedProperties[StatePropertyKey] as string, false);
+        return ApplyPayload(changedProperties[StatePropertyKey], false);
     }
 
     public static void ResetLocalState()
@@ -506,10 +506,22 @@ public static class NetworkGameState
         }
 
         string json = JsonUtility.ToJson(committed);
-        Hashtable properties = new Hashtable { { StatePropertyKey, json } };
+        byte[] payload = NetworkGameStatePhotonPayload.Encode(json);
+        if (payload == null || payload.Length == 0)
+        {
+            Debug.LogError("Could not encode Dominion game state for Photon replication.");
+            return false;
+        }
+        Hashtable properties = new Hashtable { { StatePropertyKey, payload } };
         bool queued = PhotonNetwork.CurrentRoom.SetCustomProperties(properties);
         if (!queued) return false;
         SetLocalState(committed); return true;
+    }
+
+    private static bool ApplyPayload(object payload, bool force)
+    {
+        if (!NetworkGameStatePhotonPayload.TryDecode(payload, out string json)) return false;
+        return ApplyJson(json, force);
     }
 
     private static bool ApplyJson(string json, bool force)
