@@ -17,6 +17,7 @@ public static class DeclarativeRuleVocabulary
     public const string PileEmptiedTiming = "pile_emptied";
     public const string ArtifactGainedTiming = "artifact_gained";
     public const string DiseaseGainedTiming = "disease_gained";
+    public const string CardRevealedTiming = "card_revealed";
 
     public const string SubjectScope = "subject";
     public const string InHandScope = "in_hand";
@@ -46,6 +47,7 @@ public static class DeclarativeRuleVocabulary
         PileEmptiedTiming,
         ArtifactGainedTiming,
         DiseaseGainedTiming,
+        CardRevealedTiming,
         ReactionRules.AttackReactionTiming
     };
 

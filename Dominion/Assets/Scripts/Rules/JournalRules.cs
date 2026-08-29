@@ -29,6 +29,25 @@ public static class JournalRules
         foreach (int id in new List<int>(cards)) RecordReveal(state, player, id);
     }
 
+    public static void PublishReveal(GameStateSnapshot state, PlayerStateSnapshot player, int cardInstanceId,
+        CardZone sourceZone, int sourceCardInstanceId, GameEventBus eventBus)
+    {
+        CardInstance card = FindCard(state, cardInstanceId);
+        if (card == null) return;
+        RecordReveal(state, player, card.DefinitionId);
+        eventBus?.Publish(GameEvent.CardRevealed(player != null ? player.PlayerId : string.Empty,
+            cardInstanceId, card.DefinitionId, sourceZone, sourceCardInstanceId));
+    }
+
+    public static void PublishRevealZone(GameStateSnapshot state, PlayerStateSnapshot player, CardZone zone,
+        int sourceCardInstanceId, GameEventBus eventBus)
+    {
+        List<int> cards = CardZoneRules.ResolveZone(state, player, zone);
+        if (cards == null) return;
+        foreach (int id in new List<int>(cards))
+            PublishReveal(state, player, id, zone, sourceCardInstanceId, eventBus);
+    }
+
     public static void RecordEvents(GameStateSnapshot state, IEnumerable<GameEvent> events)
     {
         if (state == null || events == null) return;

@@ -57,6 +57,7 @@ public static class EffectResolver
         {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_source_card", DiscardSourceCard}, {"discard_others_down_to", DiscardOthersDownTo},
         {"move_selected", MoveSelected}, {"move_last_moved", MoveLastMoved}, {"move_all_matching_types", MoveAllMatchingTypes},
         {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected}, {"play_selected_twice_then_trash", PlaySelectedTwiceThenTrash}, {"insert_selected_into_deck", InsertSelectedIntoDeck},
+        {"play_trigger_card", PlayTriggerCard}, {"discard_trigger_card", DiscardTriggerCard},
         {"choose_supply", ChooseSupply}, {"gain_card", GainCard}, {"gain_selected_supply", GainSelectedSupply},
         {"gain_selected_trash", GainSelectedTrash}, {"trash_selected_supply", TrashSelectedSupply},
         {"reveal_zone", RevealZone}, {"trash_source_card", TrashSourceCard},
@@ -348,7 +349,7 @@ public static class EffectResolver
             if (p == null || p.PlayerId == c.Actor.PlayerId || SkipAttackTarget(c, p)) continue; List<int> cards = Eligible(c.State, p, src, e.cardId, e.cardType, 0);
             if (cards.Count < min)
             {
-                if (publicReveal) JournalRules.RecordRevealZone(c.State, p, src);
+                if (publicReveal) JournalRules.PublishRevealZone(c.State, p, src, c.SourceCardInstanceId, c.EventBus);
                 continue;
             }
             targets.Add(p); choices.Add(cards);
@@ -394,7 +395,7 @@ public static class EffectResolver
 
         CardInstance card = Find(c.State, instanceId);
         if (card == null) return EffectResolutionResult.Rejected("Revealed card instance could not be resolved.");
-        JournalRules.RecordReveal(c.State, c.Actor, instanceId);
+        JournalRules.PublishReveal(c.State, c.Actor, instanceId, CardZone.Inspected, c.SourceCardInstanceId, c.EventBus);
         string namedDefinitionId = c.Resolution.TakeSelectedOptionIds()[0];
         CardZone destination = string.Equals(card.DefinitionId, namedDefinitionId, StringComparison.OrdinalIgnoreCase)
             ? CardZone.Hand
@@ -416,7 +417,7 @@ public static class EffectResolver
             if (!CardZoneRules.TryMoveTopCardFromDeck(c.Actor, CardZone.Inspected, c.Random, out int id, out string error))
                 return EffectResolutionResult.Rejected(error);
             if (id <= 0) break;
-            if (publicReveal) JournalRules.RecordReveal(c.State, c.Actor, id);
+            if (publicReveal) JournalRules.PublishReveal(c.State, c.Actor, id, CardZone.Inspected, c.SourceCardInstanceId, c.EventBus);
         }
         return EffectResolutionResult.Applied();
     }
@@ -454,7 +455,11 @@ public static class EffectResolver
     private static EffectResolutionResult RevealSelected(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("Invalid reveal_selected effect.");
-        foreach (int id in c.Resolution.SelectedInstanceIds) JournalRules.RecordReveal(c.State, c.Actor, id);
+        foreach (int id in c.Resolution.SelectedInstanceIds)
+        {
+            CardZone source = CardZoneRules.TryFindOwnedZone(c.Actor, id, out CardZone found) ? found : CardZone.None;
+            JournalRules.PublishReveal(c.State, c.Actor, id, source, c.SourceCardInstanceId, c.EventBus);
+        }
         return EffectResolutionResult.Applied();
     }
 
@@ -601,6 +606,51 @@ public static class EffectResolver
         c.EventBus.Publish(GameEvent.CardPlayed(c.Actor.PlayerId, i.InstanceId, i.DefinitionId)); return EffectResolutionResult.Applied();
     }
 
+    private static EffectResolutionResult PlayTriggerCard(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || c.EventBus == null || c.TriggerEvent == null ||
+            c.TriggerEvent.Type != GameEventType.CardRevealed || c.TriggerEvent.CardInstanceId <= 0)
+            return EffectResolutionResult.Rejected("Invalid play_trigger_card effect.");
+        int id = c.TriggerEvent.CardInstanceId;
+        CardInstance card = Find(c.State, id);
+        ExtensionCardData definition = card != null ? Def(card.DefinitionId) : null;
+        if (card == null || definition == null || card.OwnerPlayerId != c.Actor.PlayerId)
+            return EffectResolutionResult.Rejected("Revealed trigger card is invalid.");
+        bool foundOwnedZone = CardZoneRules.TryFindOwnedZone(c.Actor, id, out CardZone source);
+        if (!foundOwnedZone && c.State.TrashedCards != null && c.State.TrashedCards.Contains(id)) source = CardZone.Trash;
+        else if (!foundOwnedZone) return EffectResolutionResult.Rejected("Revealed trigger card is not in a playable zone.");
+        if (source != CardZone.InPlay && !CardZoneRules.MoveCard(c.State, c.Actor, source, CardZone.InPlay, id))
+            return EffectResolutionResult.Rejected("Revealed trigger card could not be moved into play.");
+        if (CardDefinitionRules.HasType(definition, "Action")) c.Actor.ActionsPlayedThisTurn++;
+        if (CardDefinitionRules.HasType(definition, "Attaque"))
+        {
+            c.Resolution.ClearAttackProtection();
+            GameRuleResult reactions = GameRules.TryStartAttackReactions(c.State, c.Actor, card, definition,
+                c.Resolution, Def, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId,
+                c.AbilityIndex, c.EffectIndex);
+            if (reactions != null)
+                return reactions.Status == GameRuleStatus.Rejected
+                    ? EffectResolutionResult.Rejected(reactions.Error)
+                    : EffectResolutionResult.WaitingForChoice();
+        }
+        c.EventBus.Publish(GameEvent.CardPlayed(c.Actor.PlayerId, id, card.DefinitionId));
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult DiscardTriggerCard(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.TriggerEvent == null || c.TriggerEvent.CardInstanceId <= 0 || c.EventBus == null)
+            return EffectResolutionResult.Rejected("Invalid discard_trigger_card effect.");
+        int id = c.TriggerEvent.CardInstanceId;
+        if (c.Actor.Discard != null && c.Actor.Discard.Contains(id)) return EffectResolutionResult.Applied();
+        if (c.Actor.InPlay == null || !c.Actor.InPlay.Contains(id))
+            return EffectResolutionResult.Rejected("Trigger card is not in play for discard.");
+        return DiscardRules.TryDiscardSelected(c.State, c.Actor, CardZone.InPlay, new[] { id },
+                c.SourceCardInstanceId, c.EventBus, out string error)
+            ? EffectResolutionResult.Applied()
+            : EffectResolutionResult.Rejected(error);
+    }
+
     private static EffectResolutionResult PlaySelectedTwiceThenTrash(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null || c.EventBus == null ||
@@ -700,7 +750,7 @@ public static class EffectResolver
                     CardInstance card = Find(c.State, id);
                     return card != null && string.Equals(card.DefinitionId, namedId, StringComparison.OrdinalIgnoreCase);
                 }) : 0;
-                if (match <= 0) { JournalRules.RecordRevealZone(c.State, target, CardZone.Hand); continue; }
+                if (match <= 0) { JournalRules.PublishRevealZone(c.State, target, CardZone.Hand, c.SourceCardInstanceId, c.EventBus); continue; }
                 if (!DiscardRules.TryDiscardSelectedFromHand(c.State, target, new[] { match }, c.SourceCardInstanceId,
                         c.EventBus, out string error)) return EffectResolutionResult.Rejected(error);
                 discarded++;
@@ -857,7 +907,7 @@ public static class EffectResolver
     {
         if (!Self(e) || !CardZoneRules.TryParseZone(e.zone, out CardZone zone))
             return EffectResolutionResult.Rejected("Invalid reveal_zone effect.");
-        JournalRules.RecordRevealZone(c.State, c.Actor, zone);
+        JournalRules.PublishRevealZone(c.State, c.Actor, zone, c.SourceCardInstanceId, c.EventBus);
         return EffectResolutionResult.Applied();
     }
 

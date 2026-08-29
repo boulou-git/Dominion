@@ -33,10 +33,12 @@
       { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
       { "op": "gain_card", "target": "self", "cardId": "base:domaine", "amount": 1, "destinationZone": "discard" }
     ] } ] },
-    { "id": "horreur", "name": "Horreur", "cost": 0, "types": ["Action", "Attaque"], "image": "horreur.png", "text": "Chaque autre joueur défausse jusqu’à avoir 4 cartes en main et recoit une malediction.\n\nLorsque vous revelez cette carte, jouez la et mettez la dans votre defausse", "abilities": [ { "when": "play", "effects": [
+    { "id": "horreur", "name": "Horreur", "cost": 0, "types": ["Action", "Attaque"], "image": "horreur.png", "text": "Chaque autre joueur défausse jusqu’à avoir 4 cartes en main et reçoit une Malédiction.\n\nLorsque vous révélez cette carte, jouez-la et mettez-la dans votre défausse.", "abilities": [ { "when": "play", "effects": [
       { "op": "discard_others_down_to", "target": "others", "amount": 4, "prompt": "Défaussez jusqu’à avoir 4 cartes en main." },
-      { "op": "choose_cards", "target": "self", "zone": "discard", "min": 0, "max": 1, "allowPass": true, "cardType": "Action", "maxCost": 3, "prompt": "Vous pouvez jouer une carte Action coûtant jusqu’à 3 🪙 depuis votre défausse." },
-      { "op": "play_selected", "target": "self", "sourceZone": "discard" }
+      { "op": "gain_card", "target": "others", "cardId": "base:malediction", "amount": 1, "destinationZone": "discard" }
+    ] }, { "when": "card_revealed", "effects": [
+      { "op": "play_trigger_card", "target": "self" },
+      { "op": "discard_trigger_card", "target": "self" }
     ] } ] }
   ],
   "artifacts": [

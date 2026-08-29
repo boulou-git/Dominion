@@ -182,6 +182,65 @@ public sealed class FleauxFoundationRulesTests
         Assert.That(row.TotalPoints, Is.EqualTo(2));
     }
 
+    [Test]
+    public void Horreur_GivesEachOpponentACurseWhenPlayed()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        PlayerStateSnapshot opponent = new PlayerStateSnapshot { PlayerId = "p2", NickName = "P2" };
+        state.Players.Add(opponent);
+        state.SupplyPiles.Add(new SupplyPileSnapshot("base:malediction", 10));
+        CardInstance horror = AddOwned(state, player, "fleaux:horreur", CardZone.Hand);
+
+        GameRuleResult result = GameRules.TryPlayCard(state, player.PlayerId, horror.InstanceId, Resolve, new Random(1));
+
+        Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
+        Assert.That(opponent.Discard.Count, Is.EqualTo(1));
+        Assert.That(state.CardInstances.Find(card => card.InstanceId == opponent.Discard[0]).DefinitionId,
+            Is.EqualTo("base:malediction"));
+        Assert.That(state.SupplyPiles.Find(pile => pile.DefinitionId == "base:malediction").RemainingCount,
+            Is.EqualTo(9));
+    }
+
+    [Test]
+    public void Horreur_PlaysItselfAndGoesToDiscardWhenRevealed()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance horror = AddOwned(state, player, "fleaux:horreur", CardZone.Inspected);
+        Assert.That(ResolutionQueue.TryBegin(state, player.PlayerId, out ResolutionQueue queue, out string beginError),
+            Is.True, beginError);
+        queue.Events.Publish(GameEvent.CardRevealed(player.PlayerId, horror.InstanceId, horror.DefinitionId,
+            CardZone.Inspected));
+
+        TriggerResolutionResult result = TriggerResolver.ResolvePending(queue, state, Resolve, new Random(1));
+
+        Assert.That(result.Status, Is.EqualTo(EffectResolutionStatus.Applied), result.Error);
+        Assert.That(player.Inspected, Does.Not.Contain(horror.InstanceId));
+        Assert.That(player.InPlay, Does.Not.Contain(horror.InstanceId));
+        Assert.That(player.Discard, Does.Contain(horror.InstanceId));
+        Assert.That(queue.Events.SnapshotHistory().Exists(gameEvent =>
+            gameEvent.Type == GameEventType.CardPlayed && gameEvent.CardInstanceId == horror.InstanceId), Is.True);
+    }
+
+    [Test]
+    public void Confesseur_RevealingHorreurTriggersItsAutomaticPlay()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance horror = AddOwned(state, player, "fleaux:horreur", CardZone.Deck);
+        CardInstance drawn = AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        CardInstance confessor = AddOwned(state, player, "fleaux:confesseur", CardZone.Hand);
+
+        GameRuleResult result = GameRules.TryPlayCard(state, player.PlayerId, confessor.InstanceId, Resolve, new Random(1));
+
+        Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
+        Assert.That(player.Hand, Does.Contain(drawn.InstanceId));
+        Assert.That(player.Discard, Does.Contain(horror.InstanceId));
+        Assert.That(player.Deck, Does.Not.Contain(horror.InstanceId));
+        Assert.That(result.Events.Exists(gameEvent => gameEvent.Type == GameEventType.CardRevealed &&
+            gameEvent.CardInstanceId == horror.InstanceId), Is.True);
+        Assert.That(result.Events.Exists(gameEvent => gameEvent.Type == GameEventType.CardPlayed &&
+            gameEvent.CardInstanceId == horror.InstanceId), Is.True);
+    }
+
     private static GameStateSnapshot NewState(out PlayerStateSnapshot player)
     {
         GameStateSnapshot state = new GameStateSnapshot { ActivePlayerId = "p1", IsStarted = true };

@@ -500,6 +500,7 @@ public static class TriggerResolver
             case GameEventType.PileEmptied: return DeclarativeRuleVocabulary.PileEmptiedTiming;
             case GameEventType.ArtifactGained: return DeclarativeRuleVocabulary.ArtifactGainedTiming;
             case GameEventType.DiseaseGained: return DeclarativeRuleVocabulary.DiseaseGainedTiming;
+            case GameEventType.CardRevealed: return DeclarativeRuleVocabulary.CardRevealedTiming;
             default: return string.Empty;
         }
     }

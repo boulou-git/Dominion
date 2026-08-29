@@ -161,7 +161,8 @@ public static class GameRules
         List<int> selected = q.TakeSelectedInstanceIds();
         if (selected.Count > 0)
         {
-            foreach (int id in selected) JournalRules.RecordReveal(s, responder, id);
+            foreach (int id in selected)
+                JournalRules.PublishReveal(s, responder, id, CardZone.Hand, c.SourceCardInstanceId, q.Events);
             CardInstance reaction = Card(s, selected[0]); CardInstance attackCard = Card(s, c.SourceCardInstanceId);
             ExtensionCardData reactionDefinition = reaction != null ? resolve(reaction.DefinitionId) : null;
             ExtensionCardData attackDefinition = attackCard != null ? resolve(attackCard.DefinitionId) : null;
@@ -271,7 +272,7 @@ public static class GameRules
         List<int> selected = q.TakeSelectedInstanceIds();
         foreach (int id in selected)
         {
-            if (publicReveal) JournalRules.RecordReveal(s, responder, id);
+            if (publicReveal) JournalRules.PublishReveal(s, responder, id, src, c.SourceCardInstanceId, q.Events);
             if (!CardZoneRules.MoveCard(responder, src, dst, id)) return GameRuleResult.Rejected("Chosen card could not be moved.", q.Events.SnapshotHistory());
         }
         List<string> remaining = c.RemainingPlayerIds != null ? new List<string>(c.RemainingPlayerIds) : new List<string>();
@@ -281,7 +282,7 @@ public static class GameRules
             List<int> cand = Eligible(s, p, src, cardId, cardType, resolve);
             if (cand.Count < c.MinSelections)
             {
-                if (publicReveal) JournalRules.RecordRevealZone(s, p, src);
+                if (publicReveal) JournalRules.PublishRevealZone(s, p, src, c.SourceCardInstanceId, q.Events);
                 continue;
             }
             if (!q.TrySuspendForDecision(p.PlayerId, c.Operation, c.Zone, c.Prompt, c.SourceCardInstanceId, c.MinSelections,
@@ -328,7 +329,8 @@ public static class GameRules
         {
             string playerId = remaining[0]; remaining.RemoveAt(0); PlayerStateSnapshot p = Player(s, playerId); if (p == null) continue;
             if (!TryTakeTopCards(p, revealCount, random, out List<int> revealed, out string revealError)) return GameRuleResult.Rejected(revealError, q.Events.SnapshotHistory());
-            foreach (int id in revealed) JournalRules.RecordReveal(s, p, id);
+            foreach (int id in revealed)
+                JournalRules.PublishReveal(s, p, id, CardZone.None, sourceCardInstanceId, q.Events);
             List<int> candidates = new List<int>();
             foreach (int id in revealed)
             {

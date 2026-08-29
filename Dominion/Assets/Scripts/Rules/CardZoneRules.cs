@@ -81,6 +81,19 @@ public static class CardZoneRules
         return ResolveZone(player, zone);
     }
 
+    public static bool TryFindOwnedZone(PlayerStateSnapshot player, int instanceId, out CardZone zone)
+    {
+        zone = CardZone.None;
+        if (player == null || instanceId <= 0) return false;
+        CardZone[] ownedZones = { CardZone.Deck, CardZone.Hand, CardZone.Discard, CardZone.InPlay, CardZone.Inspected };
+        foreach (CardZone candidate in ownedZones)
+        {
+            List<int> cards = ResolveZone(player, candidate);
+            if (cards != null && cards.Contains(instanceId)) { zone = candidate; return true; }
+        }
+        return false;
+    }
+
     public static bool MoveCard(List<int> source, List<int> destination, int instanceId)
     {
         if (source == null || destination == null || instanceId <= 0) return false;

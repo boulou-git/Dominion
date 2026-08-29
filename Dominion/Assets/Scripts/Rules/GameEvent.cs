@@ -16,7 +16,8 @@ public enum GameEventType
     BuyStarted,
     PileEmptied,
     ArtifactGained,
-    DiseaseGained
+    DiseaseGained,
+    CardRevealed
 }
 
 public sealed class GameEvent
@@ -121,6 +122,13 @@ public sealed class GameEvent
     {
         return new GameEvent(GameEventType.DiseaseGained, playerId, instanceId, definitionId,
             sourceCardInstanceId, destinationZone);
+    }
+
+    public static GameEvent CardRevealed(string playerId, int instanceId, string definitionId,
+        CardZone sourceZone, int sourceCardInstanceId = 0)
+    {
+        return new GameEvent(GameEventType.CardRevealed, playerId, instanceId, definitionId,
+            sourceCardInstanceId, sourceZone);
     }
 
     public static GameEvent TurnStarted(string playerId)
