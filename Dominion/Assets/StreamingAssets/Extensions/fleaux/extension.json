@@ -33,7 +33,7 @@
       { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
       { "op": "gain_card", "target": "self", "cardId": "base:domaine", "amount": 1, "destinationZone": "discard" }
     ] } ] },
-    { "id": "horreur", "name": "Horreur", "cost": 0, "types": ["Action", "Attaque"], "image": "horreur.png", "text": "Chaque autre joueur défausse jusqu’à avoir 4 cartes en main.\n\nVous pouvez jouer une carte Action coûtant jusqu’à 3 🪙 depuis votre défausse.", "abilities": [ { "when": "play", "effects": [
+    { "id": "horreur", "name": "Horreur", "cost": 0, "types": ["Action", "Attaque"], "image": "horreur.png", "text": "Chaque autre joueur défausse jusqu’à avoir 4 cartes en main et recoit une malediction.\n\nLorsque vous revelez cette carte, jouez la et mettez la dans votre defausse", "abilities": [ { "when": "play", "effects": [
       { "op": "discard_others_down_to", "target": "others", "amount": 4, "prompt": "Défaussez jusqu’à avoir 4 cartes en main." },
       { "op": "choose_cards", "target": "self", "zone": "discard", "min": 0, "max": 1, "allowPass": true, "cardType": "Action", "maxCost": 3, "prompt": "Vous pouvez jouer une carte Action coûtant jusqu’à 3 🪙 depuis votre défausse." },
       { "op": "play_selected", "target": "self", "sourceZone": "discard" }
@@ -56,8 +56,8 @@
         { "op": "move_trigger_card", "target": "self", "sourceZone": "discard", "destinationZone": "deck", "requiresSelectedOption": "top" }
       ] }
     ] },
-    { "id": "necronomicon", "name": "Nécronomicon", "cost": 0, "types": ["Artefact"], "image": "", "text": "À la fin de votre tour, vous pouvez placer une carte coûtant jusqu’à 3 🪙 de votre défausse sur votre deck.", "abilities": [
-      { "when": "turn_ended", "scope": "artifact", "filter": { "eventPlayer": "self" }, "oncePerTurn": true, "effects": [
+    { "id": "necronomicon", "name": "Nécronomicon", "cost": 0, "types": ["Artefact"], "image": "", "text": "Si vous avez ecartee une carte ce tour-ci, a la fin de votre tour, vous pouvez placer une carte coûtant jusqu’à 3 🪙 de votre défausse sur votre deck.", "abilities": [
+      { "when": "turn_ended", "scope": "artifact", "filter": { "eventPlayer": "self" }, "oncePerTurn": true, "requiresMinTrashedThisTurn": 1, "effects": [
         { "op": "choose_cards", "target": "self", "zone": "discard", "min": 0, "max": 1, "allowPass": true, "maxCost": 3, "prompt": "Vous pouvez placer une carte coûtant jusqu’à 3 🪙 de votre défausse sur votre deck." },
         { "op": "move_selected", "target": "self", "sourceZone": "discard", "destinationZone": "deck" }
       ] }
@@ -96,10 +96,10 @@
     { "id": "horreurs", "name": "Horreurs", "fixedCount": 10, "shuffle": false, "cardIds": ["horreur"] }
   ],
   "cards": [
-    { "id": "fossoyeur", "name": "Fossoyeur", "cost": 3, "types": ["Action", "Réaction"], "image": "fossoyeur.png", "text": "+1 Action\n+2 🪙\n\nLorsque vous recevez cette carte, recevez une Maladie.\n\nLorsque vous recevez une Maladie, vous pouvez révéler Fossoyeur depuis votre main : +1 Carte, puis défaussez 1 carte.", "abilities": [
+    { "id": "fossoyeur", "name": "Fossoyeur", "cost": 2, "types": ["Action", "Réaction"], "image": "fossoyeur.png", "text": "+1 Action\n+1 🪙\n\nLorsque vous recevez cette carte, recevez une Maladie.\n\nLorsque vous recevez une Maladie, vous pouvez révéler Fossoyeur depuis votre main : +1 Carte, puis défaussez 1 carte.", "abilities": [
       { "when": "play", "effects": [
         { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
-        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 }
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
       ] },
       { "when": "card_gained", "effects": [
         { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:maladies", "amount": 1, "destinationZone": "discard" }
@@ -171,29 +171,30 @@
       { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez écarter une carte de votre main." },
       { "op": "trash_selected", "target": "self", "sourceZone": "hand" }
     ] } ] },
-    { "id": "alchimiste", "name": "Alchimiste", "cost": 3, "types": ["Action"], "image": "alchimiste.png", "text": "+1 Action\n\nRegardez les 3 cartes du dessus de votre deck. Défaussez-les toutes ou replacez-les dans l’ordre de votre choix.\n\nSi votre main contient au moins 3 types différents, prenez le Phylactère.", "abilities": [ { "when": "play", "effects": [
+    { "id": "alchimiste", "name": "Alchimiste", "cost": 4, "types": ["Action"], "image": "alchimiste.png", "text": "+1 Action\n\nRegardez les 3 cartes du dessus de votre deck. Défaussez-les toutes ou replacez-les dans l’ordre de votre choix.\n\nSi votre main contient au moins 3 types différents, prenez le Phylactère.", "abilities": [ { "when": "play", "effects": [
       { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
-      { "op": "inspect_top_cards", "target": "self", "amount": 3 },
+      { "op": "inspect_top_cards", "target": "self", "amount": 2 },
       { "op": "choose_options", "target": "self", "min": 1, "max": 1, "prompt": "Défaussez les cartes ou replacez-les sur votre deck.", "options": [
         { "id": "discard", "label": "Tout défausser" }, { "id": "replace", "label": "Replacer sur le deck" }
       ] },
       { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "discard", "requiresSelectedOption": "discard", "prompt": "Défaussez les cartes." },
       { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "deck", "requiresSelectedOption": "replace", "prompt": "Replacez les cartes dans l’ordre de votre choix." },
-      { "op": "take_artifact", "target": "self", "artifactId": "fleaux:phylactere", "requiresMinDistinctTypesInHand": 3 }
+	  { "op": "draw", "target": "self", "amount": 1 },
+      { "op": "take_artifact", "target": "self", "artifactId": "fleaux:phylactere", "requiresMinDistinctTypesInHand": 6 }
     ] } ] },
-    { "id": "cultiste", "name": "Cultiste", "cost": 4, "types": ["Action", "Durée"], "image": "cultiste.png", "text": "Au début de votre prochain tour : +2 Cartes.\n\nPrenez la Dague rituelle ou l’Encens noir.\n\nSi vous contrôlez les deux, écartez cette carte et recevez une Horreur.", "abilities": [
+    { "id": "cultiste", "name": "Cultiste", "cost": 4, "types": ["Action", "Durée"], "image": "cultiste.png", "text": "Prenez la Dague rituelle ou l’Encens noir.\n\n Au début de votre prochain tour : +2 Cartes.\n\nPuis, si vous contrôlez les deux artefacts, écartez cette carte et recevez une Horreur.", "abilities": [
       { "when": "play", "effects": [
         { "op": "choose_options", "target": "self", "min": 1, "max": 1, "prompt": "Prenez la Dague rituelle ou l’Encens noir.", "options": [
           { "id": "dagger", "label": "Dague rituelle" }, { "id": "incense", "label": "Encens noir" }
         ] },
         { "op": "take_artifact", "target": "self", "artifactId": "fleaux:dague_rituelle", "requiresSelectedOption": "dagger" },
-        { "op": "take_artifact", "target": "self", "artifactId": "fleaux:encens_noir", "requiresSelectedOption": "incense" },
-        { "op": "trash_source_card", "target": "self", "requiresArtifactIds": ["fleaux:dague_rituelle", "fleaux:encens_noir"] },
-        { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:horreurs", "amount": 1, "destinationZone": "discard", "requiresArtifactIds": ["fleaux:dague_rituelle", "fleaux:encens_noir"] }
+        { "op": "take_artifact", "target": "self", "artifactId": "fleaux:encens_noir", "requiresSelectedOption": "incense" }
       ] },
       { "when": "turn_started", "scope": "in_play", "filter": { "eventPlayer": "self" }, "effects": [
         { "op": "draw", "target": "self", "amount": 2 },
-        { "op": "mark_duration_resolved", "target": "self" }
+		{ "op": "mark_duration_resolved", "target": "self" },
+		{ "op": "trash_source_card", "target": "self", "requiresArtifactIds": ["fleaux:dague_rituelle", "fleaux:encens_noir"] },
+        { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:horreurs", "amount": 1, "destinationZone": "discard", "requiresArtifactIds": ["fleaux:dague_rituelle", "fleaux:encens_noir"] }
       ] }
     ] },
     { "id": "cloitre", "name": "Cloître", "cost": 3, "types": ["Action", "Réaction", "Durée"], "image": "cloitre.png", "text": "+3 Cartes\n\nDéfaussez 2 cartes.\n\nMettez de côté, face cachée sous cette carte, une carte de votre main. Au début de votre prochain tour, prenez-la dans votre main.\n\nRéaction : lorsqu’un autre joueur joue une carte Attaque, vous pouvez révéler Cloître depuis votre main et le mettre de côté. Au début de votre prochain tour, jouez-le.", "abilities": [
@@ -261,7 +262,7 @@
     { "id": "confesseur", "name": "Confesseur", "cost": 2, "types": ["Action"], "image": "confesseur.png", "text": "+1 Carte\n+1 Action\n\nRegardez la carte du dessus de votre deck. Si c’est une carte Victoire, Malédiction ou Maladie, prenez-la dans votre main.", "abilities": [ { "when": "play", "effects": [
       { "op": "draw", "target": "self", "amount": 1 },
       { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
-      { "op": "inspect_top_cards", "target": "self", "amount": 1 },
+      { "op": "reveal_top_cards", "target": "self", "amount": 1 },
       { "op": "move_all_matching_types", "target": "self", "sourceZone": "inspected", "destinationZone": "hand", "cardType": "Victoire|Malédiction|Maladie" },
       { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "deck", "prompt": "Replacez la carte sur votre deck." }
     ] } ] },
