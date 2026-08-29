@@ -11,7 +11,10 @@ public static class JournalRules
     public const string ChatKind = "chat";
     public const int ChatCooldownMilliseconds = 1000;
     public const int MaxChatLength = 200;
-    private const int MaxEntries = 128;
+    // The whole authoritative state is replicated through one Photon string property.
+    // Keep the public journal deliberately small so normal match history cannot push the
+    // serialized snapshot over Protocol18's 32767-byte UTF-8 string limit.
+    private const int MaxEntries = 64;
 
     public static void RecordReveal(GameStateSnapshot state, PlayerStateSnapshot player, int cardInstanceId)
     {
