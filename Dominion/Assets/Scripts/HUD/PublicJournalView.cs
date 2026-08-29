@@ -69,25 +69,34 @@ public sealed class PublicJournalView : MonoBehaviour
             return;
         }
 
-        GameObject prefab = Resources.Load<GameObject>("UI/JournalSurface");
-        if (prefab == null)
+        Transform existing = host.Find("JournalSurface");
+        if (existing != null)
         {
-            Debug.LogError("Journal prefab contract is incomplete: JournalSurface is missing.", this);
-            return;
+            _surface = existing.gameObject;
+        }
+        else
+        {
+            GameObject prefab = Resources.Load<GameObject>("UI/JournalSurface");
+            if (prefab == null)
+            {
+                Debug.LogError("Journal prefab contract is incomplete: JournalSurface is missing.", this);
+                return;
+            }
+
+            _surface = Instantiate(prefab, host, false);
+            RectTransform surfaceRect = _surface.GetComponent<RectTransform>();
+            if (surfaceRect == null)
+            {
+                Debug.LogError("Journal prefab contract is incomplete: JournalSurface has no RectTransform.", this);
+                Destroy(_surface);
+                _surface = null;
+                return;
+            }
+
+            CopyRectTransform(legacyRect, surfaceRect);
+            _surface.transform.SetSiblingIndex(legacyRect.GetSiblingIndex() + 1);
         }
 
-        _surface = Instantiate(prefab, host, false);
-        RectTransform surfaceRect = _surface.GetComponent<RectTransform>();
-        if (surfaceRect == null)
-        {
-            Debug.LogError("Journal prefab contract is incomplete: JournalSurface has no RectTransform.", this);
-            Destroy(_surface);
-            _surface = null;
-            return;
-        }
-
-        CopyRectTransform(legacyRect, surfaceRect);
-        _surface.transform.SetSiblingIndex(legacyRect.GetSiblingIndex() + 1);
         SetLayerRecursively(_surface, _legacyJournalText.gameObject.layer);
 
         _content = _surface.transform.Find("EntriesScroll/Viewport/Content") as RectTransform;
@@ -98,7 +107,6 @@ public sealed class PublicJournalView : MonoBehaviour
         if (_content == null || _logText == null || _scroll == null || _input == null || _sendButton == null)
         {
             Debug.LogError("JournalSurface prefab contract is incomplete.", this);
-            Destroy(_surface);
             _surface = null;
             return;
         }
@@ -106,7 +114,9 @@ public sealed class PublicJournalView : MonoBehaviour
         _legacyJournalText.enabled = false;
         _legacyJournalText.raycastTarget = false;
         _input.characterLimit = JournalRules.MaxChatLength;
+        _input.onSubmit.RemoveListener(SubmitChat);
         _input.onSubmit.AddListener(SubmitChat);
+        _sendButton.onClick.RemoveListener(SendChat);
         _sendButton.onClick.AddListener(SendChat);
     }
 
