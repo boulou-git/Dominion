@@ -15,7 +15,9 @@ public sealed class PrefabUiContractTests
         Transform content = viewport?.Find("Content");
         Assert.NotNull(scroll?.GetComponent<ScrollRect>());
         Assert.NotNull(viewport?.GetComponent<Mask>());
-        Assert.NotNull(content?.GetComponent<VerticalLayoutGroup>());
+        VerticalLayoutGroup journalLayout = content?.GetComponent<VerticalLayoutGroup>();
+        Assert.NotNull(journalLayout);
+        Assert.IsFalse(journalLayout.childControlHeight);
         Assert.NotNull(content?.GetComponent<ContentSizeFitter>());
         InputField input = surface.transform.Find("Composer/MessageInput")?.GetComponent<InputField>();
         Assert.NotNull(input);
@@ -25,8 +27,9 @@ public sealed class PrefabUiContractTests
         GameObject entry = Load("JournalEntry");
         Assert.NotNull(entry.GetComponent<Text>());
         Assert.NotNull(entry.GetComponent<Button>());
-        Assert.NotNull(entry.GetComponent<ContentSizeFitter>());
-        Assert.Greater(entry.GetComponent<LayoutElement>()?.minHeight, 0f);
+        RectTransform entryRect = entry.transform as RectTransform;
+        Assert.NotNull(entryRect);
+        Assert.Greater(entryRect.sizeDelta.y, 0f);
     }
 
     [Test]

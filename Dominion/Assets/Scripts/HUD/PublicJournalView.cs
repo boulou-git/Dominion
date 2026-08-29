@@ -22,6 +22,7 @@ public sealed class PublicJournalView : MonoBehaviour
     private GameObject _entryPrefab;
     private readonly List<GameObject> _rows = new List<GameObject>();
     private int _lastRenderedVersion = int.MinValue;
+    private float _lastLayoutWidth = -1f;
     private float _nextLocalSendTime;
 
     private void Awake()
@@ -43,6 +44,7 @@ public sealed class PublicJournalView : MonoBehaviour
     {
         if (_sendButton != null) _sendButton.interactable = Time.unscaledTime >= _nextLocalSendTime;
         Refresh(NetworkGameState.State);
+        RefreshRowLayout();
     }
 
     private void BindExistingUi()
@@ -138,9 +140,7 @@ public sealed class PublicJournalView : MonoBehaviour
                 CreateEntryRow(journal[index]);
         }
 
-        Canvas.ForceUpdateCanvases();
-        LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
-        _scroll.verticalNormalizedPosition = 0f;
+        RefreshRowLayout();
     }
 
     private void CreateEntryRow(GameJournalEntrySnapshot entry)
@@ -195,6 +195,31 @@ public sealed class PublicJournalView : MonoBehaviour
             if (button.interactable) button.onClick.AddListener(() => InspectCard(definitionId));
         }
         _rows.Add(row);
+        _lastLayoutWidth = -1f;
+    }
+
+    private void RefreshRowLayout()
+    {
+        if (_content == null || _rows.Count == 0) return;
+        float width = _content.rect.width;
+        if (width <= 1f && _scroll != null && _scroll.viewport != null)
+            width = _scroll.viewport.rect.width;
+        if (width <= 1f || Mathf.Approximately(width, _lastLayoutWidth)) return;
+
+        _lastLayoutWidth = width;
+        foreach (GameObject row in _rows)
+        {
+            if (row == null) continue;
+            RectTransform rect = row.transform as RectTransform;
+            Text text = row.GetComponent<Text>() ?? row.transform.Find("Text")?.GetComponent<Text>();
+            if (rect == null || text == null) continue;
+            rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
+            rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mathf.Max(25f, text.preferredHeight + 4f));
+        }
+
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
+        if (_scroll != null) _scroll.verticalNormalizedPosition = 0f;
     }
 
     private static string ResolveCardName(string definitionId)
@@ -222,6 +247,7 @@ public sealed class PublicJournalView : MonoBehaviour
     {
         foreach (GameObject row in _rows) if (row != null) Destroy(row);
         _rows.Clear();
+        _lastLayoutWidth = -1f;
     }
 
     private static string PhaseLabel(string phase)
