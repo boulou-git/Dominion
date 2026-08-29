@@ -27,6 +27,32 @@ public sealed class FleauxFoundationRulesTests
     }
 
     [Test]
+    public void SelectedKingdomCards_OnlyEnableTheirReachableExtensionComponents()
+    {
+        ExtensionComponentUsage usage = ExtensionComponentUsageResolver.Resolve(new[]
+        {
+            "fleaux:soeurs",
+            "fleaux:herboristerie",
+            "fleaux:pilleur_de_tombes",
+            "fleaux:cultiste",
+            "fleaux:paladin"
+        });
+
+        Assert.That(usage.SpecialPileCount, Is.EqualTo(2));
+        Assert.That(usage.UsesSpecialPile("fleaux:toniques"), Is.True);
+        Assert.That(usage.UsesSpecialPile("fleaux:horreurs"), Is.True);
+        Assert.That(usage.UsesSpecialPile("fleaux:maladies"), Is.False);
+        Assert.That(usage.UsesSpecialPile("fleaux:heritages"), Is.False);
+
+        Assert.That(usage.ArtifactCount, Is.EqualTo(4));
+        Assert.That(usage.UsesArtifact("fleaux:dent_en_or"), Is.True);
+        Assert.That(usage.UsesArtifact("fleaux:dague_rituelle"), Is.True);
+        Assert.That(usage.UsesArtifact("fleaux:encens_noir"), Is.True);
+        Assert.That(usage.UsesArtifact("fleaux:etendard_divin"), Is.True);
+        Assert.That(usage.UsesArtifact("fleaux:necronomicon"), Is.False);
+    }
+
+    [Test]
     public void SchemaOneSnapshot_MigratesNewCollections()
     {
         GameStateSnapshot state = new GameStateSnapshot { SchemaVersion = 1 };

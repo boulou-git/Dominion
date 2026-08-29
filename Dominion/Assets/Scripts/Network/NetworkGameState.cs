@@ -275,14 +275,10 @@ public static class NetworkGameState
     private static void CreateExtensionComponents(GameStateSnapshot state, GameSetupConfig setup, int playerCount, System.Random random)
     {
         if (state == null || setup == null || setup.kingdomCardIds == null) return;
-        HashSet<string> enabledExtensionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string cardRef in setup.kingdomCardIds)
-            if (CardDefinitionReference.TryParseQualified(cardRef, out string extensionId, out _))
-                enabledExtensionIds.Add(extensionId);
+        ExtensionComponentUsage usage = ExtensionComponentUsageResolver.Resolve(setup.kingdomCardIds);
 
-        foreach (string extensionId in enabledExtensionIds)
+        foreach (ExtensionPackageData extension in ExtensionCatalog.All)
         {
-            ExtensionPackageData extension = ExtensionCatalog.Find(extensionId);
             if (extension == null) continue;
 
             if (extension.specialPiles != null)
@@ -290,6 +286,7 @@ public static class NetworkGameState
                 {
                     if (definition == null || definition.cardIds == null || definition.cardIds.Count == 0) continue;
                     string pileId = extension.id + ":" + definition.id;
+                    if (!usage.UsesSpecialPile(pileId)) continue;
                     SpecialPileSnapshot pile = new SpecialPileSnapshot(pileId,
                         string.IsNullOrWhiteSpace(definition.name) ? definition.id : definition.name);
                     int count = definition.fixedCount > 0
@@ -311,7 +308,9 @@ public static class NetworkGameState
                 foreach (ExtensionCardData artifact in extension.artifacts)
                 {
                     if (artifact == null || string.IsNullOrWhiteSpace(artifact.id)) continue;
-                    CardInstance instance = new CardInstance(state.NextCardInstanceId++, extension.id + ":" + artifact.id, string.Empty);
+                    string artifactId = extension.id + ":" + artifact.id;
+                    if (!usage.UsesArtifact(artifactId)) continue;
+                    CardInstance instance = new CardInstance(state.NextCardInstanceId++, artifactId, string.Empty);
                     state.CardInstances.Add(instance);
                     state.UnownedArtifacts.Add(instance.InstanceId);
                 }

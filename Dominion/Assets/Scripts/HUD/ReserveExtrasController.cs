@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
@@ -30,6 +31,8 @@ public sealed class ReserveExtrasController : MonoBehaviour
     private GameObject _artifactPrefab;
     private Vector2 _prefabKingdomCellSize;
     private string _renderedSignature;
+    private string _kingdomSignature;
+    private ExtensionComponentUsage _componentUsage = new ExtensionComponentUsage();
     private Coroutine _layoutRoutine;
 
     private void Awake()
@@ -95,8 +98,9 @@ public sealed class ReserveExtrasController : MonoBehaviour
         if (_extrasUi == null)
             return;
 
-        bool hasSpecialPiles = state != null && state.SpecialPiles != null && state.SpecialPiles.Count > 0;
-        bool hasArtifacts = state != null && state.UnownedArtifacts != null && state.UnownedArtifacts.Count > 0;
+        RefreshComponentUsage(state);
+        bool hasSpecialPiles = HasRelevantSpecialPiles(state);
+        bool hasArtifacts = HasRelevantArtifacts(state);
         bool visible = hasSpecialPiles || hasArtifacts;
 
         _extrasUi.SetActive(visible);
@@ -132,7 +136,7 @@ public sealed class ReserveExtrasController : MonoBehaviour
 
         foreach (SpecialPileSnapshot pile in state.SpecialPiles)
         {
-            if (pile == null)
+            if (pile == null || !_componentUsage.UsesSpecialPile(pile.PileId))
                 continue;
 
             GameObject tile = Instantiate(_specialPilePrefab, _specialPilesRoot, false);
@@ -173,6 +177,8 @@ public sealed class ReserveExtrasController : MonoBehaviour
         foreach (int instanceId in state.UnownedArtifacts)
         {
             CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
+            if (instance == null || !_componentUsage.UsesArtifact(instance.DefinitionId))
+                continue;
             if (!TryResolveVisual(instance, out ExtensionCardData definition, out Sprite sprite))
                 continue;
 
@@ -291,14 +297,63 @@ public sealed class ReserveExtrasController : MonoBehaviour
             LayoutRebuilder.ForceRebuildLayoutImmediate(rect);
     }
 
-    private static string BuildSignature(GameStateSnapshot state)
+    private void RefreshComponentUsage(GameStateSnapshot state)
+    {
+        string signature = BuildKingdomSignature(state);
+        if (string.Equals(signature, _kingdomSignature, StringComparison.Ordinal))
+            return;
+
+        _kingdomSignature = signature;
+        _renderedSignature = null;
+        List<string> kingdomCards = new List<string>();
+        if (state != null && state.SupplyPiles != null)
+            foreach (SupplyPileSnapshot pile in state.SupplyPiles)
+                if (pile != null && pile.IsKingdom && !string.IsNullOrWhiteSpace(pile.DefinitionId))
+                    kingdomCards.Add(pile.DefinitionId);
+        _componentUsage = ExtensionComponentUsageResolver.Resolve(kingdomCards);
+    }
+
+    private bool HasRelevantSpecialPiles(GameStateSnapshot state)
+    {
+        if (state == null || state.SpecialPiles == null)
+            return false;
+        foreach (SpecialPileSnapshot pile in state.SpecialPiles)
+            if (pile != null && _componentUsage.UsesSpecialPile(pile.PileId))
+                return true;
+        return false;
+    }
+
+    private bool HasRelevantArtifacts(GameStateSnapshot state)
+    {
+        if (state == null || state.UnownedArtifacts == null)
+            return false;
+        foreach (int instanceId in state.UnownedArtifacts)
+        {
+            CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
+            if (instance != null && _componentUsage.UsesArtifact(instance.DefinitionId))
+                return true;
+        }
+        return false;
+    }
+
+    private static string BuildKingdomSignature(GameStateSnapshot state)
+    {
+        StringBuilder builder = new StringBuilder();
+        if (state != null && state.SupplyPiles != null)
+            foreach (SupplyPileSnapshot pile in state.SupplyPiles)
+                if (pile != null && pile.IsKingdom)
+                    builder.Append(pile.DefinitionId).Append('|');
+        return builder.ToString();
+    }
+
+    private string BuildSignature(GameStateSnapshot state)
     {
         StringBuilder builder = new StringBuilder();
         if (state.SpecialPiles != null)
         {
             foreach (SpecialPileSnapshot pile in state.SpecialPiles)
             {
-                if (pile == null)
+                if (pile == null || !_componentUsage.UsesSpecialPile(pile.PileId))
                     continue;
                 int count = pile.CardInstanceIds != null ? pile.CardInstanceIds.Count : 0;
                 int top = count > 0 ? pile.CardInstanceIds[count - 1] : 0;
@@ -308,7 +363,11 @@ public sealed class ReserveExtrasController : MonoBehaviour
         builder.Append('#');
         if (state.UnownedArtifacts != null)
             foreach (int instanceId in state.UnownedArtifacts)
-                builder.Append(instanceId).Append(',');
+            {
+                CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
+                if (instance != null && _componentUsage.UsesArtifact(instance.DefinitionId))
+                    builder.Append(instanceId).Append(',');
+            }
         return builder.ToString();
     }
 
