@@ -15,21 +15,13 @@ public sealed class PrefabUiContractTests
         Transform content = viewport?.Find("Content");
         Assert.NotNull(scroll?.GetComponent<ScrollRect>());
         Assert.NotNull(viewport?.GetComponent<Mask>());
-        VerticalLayoutGroup journalLayout = content?.GetComponent<VerticalLayoutGroup>();
-        Assert.NotNull(journalLayout);
-        Assert.IsFalse(journalLayout.childControlHeight);
-        Assert.NotNull(content?.GetComponent<ContentSizeFitter>());
+        Assert.NotNull(content?.GetComponent<Text>());
         InputField input = surface.transform.Find("Composer/MessageInput")?.GetComponent<InputField>();
         Assert.NotNull(input);
         Assert.AreEqual(JournalRules.MaxChatLength, input.characterLimit);
         Assert.NotNull(surface.transform.Find("Composer/SendButton")?.GetComponent<Button>());
 
-        GameObject entry = Load("JournalEntry");
-        Assert.NotNull(entry.GetComponent<Text>());
-        Assert.NotNull(entry.GetComponent<Button>());
-        RectTransform entryRect = entry.transform as RectTransform;
-        Assert.NotNull(entryRect);
-        Assert.Greater(entryRect.sizeDelta.y, 0f);
+        Assert.Greater((content as RectTransform).sizeDelta.y, 0f);
     }
 
     [Test]

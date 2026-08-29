@@ -12,15 +12,12 @@ public sealed class PublicJournalView : MonoBehaviour
 
     private GameScreenController _screen;
     private Text _legacyJournalText;
-    private GameObject _zoomOverlay;
-    private Image _zoomImage;
     private GameObject _surface;
     private RectTransform _content;
+    private Text _logText;
     private ScrollRect _scroll;
     private InputField _input;
     private Button _sendButton;
-    private GameObject _entryPrefab;
-    private readonly List<GameObject> _rows = new List<GameObject>();
     private int _lastRenderedVersion = int.MinValue;
     private float _lastLayoutWidth = -1f;
     private float _nextLocalSendTime;
@@ -44,15 +41,13 @@ public sealed class PublicJournalView : MonoBehaviour
     {
         if (_sendButton != null) _sendButton.interactable = Time.unscaledTime >= _nextLocalSendTime;
         Refresh(NetworkGameState.State);
-        RefreshRowLayout();
+        RefreshLogLayout();
     }
 
     private void BindExistingUi()
     {
         if (_screen == null) return;
         _legacyJournalText = ReadField<Text>("_journalText");
-        _zoomOverlay = ReadField<GameObject>("_zoomOverlay");
-        _zoomImage = ReadField<Image>("_zoomImage");
         EnsureSurface();
     }
 
@@ -66,19 +61,19 @@ public sealed class PublicJournalView : MonoBehaviour
     {
         if (_surface != null || _legacyJournalText == null) return;
         GameObject prefab = Resources.Load<GameObject>("UI/JournalSurface");
-        _entryPrefab = Resources.Load<GameObject>("UI/JournalEntry");
-        if (prefab == null || _entryPrefab == null)
+        if (prefab == null)
         {
-            Debug.LogError("Journal prefab contract is incomplete: JournalSurface or JournalEntry is missing.", this);
+            Debug.LogError("Journal prefab contract is incomplete: JournalSurface is missing.", this);
             return;
         }
 
         _surface = Instantiate(prefab, _legacyJournalText.transform, false);
         _content = _surface.transform.Find("EntriesScroll/Viewport/Content") as RectTransform;
+        _logText = _content != null ? _content.GetComponent<Text>() : null;
         _scroll = _surface.transform.Find("EntriesScroll")?.GetComponent<ScrollRect>();
         _input = _surface.transform.Find("Composer/MessageInput")?.GetComponent<InputField>();
         _sendButton = _surface.transform.Find("Composer/SendButton")?.GetComponent<Button>();
-        if (_content == null || _scroll == null || _input == null || _sendButton == null)
+        if (_content == null || _logText == null || _scroll == null || _input == null || _sendButton == null)
         {
             Debug.LogError("JournalSurface prefab contract is incomplete.", this);
             Destroy(_surface); _surface = null; return;
@@ -118,108 +113,80 @@ public sealed class PublicJournalView : MonoBehaviour
         int version = state != null ? state.Version : -1;
         if (_lastRenderedVersion == version) return;
         _lastRenderedVersion = version;
-        ClearRows();
+        List<string> lines = new List<string>();
 
         if (state == null || state.Players == null || state.Players.Count == 0)
         {
-            CreateRow("En attente de la partie…", string.Empty, true);
+            lines.Add("En attente de la partie…");
+            SetLog(lines);
             return;
         }
 
         PlayerStateSnapshot active = state.Players.Find(player => player != null && player.PlayerId == state.ActivePlayerId);
         string activeName = active != null && !string.IsNullOrWhiteSpace(active.NickName) ? active.NickName : "Joueur";
-        CreateRow("Tour " + state.TurnNumber + " — " + activeName + " — " + PhaseLabel(state.Phase), string.Empty, true);
+        lines.Add("Tour " + state.TurnNumber + " — " + activeName + " — " + PhaseLabel(state.Phase));
 
         List<GameJournalEntrySnapshot> journal = state.Journal;
         if (journal == null || journal.Count == 0)
-            CreateRow("Aucune activité publique.", string.Empty, false);
+            lines.Add("Aucune activité publique.");
         else
         {
             int first = Math.Max(0, journal.Count - MaxVisibleEntries);
             for (int index = first; index < journal.Count; index++)
-                CreateEntryRow(journal[index]);
+            {
+                string line = FormatEntry(journal[index]);
+                if (!string.IsNullOrWhiteSpace(line)) lines.Add(line);
+            }
         }
 
-        RefreshRowLayout();
+        SetLog(lines);
     }
 
-    private void CreateEntryRow(GameJournalEntrySnapshot entry)
+    private static string FormatEntry(GameJournalEntrySnapshot entry)
     {
-        if (entry == null) return;
+        if (entry == null) return string.Empty;
         string player = string.IsNullOrWhiteSpace(entry.PlayerName) ? "Joueur" : entry.PlayerName;
         string cardName = ResolveCardName(entry.CardDefinitionId);
         string sourceName = ResolveCardName(entry.SourceCardDefinitionId);
-        string text;
-        string inspectId = entry.CardDefinitionId;
         switch (entry.Kind)
         {
             case JournalRules.ChatKind:
-                text = player + " : " + entry.Message;
-                inspectId = string.Empty;
-                break;
+                return player + " : " + entry.Message;
             case JournalRules.PlayedKind:
-                text = "T" + entry.TurnNumber + " · " + player + " joue " + cardName + ".";
-                break;
+                return "T" + entry.TurnNumber + " · " + player + " joue " + cardName + ".";
             case JournalRules.GainedKind:
-                text = "T" + entry.TurnNumber + " · " + player + " reçoit " + cardName + ".";
-                break;
+                return "T" + entry.TurnNumber + " · " + player + " reçoit " + cardName + ".";
             case JournalRules.ChoiceKind:
-                text = "T" + entry.TurnNumber + " · " + player + " choisit « " + entry.Message + " »" +
+                return "T" + entry.TurnNumber + " · " + player + " choisit « " + entry.Message + " »" +
                        (!string.IsNullOrWhiteSpace(sourceName) ? " pour " + sourceName : string.Empty) + ".";
-                inspectId = entry.SourceCardDefinitionId;
-                break;
             case JournalRules.RevealKind:
-                text = "T" + entry.TurnNumber + " · " + player + " révèle " + cardName + ".";
-                break;
+                return "T" + entry.TurnNumber + " · " + player + " révèle " + cardName + ".";
             default:
-                return;
+                return string.Empty;
         }
-        CreateRow(text, inspectId, false);
     }
 
-    private void CreateRow(string message, string inspectDefinitionId, bool header)
+    private void SetLog(List<string> lines)
     {
-        GameObject row = Instantiate(_entryPrefab, _content, false);
-        row.name = header ? "JournalHeader" : "JournalEntry";
-        Text text = row.GetComponent<Text>() ?? row.transform.Find("Text")?.GetComponent<Text>();
-        if (text != null)
-        {
-            text.text = message ?? string.Empty;
-            text.fontStyle = header ? FontStyle.Bold : FontStyle.Normal;
-        }
-        Button button = row.GetComponent<Button>();
-        if (button != null)
-        {
-            string definitionId = inspectDefinitionId;
-            button.interactable = !string.IsNullOrWhiteSpace(definitionId);
-            if (button.interactable) button.onClick.AddListener(() => InspectCard(definitionId));
-        }
-        _rows.Add(row);
+        if (_logText == null) return;
+        _logText.text = lines != null ? string.Join("\n", lines) : string.Empty;
         _lastLayoutWidth = -1f;
+        RefreshLogLayout();
     }
 
-    private void RefreshRowLayout()
+    private void RefreshLogLayout()
     {
-        if (_content == null || _rows.Count == 0) return;
-        float width = _content.rect.width;
-        if (width <= 1f && _scroll != null && _scroll.viewport != null)
-            width = _scroll.viewport.rect.width;
+        if (_content == null || _logText == null || _scroll == null || _scroll.viewport == null) return;
+        float width = _scroll.viewport.rect.width;
         if (width <= 1f || Mathf.Approximately(width, _lastLayoutWidth)) return;
 
         _lastLayoutWidth = width;
-        foreach (GameObject row in _rows)
-        {
-            if (row == null) continue;
-            RectTransform rect = row.transform as RectTransform;
-            Text text = row.GetComponent<Text>() ?? row.transform.Find("Text")?.GetComponent<Text>();
-            if (rect == null || text == null) continue;
-            rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
-            rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mathf.Max(25f, text.preferredHeight + 4f));
-        }
-
+        _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, width);
         Canvas.ForceUpdateCanvases();
+        float height = Mathf.Max(_scroll.viewport.rect.height, _logText.preferredHeight + 4f);
+        _content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
         LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
-        if (_scroll != null) _scroll.verticalNormalizedPosition = 0f;
+        _scroll.verticalNormalizedPosition = 0f;
     }
 
     private static string ResolveCardName(string definitionId)
@@ -228,26 +195,6 @@ public sealed class PublicJournalView : MonoBehaviour
         ExtensionPackageData extension; ExtensionCardData definition;
         return RoomGameSetup.TryResolveCard(definitionId, out extension, out definition) && definition != null
             ? definition.name : definitionId;
-    }
-
-    private void InspectCard(string definitionId)
-    {
-        ExtensionPackageData extension; ExtensionCardData definition;
-        if (!RoomGameSetup.TryResolveCard(definitionId, out extension, out definition) || definition == null) return;
-        Sprite sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition);
-        if (sprite == null) return;
-        if (_zoomOverlay == null || _zoomImage == null) BindExistingUi();
-        if (_zoomOverlay == null || _zoomImage == null) return;
-        _zoomImage.sprite = sprite; _zoomImage.preserveAspect = true;
-        DynamicCardCostView.Attach(_zoomImage.gameObject, definition);
-        _zoomOverlay.SetActive(true); _zoomOverlay.transform.SetAsLastSibling();
-    }
-
-    private void ClearRows()
-    {
-        foreach (GameObject row in _rows) if (row != null) Destroy(row);
-        _rows.Clear();
-        _lastLayoutWidth = -1f;
     }
 
     private static string PhaseLabel(string phase)
