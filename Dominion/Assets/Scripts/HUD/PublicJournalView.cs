@@ -60,6 +60,15 @@ public sealed class PublicJournalView : MonoBehaviour
     private void EnsureSurface()
     {
         if (_surface != null || _legacyJournalText == null) return;
+
+        RectTransform legacyRect = _legacyJournalText.rectTransform;
+        RectTransform host = legacyRect.parent as RectTransform;
+        if (host == null)
+        {
+            Debug.LogError("Journal prefab contract is incomplete: JournalText has no RectTransform parent.", this);
+            return;
+        }
+
         GameObject prefab = Resources.Load<GameObject>("UI/JournalSurface");
         if (prefab == null)
         {
@@ -67,7 +76,20 @@ public sealed class PublicJournalView : MonoBehaviour
             return;
         }
 
-        _surface = Instantiate(prefab, _legacyJournalText.transform, false);
+        _surface = Instantiate(prefab, host, false);
+        RectTransform surfaceRect = _surface.GetComponent<RectTransform>();
+        if (surfaceRect == null)
+        {
+            Debug.LogError("Journal prefab contract is incomplete: JournalSurface has no RectTransform.", this);
+            Destroy(_surface);
+            _surface = null;
+            return;
+        }
+
+        CopyRectTransform(legacyRect, surfaceRect);
+        _surface.transform.SetSiblingIndex(legacyRect.GetSiblingIndex() + 1);
+        SetLayerRecursively(_surface, _legacyJournalText.gameObject.layer);
+
         _content = _surface.transform.Find("EntriesScroll/Viewport/Content") as RectTransform;
         _logText = _content != null ? _content.GetComponent<Text>() : null;
         _scroll = _surface.transform.Find("EntriesScroll")?.GetComponent<ScrollRect>();
@@ -76,13 +98,35 @@ public sealed class PublicJournalView : MonoBehaviour
         if (_content == null || _logText == null || _scroll == null || _input == null || _sendButton == null)
         {
             Debug.LogError("JournalSurface prefab contract is incomplete.", this);
-            Destroy(_surface); _surface = null; return;
+            Destroy(_surface);
+            _surface = null;
+            return;
         }
+
         _legacyJournalText.enabled = false;
         _legacyJournalText.raycastTarget = false;
         _input.characterLimit = JournalRules.MaxChatLength;
         _input.onSubmit.AddListener(SubmitChat);
         _sendButton.onClick.AddListener(SendChat);
+    }
+
+    private static void CopyRectTransform(RectTransform source, RectTransform destination)
+    {
+        destination.anchorMin = source.anchorMin;
+        destination.anchorMax = source.anchorMax;
+        destination.anchoredPosition = source.anchoredPosition;
+        destination.sizeDelta = source.sizeDelta;
+        destination.pivot = source.pivot;
+        destination.localRotation = source.localRotation;
+        destination.localScale = source.localScale;
+    }
+
+    private static void SetLayerRecursively(GameObject root, int layer)
+    {
+        if (root == null) return;
+        root.layer = layer;
+        foreach (Transform child in root.transform)
+            SetLayerRecursively(child.gameObject, layer);
     }
 
     private void SubmitChat(string value)
@@ -212,12 +256,14 @@ public sealed class PublicJournalView : MonoBehaviour
 public sealed class PublicJournalBootstrap : MonoBehaviour
 {
     private float _nextScan;
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Boot()
     {
         if (GameObject.Find("DominionPublicJournalBootstrap") != null) return;
         GameObject installer = new GameObject("DominionPublicJournalBootstrap");
-        DontDestroyOnLoad(installer); installer.AddComponent<PublicJournalBootstrap>();
+        DontDestroyOnLoad(installer);
+        installer.AddComponent<PublicJournalBootstrap>();
     }
 
     private void Update()
