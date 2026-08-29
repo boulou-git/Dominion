@@ -42,7 +42,7 @@ public sealed class CardGainAnimationController : MonoBehaviour
 
     private static void AttachToCurrentScreen()
     {
-        BuyPhaseGameplayController host = UnityEngine.Object.FindObjectOfType<BuyPhaseGameplayController>();
+        BuyPhaseGameplayController host = UnityEngine.Object.FindAnyObjectByType<BuyPhaseGameplayController>();
         if (host == null || host.GetComponent<CardGainAnimationController>() != null)
             return;
 
