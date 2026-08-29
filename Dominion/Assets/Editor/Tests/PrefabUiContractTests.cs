@@ -74,6 +74,27 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(decision.transform.Find("ConfirmDecision")?.GetComponent<Button>());
         Assert.NotNull(Load("DecisionOption").transform.Find("Label")?.GetComponent<Text>());
 
+        GameObject instructionBar = Load("DecisionInstructionBar");
+        RectTransform instructionRect = instructionBar.GetComponent<RectTransform>();
+        Transform instructionPrompt = instructionBar.transform.Find("Prompt");
+        Assert.NotNull(instructionPrompt?.GetComponent<Text>());
+        Assert.NotNull(instructionPrompt?.GetComponent<DraggableDecisionPanel>());
+        Assert.NotNull(instructionBar.transform.Find("Count")?.GetComponent<Text>());
+        Assert.NotNull(instructionBar.transform.Find("ConfirmDecision")?.GetComponent<Button>());
+        Assert.Less(instructionRect.anchorMax.y - instructionRect.anchorMin.y, 0.12f);
+
+        GameObject cardDrawer = Load("DecisionCardDrawer");
+        Assert.IsNull(cardDrawer.GetComponent<Graphic>(), "The full-screen drawer root must not block board clicks.");
+        Transform expandedDrawer = cardDrawer.transform.Find("Expanded");
+        Transform drawerCards = expandedDrawer?.Find("DecisionCards");
+        Assert.NotNull(expandedDrawer?.Find("Prompt")?.GetComponent<Text>());
+        Assert.NotNull(expandedDrawer?.Find("Count")?.GetComponent<Text>());
+        Assert.NotNull(expandedDrawer?.Find("ConfirmDecision")?.GetComponent<Button>());
+        Assert.NotNull(expandedDrawer?.Find("CollapseButton")?.GetComponent<Button>());
+        Assert.NotNull(drawerCards?.GetComponent<GridLayoutGroup>());
+        Assert.NotNull(drawerCards?.GetComponent<DecisionScrollGrid>());
+        Assert.NotNull(cardDrawer.transform.Find("CollapsedTab")?.GetComponent<Button>());
+
         GameObject deckPosition = Load("DeckPositionDecision");
         Assert.NotNull(deckPosition.GetComponent<DeckPositionDecisionView>());
         Assert.NotNull(deckPosition.transform.Find("Track/Handle")?.GetComponent<Image>());

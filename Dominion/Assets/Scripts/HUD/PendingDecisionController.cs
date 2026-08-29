@@ -10,6 +10,8 @@ using UnityEngine.UI;
 public sealed class PendingDecisionController : MonoBehaviour
 {
     private const string PanelPrefabResourcePath = "UI/PendingDecisionPanel";
+    private const string InstructionBarPrefabResourcePath = "UI/DecisionInstructionBar";
+    private const string CardDrawerPrefabResourcePath = "UI/DecisionCardDrawer";
     private const string OptionPrefabResourcePath = "UI/DecisionOption";
     private const string DeckPositionPrefabResourcePath = "UI/DeckPositionDecision";
     private const string CardNamePrefabResourcePath = "UI/CardNameDecision";
@@ -24,6 +26,19 @@ public sealed class PendingDecisionController : MonoBehaviour
     private readonly List<GameObject> _externalCards = new List<GameObject>();
 
     private RectTransform _panel;
+    private GameObject _instructionBar;
+    private GameObject _cardDrawer;
+    private GameObject _drawerExpanded;
+    private GameObject _drawerCollapsedTab;
+    private Text _barPromptText;
+    private Text _barCountText;
+    private Button _barConfirmButton;
+    private Text _panelPromptText;
+    private Text _panelCountText;
+    private Button _panelConfirmButton;
+    private Text _drawerPromptText;
+    private Text _drawerCountText;
+    private Button _drawerConfirmButton;
     private RectTransform _externalCardsRoot;
     private RectTransform _optionsRoot;
     private RectTransform _optionPreviewCardsRoot;
@@ -37,7 +52,6 @@ public sealed class PendingDecisionController : MonoBehaviour
     private Text _promptText;
     private Text _countText;
     private Button _confirmButton;
-    private Text _confirmText;
     private string _boundDecisionId;
     private bool _submitPending;
     private bool _panelBindingFailed;
@@ -76,16 +90,15 @@ public sealed class PendingDecisionController : MonoBehaviour
             _boundDecisionId = decision.DecisionId;
         }
 
-        if (_panel != null) _panel.gameObject.SetActive(true);
-        if (_promptText != null) _promptText.text = string.IsNullOrWhiteSpace(decision.Prompt) ? "Faites un choix." : decision.Prompt;
-
         bool supplyChoice = IsSupplyDecision(decision);
         bool optionChoice = IsOptionDecision(decision);
         bool deckPositionChoice = IsDeckPositionDecision(decision);
         bool cardNameChoice = IsCardNameDecision(decision);
         bool hasCardPreview = optionChoice && decision.CandidateInstanceIds != null && decision.CandidateInstanceIds.Count > 0;
         CardZone choiceZone = ResolveDecisionZone(decision);
-        ConfigurePanel(choiceZone, supplyChoice, optionChoice, deckPositionChoice, cardNameChoice, hasCardPreview);
+        ConfigurePanel(choiceZone, supplyChoice, optionChoice, deckPositionChoice, cardNameChoice, hasCardPreview, newDecision);
+        if (_promptText != null)
+            _promptText.text = string.IsNullOrWhiteSpace(decision.Prompt) ? "Faites un choix." : decision.Prompt;
 
         if (optionChoice)
         {
@@ -479,6 +492,8 @@ public sealed class PendingDecisionController : MonoBehaviour
         ClearCardBindings(); ClearExternalCards(); ClearSupplyDecisionVisuals();
         _selected.Clear(); _selectedSupply.Clear(); _selectedOptions.Clear(); _boundDecisionId = string.Empty; _submitPending = false;
         if (_panel != null) _panel.gameObject.SetActive(false);
+        if (_instructionBar != null) _instructionBar.SetActive(false);
+        if (_cardDrawer != null) _cardDrawer.SetActive(false);
     }
 
     private void ClearSupplyDecisionVisuals()
@@ -523,26 +538,22 @@ public sealed class PendingDecisionController : MonoBehaviour
         GameObject panelObject = Instantiate(prefab, transform);
         panelObject.name = "PendingDecisionPanel";
         _panel = panelObject.GetComponent<RectTransform>();
-        _promptText = panelObject.transform.Find("Prompt")?.GetComponent<Text>();
-        _countText = panelObject.transform.Find("Count")?.GetComponent<Text>();
-        Transform cardsViewport = panelObject.transform.Find("DecisionCards");
+        _panelPromptText = panelObject.transform.Find("Prompt")?.GetComponent<Text>();
+        _panelCountText = panelObject.transform.Find("Count")?.GetComponent<Text>();
         Transform optionsViewport = panelObject.transform.Find("DecisionOptions");
         Transform optionPreviewCardsViewport = panelObject.transform.Find("OptionPreviewCards");
         Transform optionPreviewOptionsViewport = panelObject.transform.Find("OptionPreviewOptions");
-        _cardsScrollGrid = cardsViewport != null ? cardsViewport.GetComponent<DecisionScrollGrid>() : null;
         _optionsScrollGrid = optionsViewport != null ? optionsViewport.GetComponent<DecisionScrollGrid>() : null;
         _optionPreviewCardsScrollGrid = optionPreviewCardsViewport != null ? optionPreviewCardsViewport.GetComponent<DecisionScrollGrid>() : null;
         _optionPreviewOptionsScrollGrid = optionPreviewOptionsViewport != null ? optionPreviewOptionsViewport.GetComponent<DecisionScrollGrid>() : null;
-        _externalCardsRoot = _cardsScrollGrid != null ? _cardsScrollGrid.Content : null;
         _optionsRoot = _optionsScrollGrid != null ? _optionsScrollGrid.Content : null;
         _optionPreviewCardsRoot = _optionPreviewCardsScrollGrid != null ? _optionPreviewCardsScrollGrid.Content : null;
         _optionPreviewOptionsRoot = _optionPreviewOptionsScrollGrid != null ? _optionPreviewOptionsScrollGrid.Content : null;
-        _confirmButton = panelObject.transform.Find("ConfirmDecision")?.GetComponent<Button>();
-        _confirmText = _confirmButton != null ? _confirmButton.transform.Find("Label")?.GetComponent<Text>() : null;
-        if (_panel == null || _promptText == null || _countText == null || _cardsScrollGrid == null ||
+        _panelConfirmButton = panelObject.transform.Find("ConfirmDecision")?.GetComponent<Button>();
+        if (_panel == null || _panelPromptText == null || _panelCountText == null ||
             _optionsScrollGrid == null || _optionPreviewCardsScrollGrid == null || _optionPreviewOptionsScrollGrid == null ||
-            _externalCardsRoot == null || _optionsRoot == null || _optionPreviewCardsRoot == null || _optionPreviewOptionsRoot == null ||
-            _confirmButton == null || _confirmText == null)
+            _optionsRoot == null || _optionPreviewCardsRoot == null || _optionPreviewOptionsRoot == null ||
+            _panelConfirmButton == null)
         {
             Debug.LogError("PendingDecisionPanel prefab contract is incomplete.", panelObject);
             Destroy(panelObject);
@@ -550,22 +561,109 @@ public sealed class PendingDecisionController : MonoBehaviour
             _panelBindingFailed = true;
             return;
         }
-        _confirmButton.onClick.AddListener(Submit);
+
+        GameObject barPrefab = Resources.Load<GameObject>(InstructionBarPrefabResourcePath);
+        GameObject drawerPrefab = Resources.Load<GameObject>(CardDrawerPrefabResourcePath);
+        if (barPrefab == null || drawerPrefab == null)
+        {
+            Debug.LogError("Adaptive decision prefabs are missing from Resources/UI.", this);
+            Destroy(panelObject);
+            _panel = null;
+            _panelBindingFailed = true;
+            return;
+        }
+
+        _instructionBar = Instantiate(barPrefab, transform);
+        _instructionBar.name = "DecisionInstructionBar";
+        _barPromptText = _instructionBar.transform.Find("Prompt")?.GetComponent<Text>();
+        _barCountText = _instructionBar.transform.Find("Count")?.GetComponent<Text>();
+        _barConfirmButton = _instructionBar.transform.Find("ConfirmDecision")?.GetComponent<Button>();
+
+        _cardDrawer = Instantiate(drawerPrefab, transform);
+        _cardDrawer.name = "DecisionCardDrawer";
+        Transform expanded = _cardDrawer.transform.Find("Expanded");
+        _drawerExpanded = expanded != null ? expanded.gameObject : null;
+        Transform collapsedTab = _cardDrawer.transform.Find("CollapsedTab");
+        _drawerCollapsedTab = collapsedTab != null ? collapsedTab.gameObject : null;
+        _drawerPromptText = expanded?.Find("Prompt")?.GetComponent<Text>();
+        _drawerCountText = expanded?.Find("Count")?.GetComponent<Text>();
+        _drawerConfirmButton = expanded?.Find("ConfirmDecision")?.GetComponent<Button>();
+        Transform cardsViewport = expanded?.Find("DecisionCards");
+        _cardsScrollGrid = cardsViewport != null ? cardsViewport.GetComponent<DecisionScrollGrid>() : null;
+        _externalCardsRoot = _cardsScrollGrid != null ? _cardsScrollGrid.Content : null;
+        Button collapseButton = expanded?.Find("CollapseButton")?.GetComponent<Button>();
+        Button expandButton = collapsedTab?.GetComponent<Button>();
+
+        if (_barPromptText == null || _barCountText == null || _barConfirmButton == null ||
+            _drawerExpanded == null || _drawerCollapsedTab == null || _drawerPromptText == null ||
+            _drawerCountText == null || _drawerConfirmButton == null || _cardsScrollGrid == null ||
+            _externalCardsRoot == null || collapseButton == null || expandButton == null)
+        {
+            Debug.LogError("Adaptive decision prefab contract is incomplete.", this);
+            Destroy(panelObject);
+            Destroy(_instructionBar);
+            Destroy(_cardDrawer);
+            _panel = null;
+            _panelBindingFailed = true;
+            return;
+        }
+
+        _panelConfirmButton.onClick.AddListener(Submit);
+        _barConfirmButton.onClick.AddListener(Submit);
+        _drawerConfirmButton.onClick.AddListener(Submit);
+        collapseButton.onClick.AddListener(() => SetDrawerExpanded(false));
+        expandButton.onClick.AddListener(() => SetDrawerExpanded(true));
         _panel.gameObject.SetActive(false);
+        _instructionBar.SetActive(false);
+        _cardDrawer.SetActive(false);
     }
 
     private void ConfigurePanel(CardZone zone, bool supplyChoice, bool optionChoice,
-        bool deckPositionChoice, bool cardNameChoice, bool hasCardPreview)
+        bool deckPositionChoice, bool cardNameChoice, bool hasCardPreview, bool newDecision)
     {
-        if (_panel == null) return;
+        if (_panel == null || _instructionBar == null || _cardDrawer == null) return;
         bool cardsVisible = zone != CardZone.Hand && !supplyChoice && !optionChoice;
-        if (_cardsScrollGrid != null) _cardsScrollGrid.gameObject.SetActive(cardsVisible);
+        bool compactVisible = !cardsVisible && !optionChoice;
+        _panel.gameObject.SetActive(optionChoice);
+        _instructionBar.SetActive(compactVisible);
+        _cardDrawer.SetActive(cardsVisible);
+        if (cardsVisible && newDecision) SetDrawerExpanded(true);
+
+        if (optionChoice)
+        {
+            _promptText = _panelPromptText;
+            _countText = _panelCountText;
+            _confirmButton = _panelConfirmButton;
+            _panel.SetAsLastSibling();
+        }
+        else if (cardsVisible)
+        {
+            _promptText = _drawerPromptText;
+            _countText = _drawerCountText;
+            _confirmButton = _drawerConfirmButton;
+            _cardDrawer.transform.SetAsLastSibling();
+        }
+        else
+        {
+            _promptText = _barPromptText;
+            _countText = _barCountText;
+            _confirmButton = _barConfirmButton;
+            _instructionBar.transform.SetAsLastSibling();
+        }
+
         bool genericOptions = optionChoice && !deckPositionChoice && !cardNameChoice;
         if (_optionsScrollGrid != null) _optionsScrollGrid.gameObject.SetActive(genericOptions && !hasCardPreview);
         if (_optionPreviewCardsScrollGrid != null) _optionPreviewCardsScrollGrid.gameObject.SetActive(genericOptions && hasCardPreview);
         if (_optionPreviewOptionsScrollGrid != null) _optionPreviewOptionsScrollGrid.gameObject.SetActive(genericOptions && hasCardPreview);
         if (_deckPositionView != null) _deckPositionView.gameObject.SetActive(deckPositionChoice);
         if (_cardNameView != null) _cardNameView.gameObject.SetActive(cardNameChoice);
+    }
+
+    private void SetDrawerExpanded(bool expanded)
+    {
+        if (_drawerExpanded != null) _drawerExpanded.SetActive(expanded);
+        if (_drawerCollapsedTab != null) _drawerCollapsedTab.SetActive(!expanded);
+        if (expanded) _cardsScrollGrid?.RefreshLayout(false);
     }
 
     private Transform FindHandCardsRoot()
