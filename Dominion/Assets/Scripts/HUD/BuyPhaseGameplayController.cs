@@ -226,7 +226,8 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             if (binding == null)
                 binding = child.gameObject.AddComponent<SupplyPileInteractionBinding>();
 
-            binding.Bind(definitionId, image.sprite, RequestBuyCard, ShowZoom);
+            binding.Bind(definitionId, image.sprite, RequestBuyCard,
+                (sprite, definition) => ShowZoom(sprite, definition));
             _supplyBindings[definitionId] = binding;
         }
     }
