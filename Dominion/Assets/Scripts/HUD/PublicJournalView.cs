@@ -21,7 +21,7 @@ public sealed class PublicJournalView : MonoBehaviour
     private Button _sendButton;
     private GameObject _entryPrefab;
     private readonly List<GameObject> _rows = new List<GameObject>();
-    private int _lastRenderedVersion = -1;
+    private int _lastRenderedVersion = int.MinValue;
     private float _nextLocalSendTime;
 
     private void Awake()
@@ -42,6 +42,7 @@ public sealed class PublicJournalView : MonoBehaviour
     private void Update()
     {
         if (_sendButton != null) _sendButton.interactable = Time.unscaledTime >= _nextLocalSendTime;
+        Refresh(NetworkGameState.State);
     }
 
     private void BindExistingUi()
@@ -70,8 +71,6 @@ public sealed class PublicJournalView : MonoBehaviour
             return;
         }
 
-        _legacyJournalText.enabled = false;
-        _legacyJournalText.raycastTarget = false;
         _surface = Instantiate(prefab, _legacyJournalText.transform, false);
         _content = _surface.transform.Find("EntriesScroll/Viewport/Content") as RectTransform;
         _scroll = _surface.transform.Find("EntriesScroll")?.GetComponent<ScrollRect>();
@@ -82,6 +81,8 @@ public sealed class PublicJournalView : MonoBehaviour
             Debug.LogError("JournalSurface prefab contract is incomplete.", this);
             Destroy(_surface); _surface = null; return;
         }
+        _legacyJournalText.enabled = false;
+        _legacyJournalText.raycastTarget = false;
         _input.characterLimit = JournalRules.MaxChatLength;
         _input.onSubmit.AddListener(SubmitChat);
         _sendButton.onClick.AddListener(SendChat);
@@ -97,7 +98,12 @@ public sealed class PublicJournalView : MonoBehaviour
     {
         if (_input == null || Time.unscaledTime < _nextLocalSendTime) return;
         string message = _input.text != null ? _input.text.Trim() : string.Empty;
-        if (message.Length == 0 || PlayersTurnsHandler.Instance == null) return;
+        if (message.Length == 0) return;
+        if (PlayersTurnsHandler.Instance == null)
+        {
+            Debug.LogError("Cannot send chat message: PlayersTurnsHandler is unavailable.", this);
+            return;
+        }
         PlayersTurnsHandler.Instance.SendChatMessage(message);
         _input.text = string.Empty;
         _nextLocalSendTime = Time.unscaledTime + 1f;

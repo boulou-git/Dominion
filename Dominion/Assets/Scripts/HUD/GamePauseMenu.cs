@@ -2,7 +2,6 @@ using System;
 using ExitGames.Client.Photon;
 using Photon.Pun;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -50,11 +49,7 @@ public sealed class GamePauseMenu : MonoBehaviour
         root.name = RootName;
         SceneManager.MoveGameObjectToScene(root, scene);
 
-        if (FindFirstObjectByType<EventSystem>() == null)
-        {
-            GameObject eventSystem = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-            SceneManager.MoveGameObjectToScene(eventSystem, scene);
-        }
+        SingleEventSystemGuard.EnsureExactlyOne();
     }
 
     private void Awake()

@@ -26,6 +26,7 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(entry.GetComponent<Text>());
         Assert.NotNull(entry.GetComponent<Button>());
         Assert.NotNull(entry.GetComponent<ContentSizeFitter>());
+        Assert.Greater(entry.GetComponent<LayoutElement>()?.minHeight, 0f);
     }
 
     [Test]
