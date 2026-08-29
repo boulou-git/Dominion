@@ -47,6 +47,19 @@ public sealed class JournalRulesTests
         Assert.AreEqual("+2 Pièces", state.Journal[0].Message);
     }
 
+    [Test]
+    public void Journal_DropsOldestEntriesAfterReplicatedHistoryLimit()
+    {
+        GameStateSnapshot state = State();
+        for (int i = 0; i < 80; i++)
+            JournalRules.RecordReveal(state, state.Players[0], "base:cuivre");
+
+        Assert.AreEqual(64, state.Journal.Count);
+        Assert.AreEqual(17, state.Journal[0].Sequence);
+        Assert.AreEqual(80, state.Journal[state.Journal.Count - 1].Sequence);
+        Assert.AreEqual(81, state.NextJournalSequence);
+    }
+
     private static GameStateSnapshot State()
     {
         return new GameStateSnapshot
