@@ -149,6 +149,9 @@ public static class TrashRules
             return false;
         }
 
+        if (owner.ResolvedDurationCards != null)
+            owner.ResolvedDurationCards.Remove(instanceId);
+
         owner.CardsTrashedThisTurn++;
         eventBus?.Publish(new GameEvent(
             GameEventType.CardTrashed,

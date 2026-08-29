@@ -295,6 +295,34 @@ public sealed class FleauxSimpleCardRulesTests
         Assert.That(player.ResolvedDurationCards.Contains(cultist.InstanceId), Is.False);
     }
 
+    [Test]
+    public void Cultiste_WithBothArtifactsTrashesItselfAndGainsHorreur()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance cultist = AddOwned(state, player, "fleaux:cultiste", CardZone.InPlay);
+        CardInstance dagger = AddOwned(state, player, "fleaux:dague_rituelle", CardZone.None);
+        CardInstance incense = AddOwned(state, player, "fleaux:encens_noir", CardZone.None);
+        player.Artifacts.Add(dagger.InstanceId);
+        player.Artifacts.Add(incense.InstanceId);
+        AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        AddOwned(state, player, "base:argent", CardZone.Deck);
+        CardInstance horror = new CardInstance(state.NextCardInstanceId++, "fleaux:horreur", string.Empty);
+        state.CardInstances.Add(horror);
+        SpecialPileSnapshot horrorPile = new SpecialPileSnapshot("fleaux:horreurs", "Horreurs");
+        horrorPile.CardInstanceIds.Add(horror.InstanceId);
+        state.SpecialPiles.Add(horrorPile);
+
+        GameRuleResult start = TurnLifecycleRules.TryResolveTurnStarted(state, player, Resolve, new Random(1));
+
+        Assert.That(start.Status, Is.EqualTo(GameRuleStatus.Applied), start.Error);
+        Assert.That(player.Hand.Count, Is.EqualTo(2));
+        Assert.That(state.TrashedCards, Does.Contain(cultist.InstanceId));
+        Assert.That(player.InPlay, Does.Not.Contain(cultist.InstanceId));
+        Assert.That(player.ResolvedDurationCards, Does.Not.Contain(cultist.InstanceId));
+        Assert.That(player.Discard, Does.Contain(horror.InstanceId));
+        Assert.That(horror.OwnerPlayerId, Is.EqualTo(player.PlayerId));
+    }
+
     private static GameStateSnapshot NewState(out PlayerStateSnapshot player)
     {
         GameStateSnapshot state = new GameStateSnapshot

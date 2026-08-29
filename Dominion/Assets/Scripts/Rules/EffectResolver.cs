@@ -116,6 +116,9 @@ public static class EffectResolver
         }
         if (e.requiresMinActionsPlayedThisTurn > 0 && c.Actor.ActionsPlayedThisTurn < e.requiresMinActionsPlayedThisTurn)
             return EffectResolutionResult.Applied();
+        if (e.requiresSourceInPlay && (c.SourceCardInstanceId <= 0 || c.Actor.InPlay == null ||
+            !c.Actor.InPlay.Contains(c.SourceCardInstanceId)))
+            return EffectResolutionResult.Applied();
         if (e.requiresMaxHandSize >= 0 && (c.Actor.Hand == null || c.Actor.Hand.Count > e.requiresMaxHandSize))
             return EffectResolutionResult.Applied();
         if (e.requiresMinDiscardedOrTrashedThisTurn > 0 &&

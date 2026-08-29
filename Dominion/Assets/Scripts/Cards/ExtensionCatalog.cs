@@ -120,6 +120,7 @@ public sealed class CardEffectData
     public string specialPileId;
     public string artifactId;
     public bool drawForMissing;
+    public bool requiresSourceInPlay;
     public int requiresMinDiscardedOrTrashedThisTurn;
     public int requiresMinTrashedThisTurn;
     public int requiresMinDistinctTypesInHand;

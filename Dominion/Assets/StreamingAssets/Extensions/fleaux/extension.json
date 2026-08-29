@@ -194,9 +194,9 @@
       ] },
       { "when": "turn_started", "scope": "in_play", "filter": { "eventPlayer": "self" }, "effects": [
         { "op": "draw", "target": "self", "amount": 2 },
-		{ "op": "mark_duration_resolved", "target": "self" },
 		{ "op": "trash_source_card", "target": "self", "requiresArtifactIds": ["fleaux:dague_rituelle", "fleaux:encens_noir"] },
-        { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:horreurs", "amount": 1, "destinationZone": "discard", "requiresArtifactIds": ["fleaux:dague_rituelle", "fleaux:encens_noir"] }
+        { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:horreurs", "amount": 1, "destinationZone": "discard", "requiresArtifactIds": ["fleaux:dague_rituelle", "fleaux:encens_noir"] },
+		{ "op": "mark_duration_resolved", "target": "self", "requiresSourceInPlay": true }
       ] }
     ] },
     { "id": "cloitre", "name": "Cloître", "cost": 3, "types": ["Action", "Réaction", "Durée"], "image": "cloitre.png", "text": "+3 Cartes\n\nDéfaussez 2 cartes.\n\nMettez de côté, face cachée sous cette carte, une carte de votre main. Au début de votre prochain tour, prenez-la dans votre main.\n\nRéaction : lorsqu’un autre joueur joue une carte Attaque, vous pouvez révéler Cloître depuis votre main et le mettre de côté. Au début de votre prochain tour, jouez-le.", "abilities": [
