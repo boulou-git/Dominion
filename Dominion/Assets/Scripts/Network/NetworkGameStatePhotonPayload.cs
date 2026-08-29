@@ -24,7 +24,7 @@ public static class NetworkGameStatePhotonPayload
         using (MemoryStream output = new MemoryStream())
         {
             output.WriteByte(GzipUtf8Format);
-            using (GZipStream gzip = new GZipStream(output, CompressionLevel.Fastest, true))
+            using (GZipStream gzip = new GZipStream(output, System.IO.Compression.CompressionLevel.Fastest, true))
                 gzip.Write(utf8, 0, utf8.Length);
             return output.ToArray();
         }
