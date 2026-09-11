@@ -12,6 +12,7 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     [SerializeField] private PlayerHandler _playerHandler;
     private string _lastObservedActivePlayerId;
     private int _lastObservedTurnNumber = -1;
+    private int _lastAutoAdvanceVersion = -1;
 
     public void Initialise()
     {
@@ -25,6 +26,15 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     private void OnDestroy()
     {
         NetworkGameState.StateChanged -= OnGameStateChanged;
+    }
+
+    private void Update()
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (!ShouldAutoAdvanceActionPhase(state) || _lastAutoAdvanceVersion == state.Version) return;
+
+        _lastAutoAdvanceVersion = state.Version;
+        AdvancePhase();
     }
 
     public void AdvancePhase()
@@ -156,6 +166,34 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
         return state != null && state.IsStarted && !state.IsPaused &&
                (state.Resolution == null || !state.Resolution.IsActive) &&
                state.ActivePlayerId == NetworkGameState.LocalPlayerId;
+    }
+
+    private static bool ShouldAutoAdvanceActionPhase(GameStateSnapshot state)
+    {
+        if (!CanSendActivePlayerCommand(state) || state.Phase != NetworkGameState.ActionPhase)
+            return false;
+
+        PlayerStateSnapshot localPlayer = state.Players != null
+            ? state.Players.Find(player => player != null && player.PlayerId == NetworkGameState.LocalPlayerId)
+            : null;
+        if (localPlayer == null) return false;
+        if (localPlayer.Actions <= 0) return true;
+        if (localPlayer.Hand == null || localPlayer.Hand.Count == 0) return true;
+
+        foreach (int instanceId in localPlayer.Hand)
+        {
+            CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
+            if (instance == null) return false;
+
+            ExtensionPackageData extension;
+            ExtensionCardData definition;
+            if (!RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition))
+                return false;
+            if (CardDefinitionRules.HasType(definition, "Action"))
+                return false;
+        }
+
+        return true;
     }
 
     private static bool CanSendPendingDecision(GameStateSnapshot state, string decisionId)
