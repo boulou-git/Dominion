@@ -129,6 +129,7 @@ public static class TriggerResolver
         if (!subject && string.IsNullOrWhiteSpace(listenerScope))
             return RejectAndAbort(state, 0, 0, 0, "External listener scope is missing from the decision continuation.");
 
+        int previouslyPendingEvents = resolution.Events.PendingCount;
         AbilityResolutionResult resumed = AbilityResolver.ResolveTimingFromCursor(
             definition,
             continuation.Timing,
@@ -138,6 +139,8 @@ public static class TriggerResolver
                 FilterMatches(ability != null ? ability.filter : null, gameEvent, owner, resolveCardDefinition),
             continuation.AbilityIndex,
             continuation.EffectIndex + 1);
+
+        resolution.Events.PromoteEventsPublishedSince(previouslyPendingEvents);
 
         if (resumed.Status == EffectResolutionStatus.Rejected)
             return RejectAndAbort(state, 0, resumed.AbilitiesMatched, resumed.EffectsResolved, resumed.Error);

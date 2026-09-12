@@ -37,6 +37,45 @@ public sealed class ThroneRoomRulesTests
         Assert.That(player.InPlay, Does.Contain(village.InstanceId));
     }
 
+    [Test]
+    public void ThroneRoomOnThroneRoom_ResolvesFirstChoiceTwiceBeforeRequestingSecondChoice()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance outer = AddOwned(state, player, "base:salle_du_trone", CardZone.Hand);
+        CardInstance inner = AddOwned(state, player, "base:salle_du_trone", CardZone.Hand);
+        CardInstance village = AddOwned(state, player, "base:village", CardZone.Hand);
+        AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        CardInstance drawnAction = AddOwned(state, player, "base:forge", CardZone.Deck);
+
+        GameRuleResult chooseInner = GameRules.TryPlayCard(
+            state, player.PlayerId, outer.InstanceId, Resolve, new Random(1));
+        Assert.That(chooseInner.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), chooseInner.Error);
+
+        GameRuleResult chooseFirstAction = GameRules.TrySubmitDecision(
+            state, player.PlayerId, state.Resolution.PendingDecision.DecisionId,
+            new[] { inner.InstanceId }, Resolve, new Random(1));
+        Assert.That(chooseFirstAction.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), chooseFirstAction.Error);
+        CollectionAssert.AreEqual(new[] { village.InstanceId }, state.Resolution.PendingDecision.CandidateInstanceIds);
+
+        GameRuleResult chooseSecondAction = GameRules.TrySubmitDecision(
+            state, player.PlayerId, state.Resolution.PendingDecision.DecisionId,
+            new[] { village.InstanceId }, Resolve, new Random(1));
+
+        Assert.That(chooseSecondAction.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), chooseSecondAction.Error);
+        CollectionAssert.AreEqual(new[] { drawnAction.InstanceId }, state.Resolution.PendingDecision.CandidateInstanceIds);
+        Assert.That(player.Hand, Does.Contain(drawnAction.InstanceId),
+            "The first selected Action must finish both plays before Throne Room asks again.");
+        Assert.That(player.Actions, Is.EqualTo(4));
+
+        GameRuleResult finished = GameRules.TrySubmitDecision(
+            state, player.PlayerId, state.Resolution.PendingDecision.DecisionId,
+            new[] { drawnAction.InstanceId }, Resolve, new Random(1));
+
+        Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
+        Assert.That(state.Resolution.PendingDecision.IsPending, Is.False);
+        Assert.That(player.InPlay, Does.Contain(drawnAction.InstanceId));
+    }
+
     private static GameStateSnapshot NewState(out PlayerStateSnapshot player)
     {
         GameStateSnapshot state = new GameStateSnapshot

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 /// <summary>
@@ -74,6 +75,35 @@ public sealed class GameEventBus
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Moves events published while a suspended ability was being resumed ahead of
+    /// events that were already waiting. This preserves Dominion's nested resolution
+    /// order: finish the card selected by the current effect before continuing an
+    /// older repeated play (notably Throne Room played by Throne Room).
+    /// </summary>
+    public void PromoteEventsPublishedSince(int previouslyPendingCount)
+    {
+        int existingCount = Math.Max(0, Math.Min(previouslyPendingCount, _pending.Count));
+        if (existingCount == 0 || existingCount == _pending.Count)
+            return;
+
+        List<GameEvent> ordered = new List<GameEvent>(_pending);
+        _pending.Clear();
+        for (int index = existingCount; index < ordered.Count; index++)
+            _pending.Enqueue(ordered[index]);
+        for (int index = 0; index < existingCount; index++)
+            _pending.Enqueue(ordered[index]);
+
+        if (_backingSnapshot == null)
+            return;
+
+        if (_backingSnapshot.PendingEvents == null)
+            _backingSnapshot.PendingEvents = new List<GameEventSnapshot>();
+        _backingSnapshot.PendingEvents.Clear();
+        foreach (GameEvent pendingEvent in _pending)
+            _backingSnapshot.PendingEvents.Add(GameEventSnapshot.FromRuntime(pendingEvent));
     }
 
     public List<GameEvent> SnapshotHistory()
