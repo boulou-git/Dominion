@@ -113,6 +113,12 @@
         { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1, "requiresSelectedOption": "react" }
       ] }
     ] },
+    { "id": "denier_maudit", "name": "Denier maudit", "cost": 4, "types": ["Trésor"], "image": "denier_maudit.png", "text": "+2 🪙\n\nRévélez votre main.\n\nPour chaque carte Maladie ou Malédiction révélée : +1 🪙, jusqu’à +2 🪙.\n\nSi vous n’en révélez aucune, recevez une Maladie.", "abilities": [ { "when": "play", "effects": [
+      { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
+      { "op": "reveal_zone", "target": "self", "zone": "hand" },
+      { "op": "add_resource_per_matching_cards_in_hand", "target": "self", "resource": "coins", "amount": 1, "max": 2, "matchingCardTypes": ["Maladie", "Malédiction"] },
+      { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:maladies", "amount": 1, "destinationZone": "discard", "requiresNoMatchingCardsInHand": true, "matchingCardTypes": ["Maladie", "Malédiction"] }
+    ] } ] },
     { "id": "soeurs", "name": "Sœurs", "cost": 3, "types": ["Action"], "image": "soeurs.png", "text": "+1 Carte\n\nVous pouvez jouer une carte Action coûtant jusqu’à 2 🪙 de votre main.", "abilities": [ { "when": "play", "effects": [
       { "op": "draw", "target": "self", "amount": 1 },
       { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "allowPass": true, "cardType": "Action", "maxCost": 2, "prompt": "Vous pouvez jouer une carte Action coûtant jusqu’à 2 🪙." },

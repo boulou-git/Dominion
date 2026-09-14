@@ -125,6 +125,7 @@ public sealed class CardEffectData
     public int requiresMinTrashedThisTurn;
     public int requiresMinDistinctTypesInHand;
     public int requiresMinMatchingCardsInHand;
+    public bool requiresNoMatchingCardsInHand;
     public List<string> matchingCardTypes = new List<string>();
     public List<string> requiresArtifactIds = new List<string>();
 }

@@ -45,7 +45,8 @@ public static class EffectResolver
     private delegate EffectResolutionResult Handler(CardEffectData e, EffectExecutionContext c);
     private static readonly Dictionary<string, Handler> H = new Dictionary<string, Handler>(StringComparer.OrdinalIgnoreCase)
     {
-        {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection}, {"reduce_costs_this_turn", ReduceCostsThisTurn},
+        {"add_resource", AddResource}, {"add_resource_per_last_selection", AddResourcePerSelection},
+        {"add_resource_per_matching_cards_in_hand", AddResourcePerMatchingCardsInHand}, {"reduce_costs_this_turn", ReduceCostsThisTurn},
         {"draw", Draw}, {"draw_last_selection_count", DrawSelectionCount}, {"draw_to_hand_size", DrawToHandSize}, {"draw_to_hand_size_skipping_type", DrawToHandSizeSkippingType},
         {"choose_cards", ChooseCards}, {"choose_cards_per_empty_pile", ChoosePerEmptyPile}, {"choose_options", ChooseOptions},
         {"choose_options_repeated_per_empty_kingdom_pile", ChooseOptionsRepeatedPerEmptyKingdomPile},
@@ -132,6 +133,9 @@ public static class EffectResolver
         if (e.requiresMinMatchingCardsInHand > 0 &&
             CountMatchingTypes(c.State, c.Actor.Hand, e.matchingCardTypes) < e.requiresMinMatchingCardsInHand)
             return EffectResolutionResult.Applied();
+        if (e.requiresNoMatchingCardsInHand &&
+            CountMatchingTypes(c.State, c.Actor.Hand, e.matchingCardTypes) > 0)
+            return EffectResolutionResult.Applied();
         if (e.requiresArtifactIds != null)
             foreach (string artifactId in e.requiresArtifactIds)
                 if (!ArtifactRules.Controls(c.State, c.Actor, artifactId)) return EffectResolutionResult.Applied();
@@ -159,6 +163,20 @@ public static class EffectResolver
     {
         if (!Self(e) || c.Resolution == null || e.amount < 0) return EffectResolutionResult.Rejected("Invalid add_resource_per_last_selection effect.");
         return AddResource(new CardEffectData { target = "self", resource = e.resource, amount = e.amount * c.Resolution.LastSelectionCount }, c);
+    }
+
+    private static EffectResolutionResult AddResourcePerMatchingCardsInHand(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || e.amount < 0 || e.matchingCardTypes == null || e.matchingCardTypes.Count == 0)
+            return EffectResolutionResult.Rejected("Invalid add_resource_per_matching_cards_in_hand effect.");
+        int matchingCards = CountMatchingTypes(c.State, c.Actor.Hand, e.matchingCardTypes);
+        if (e.max > 0) matchingCards = Math.Min(matchingCards, e.max);
+        return AddResource(new CardEffectData
+        {
+            target = "self",
+            resource = e.resource,
+            amount = e.amount * matchingCards
+        }, c);
     }
 
     private static EffectResolutionResult ReduceCostsThisTurn(CardEffectData e, EffectExecutionContext c)

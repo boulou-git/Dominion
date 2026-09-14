@@ -16,7 +16,7 @@ public sealed class FleauxFoundationRulesTests
     {
         ExtensionPackageData extension = ExtensionCatalog.Find("fleaux");
         Assert.That(extension, Is.Not.Null);
-        Assert.That(extension.cards.Count, Is.EqualTo(27));
+        Assert.That(extension.cards.Count, Is.EqualTo(28));
         Assert.That(extension.baseCards.Count, Is.EqualTo(7));
         Assert.That(extension.artifacts.Count, Is.EqualTo(7));
         Assert.That(extension.specialPiles.Count, Is.EqualTo(4));
@@ -50,6 +50,44 @@ public sealed class FleauxFoundationRulesTests
         Assert.That(usage.UsesArtifact("fleaux:encens_noir"), Is.True);
         Assert.That(usage.UsesArtifact("fleaux:etendard_divin"), Is.True);
         Assert.That(usage.UsesArtifact("fleaux:necronomicon"), Is.False);
+    }
+
+    [Test]
+    public void DenierMaudit_RevealsHandAndCapsMatchingCardBonusAtTwo()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        state.Phase = GameRules.BuyPhase;
+        CardInstance coin = AddOwned(state, player, "fleaux:denier_maudit", CardZone.Hand);
+        AddOwned(state, player, "fleaux:fievre", CardZone.Hand);
+        AddOwned(state, player, "fleaux:gangrene", CardZone.Hand);
+        AddOwned(state, player, "base:malediction", CardZone.Hand);
+
+        GameRuleResult result = GameRules.TryPlayCard(state, player.PlayerId, coin.InstanceId, Resolve, new Random(1));
+
+        Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
+        Assert.That(player.Coins, Is.EqualTo(4));
+        Assert.That(state.Journal.FindAll(entry => entry.Kind == JournalRules.RevealKind).Count, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void DenierMaudit_GainsDiseaseWhenHandHasNoDiseaseOrCurse()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        state.Phase = GameRules.BuyPhase;
+        CardInstance disease = new CardInstance(state.NextCardInstanceId++, "fleaux:fievre", string.Empty);
+        state.CardInstances.Add(disease);
+        SpecialPileSnapshot pile = new SpecialPileSnapshot("fleaux:maladies", "Maladies");
+        pile.CardInstanceIds.Add(disease.InstanceId);
+        state.SpecialPiles.Add(pile);
+        CardInstance coin = AddOwned(state, player, "fleaux:denier_maudit", CardZone.Hand);
+        AddOwned(state, player, "base:cuivre", CardZone.Hand);
+
+        GameRuleResult result = GameRules.TryPlayCard(state, player.PlayerId, coin.InstanceId, Resolve, new Random(1));
+
+        Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
+        Assert.That(player.Coins, Is.EqualTo(2));
+        Assert.That(player.Discard, Does.Contain(disease.InstanceId));
+        Assert.That(pile.CardInstanceIds, Is.Empty);
     }
 
     [Test]
