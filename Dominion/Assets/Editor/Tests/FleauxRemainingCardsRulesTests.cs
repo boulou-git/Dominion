@@ -72,9 +72,44 @@ public sealed class FleauxRemainingCardsRulesTests
 
         Assert.That(waiting.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), waiting.Error);
         Assert.That(player.Artifacts.Contains(artifact.InstanceId), Is.True);
+        GameRuleResult cardChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "hand" }, Resolve, new Random(1));
+        Assert.That(cardChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), cardChoice.Error);
+        int copperId = player.Hand.Single();
         GameRuleResult finished = GameRules.TrySubmitDecision(state, player.PlayerId,
-            state.Resolution.PendingDecision.DecisionId, Array.Empty<int>(), Resolve, new Random(1));
+            state.Resolution.PendingDecision.DecisionId, new[] { copperId }, Resolve, new Random(1));
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
+        Assert.That(state.TrashedCards, Does.Contain(copperId));
+    }
+
+    [Test]
+    public void Necromancien_CanTrashActionFromSupplyWithoutAwardingArtifactForThatTrash()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        SupplyPileSnapshot actionPile = new SupplyPileSnapshot("base:village", 10, true);
+        SupplyPileSnapshot treasurePile = new SupplyPileSnapshot("base:argent", 10);
+        state.SupplyPiles.Add(actionPile);
+        state.SupplyPiles.Add(treasurePile);
+        AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        CardInstance necromancer = AddOwned(state, player, "fleaux:necromancien", CardZone.Hand);
+
+        GameRuleResult sourceChoice = GameRules.TryPlayCard(state, player.PlayerId, necromancer.InstanceId, Resolve, new Random(1));
+        Assert.That(sourceChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), sourceChoice.Error);
+        GameRuleResult supplyChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "supply" }, Resolve, new Random(1));
+
+        Assert.That(supplyChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), supplyChoice.Error);
+        Assert.That(state.Resolution.PendingDecision.CandidateDefinitionIds, Does.Contain("base:village"));
+        Assert.That(state.Resolution.PendingDecision.CandidateDefinitionIds, Does.Not.Contain("base:argent"));
+        GameRuleResult finished = GameRules.TrySubmitSupplyDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "base:village" }, Resolve, new Random(1));
+
+        Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
+        Assert.That(actionPile.RemainingCount, Is.EqualTo(9));
+        Assert.That(player.CardsTrashedThisTurn, Is.EqualTo(1));
+        Assert.That(player.Artifacts, Is.Empty);
+        Assert.That(state.TrashedCards.Select(id => state.CardInstances.Single(card => card.InstanceId == id).DefinitionId),
+            Does.Contain("base:village"));
     }
 
     [Test]

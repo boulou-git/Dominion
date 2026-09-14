@@ -166,12 +166,18 @@
       { "op": "gain_selected_trash", "target": "self", "destinationZone": "hand", "requiresSelectedOption": "trash" },
       { "op": "take_artifact", "target": "self", "artifactId": "fleaux:sac_d_ossements", "requiresSelectedOption": "artifact" }
     ] } ] },
-    { "id": "necromancien", "name": "Nécromancien", "cost": 5, "types": ["Action"], "image": "necromancien.png", "text": "+1 Carte\n+1 Action\n\nVous pouvez écarter une carte de votre main. Si vous aviez déjà écarté une autre carte ce tour-ci, prenez le Nécronomicon.", "abilities": [ { "when": "play", "effects": [
+    { "id": "necromancien", "name": "Nécromancien", "cost": 5, "types": ["Action"], "image": "necromancien.png", "text": "+1 Carte\n+1 Action\n\nVous pouvez écarter une carte de votre main ou une carte Action d'une pile de la Réserve.\n\nSi vous aviez déjà écarté une autre carte ce tour-ci, prenez le Nécronomicon.", "abilities": [ { "when": "play", "effects": [
       { "op": "draw", "target": "self", "amount": 1 },
       { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
       { "op": "take_artifact", "target": "self", "artifactId": "fleaux:necronomicon", "requiresMinTrashedThisTurn": 1 },
-      { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez écarter une carte de votre main." },
-      { "op": "trash_selected", "target": "self", "sourceZone": "hand" }
+      { "op": "choose_options", "target": "self", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez écarter une carte de votre main ou une carte Action de la Réserve.", "options": [
+        { "id": "hand", "label": "Écarter une carte de votre main" },
+        { "id": "supply", "label": "Écarter une carte Action de la Réserve" }
+      ] },
+      { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "allowNoEligible": true, "requiresSelectedOption": "hand", "prompt": "Choisissez une carte de votre main à écarter." },
+      { "op": "trash_selected", "target": "self", "sourceZone": "hand", "requiresSelectedOption": "hand" },
+      { "op": "choose_supply", "target": "self", "cardType": "Action", "min": 1, "max": 1, "allowNoEligible": true, "requiresSelectedOption": "supply", "prompt": "Choisissez une carte Action d'une pile de la Réserve à écarter." },
+      { "op": "trash_selected_supply", "target": "self", "requiresSelectedOption": "supply" }
     ] } ] },
     { "id": "alchimiste", "name": "Alchimiste", "cost": 4, "types": ["Action"], "image": "alchimiste.png", "text": "+1 Action\n\nRegardez les 3 cartes du dessus de votre deck. Défaussez-les toutes ou replacez-les dans l’ordre de votre choix.\n\nSi votre main contient au moins 3 types différents, prenez le Phylactère.", "abilities": [ { "when": "play", "effects": [
       { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
