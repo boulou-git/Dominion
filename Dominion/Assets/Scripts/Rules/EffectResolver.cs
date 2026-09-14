@@ -53,7 +53,8 @@ public static class EffectResolver
         {"choose_each_other_cards", ChooseEachOtherCards}, {"reveal_each_other_cards", RevealEachOtherCards},
         {"reveal_each_other_top_trash_type_except", RevealEachOtherTopTrashTypeExcept},
         {"inspect_top_cards", InspectTopCards}, {"reveal_top_cards", RevealTopCards}, {"reveal_top_if_named", RevealTopIfNamed}, {"move_all_ordered", MoveAllOrdered},
-        {"remember_selected_card_cost", RememberCost}, {"remember_selected_card", RememberSelectedCard}, {"reveal_selected", RevealSelected},
+        {"remember_selected_card_cost", RememberCost}, {"remember_trigger_card_cost", RememberTriggerCardCost},
+        {"remember_selected_card", RememberSelectedCard}, {"reveal_selected", RevealSelected},
         {"trash_selected", TrashSelected}, {"discard_selected", DiscardSelected}, {"discard_source_card", DiscardSourceCard}, {"discard_others_down_to", DiscardOthersDownTo},
         {"move_selected", MoveSelected}, {"move_last_moved", MoveLastMoved}, {"move_all_matching_types", MoveAllMatchingTypes},
         {"move_top_card", MoveTopCard}, {"play_selected", PlaySelected}, {"play_selected_twice_then_trash", PlaySelectedTwiceThenTrash}, {"insert_selected_into_deck", InsertSelectedIntoDeck},
@@ -447,6 +448,19 @@ public static class EffectResolver
         c.Resolution.SetLastSelectedCardCost(effectiveCost); return EffectResolutionResult.Applied();
     }
 
+    private static EffectResolutionResult RememberTriggerCardCost(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || c.Resolution == null || c.TriggerEvent == null || c.TriggerEvent.CardInstanceId <= 0)
+            return EffectResolutionResult.Rejected("Invalid remember_trigger_card_cost effect.");
+        CardInstance instance = Find(c.State, c.TriggerEvent.CardInstanceId);
+        ExtensionCardData definition = instance != null ? Def(instance.DefinitionId) : null;
+        int effectiveCost = CostRules.GetEffectiveCost(c.State, definition);
+        if (definition == null || effectiveCost < 0)
+            return EffectResolutionResult.Rejected("Trigger card definition/cost is invalid.");
+        c.Resolution.SetLastSelectedCardCost(effectiveCost);
+        return EffectResolutionResult.Applied();
+    }
+
     private static EffectResolutionResult RememberSelectedCard(CardEffectData e, EffectExecutionContext c)
     {
         if (!Self(e) || c.Resolution == null) return EffectResolutionResult.Rejected("Invalid remember_selected_card effect.");
@@ -473,7 +487,7 @@ public static class EffectResolver
         if (e.useLastSelectionCost)
         {
             if (c.Resolution.LastSelectedCardCost < 0) return min == 0 ? EffectResolutionResult.Applied() : EffectResolutionResult.Rejected("choose_supply requires a remembered selected-card cost.");
-            int dyn = c.Resolution.LastSelectedCardCost + e.costOffset; ceiling = ceiling >= 0 ? Math.Min(ceiling, dyn) : dyn;
+            int dyn = Math.Max(0, c.Resolution.LastSelectedCardCost + e.costOffset); ceiling = ceiling >= 0 ? Math.Min(ceiling, dyn) : dyn;
             if (e.exactCost) exact = dyn;
         }
         List<string> candidates = new List<string>(); if (c.State.SupplyPiles != null) foreach (SupplyPileSnapshot p in c.State.SupplyPiles)

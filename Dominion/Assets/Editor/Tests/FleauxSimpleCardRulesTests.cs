@@ -164,40 +164,34 @@ public sealed class FleauxSimpleCardRulesTests
     }
 
     [Test]
-    public void Fossoyeur_ReactionDecisionResumesExternalHandListenerOnce()
+    public void Fossoyeur_DiscardsReactingCopyAndGainsAtExactlyOneLess()
     {
         GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
         CardInstance fossoyeur = AddOwned(state, player, "fleaux:fossoyeur", CardZone.Hand);
-        CardInstance discard = AddOwned(state, player, "base:cuivre", CardZone.Hand);
-        AddOwned(state, player, "base:argent", CardZone.Deck);
-        CardInstance disease = new CardInstance(state.NextCardInstanceId++, "fleaux:fievre", string.Empty);
-        state.CardInstances.Add(disease);
-        SpecialPileSnapshot pile = new SpecialPileSnapshot("fleaux:maladies", "Maladies");
-        pile.CardInstanceIds.Add(disease.InstanceId);
-        state.SpecialPiles.Add(pile);
+        CardInstance silver = AddOwned(state, player, "base:argent", CardZone.Hand);
+        state.SupplyPiles.Add(new SupplyPileSnapshot("base:domaine", 8));
+        state.SupplyPiles.Add(new SupplyPileSnapshot("base:cuivre", 46));
         Assert.That(ResolutionQueue.TryBegin(state, player.PlayerId, out ResolutionQueue queue, out string beginError), Is.True, beginError);
-        Assert.That(SpecialPileRules.TryGainTop(state, player, pile.PileId, CardZone.Discard, 0,
-            queue.Events, Resolve, out _, out string gainError), Is.True, gainError);
+        Assert.That(TrashRules.TryTrashFromHand(state, player, silver.InstanceId, 0,
+            queue.Events, out string trashError), Is.True, trashError);
 
         TriggerResolutionResult first = TriggerResolver.ResolvePending(queue, state, Resolve, new Random(1));
 
         Assert.That(first.Status, Is.EqualTo(EffectResolutionStatus.WaitingForChoice), first.Error);
         Assert.That(queue.PendingDecision.ListenerCardInstanceId, Is.EqualTo(fossoyeur.InstanceId));
         Assert.That(queue.PendingDecision.ListenerScope, Is.EqualTo(DeclarativeRuleVocabulary.InHandScope));
-        string revealDecision = queue.PendingDecision.DecisionId;
-        GameRuleResult reveal = GameRules.TrySubmitOptionDecision(state, player.PlayerId, revealDecision,
-            new[] { "reveal" }, Resolve, new Random(1));
-        Assert.That(reveal.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), reveal.Error);
-        Assert.That(queue.PendingDecision.Operation, Is.EqualTo("choose_cards"));
-
-        string discardDecision = queue.PendingDecision.DecisionId;
-        GameRuleResult finished = GameRules.TrySubmitDecision(state, player.PlayerId, discardDecision,
-            new[] { discard.InstanceId }, Resolve, new Random(1));
+        GameRuleResult gainChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            queue.PendingDecision.DecisionId, new[] { "react" }, Resolve, new Random(1));
+        Assert.That(gainChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), gainChoice.Error);
+        Assert.That(player.Discard, Does.Contain(fossoyeur.InstanceId));
+        Assert.That(queue.PendingDecision.CandidateDefinitionIds, Is.EquivalentTo(new[] { "base:domaine" }));
+        GameRuleResult finished = GameRules.TrySubmitSupplyDecision(state, player.PlayerId,
+            queue.PendingDecision.DecisionId, new[] { "base:domaine" }, Resolve, new Random(1));
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
-        Assert.That(player.Hand.Contains(fossoyeur.InstanceId), Is.True);
-        Assert.That(player.Discard.Contains(discard.InstanceId), Is.True);
-        Assert.That(player.Hand.Count(id => id == fossoyeur.InstanceId), Is.EqualTo(1));
+        Assert.That(player.Hand.Contains(fossoyeur.InstanceId), Is.False);
+        Assert.That(player.Discard.Select(id => state.CardInstances.Find(card => card.InstanceId == id).DefinitionId),
+            Does.Contain("base:domaine"));
         Assert.That(state.Resolution.IsActive, Is.False);
     }
 
@@ -207,14 +201,10 @@ public sealed class FleauxSimpleCardRulesTests
         GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
         CardInstance first = AddOwned(state, player, "fleaux:fossoyeur", CardZone.Hand);
         CardInstance second = AddOwned(state, player, "fleaux:fossoyeur", CardZone.Hand);
-        CardInstance disease = new CardInstance(state.NextCardInstanceId++, "fleaux:fievre", string.Empty);
-        state.CardInstances.Add(disease);
-        SpecialPileSnapshot pile = new SpecialPileSnapshot("fleaux:maladies", "Maladies");
-        pile.CardInstanceIds.Add(disease.InstanceId);
-        state.SpecialPiles.Add(pile);
+        CardInstance copper = AddOwned(state, player, "base:cuivre", CardZone.Hand);
         Assert.That(ResolutionQueue.TryBegin(state, player.PlayerId, out ResolutionQueue queue, out string beginError), Is.True, beginError);
-        Assert.That(SpecialPileRules.TryGainTop(state, player, pile.PileId, CardZone.Discard, 0,
-            queue.Events, Resolve, out _, out string gainError), Is.True, gainError);
+        Assert.That(TrashRules.TryTrashFromHand(state, player, copper.InstanceId, 0,
+            queue.Events, out string trashError), Is.True, trashError);
         Assert.That(TriggerResolver.ResolvePending(queue, state, Resolve, new Random(1)).Status,
             Is.EqualTo(EffectResolutionStatus.WaitingForChoice));
         Assert.That(queue.PendingDecision.ListenerCardInstanceId, Is.EqualTo(first.InstanceId));
@@ -227,6 +217,27 @@ public sealed class FleauxSimpleCardRulesTests
         GameRuleResult secondPass = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
             queue.PendingDecision.DecisionId, Array.Empty<string>(), Resolve, new Random(1));
         Assert.That(secondPass.Status, Is.EqualTo(GameRuleStatus.Applied), secondPass.Error);
+    }
+
+    [Test]
+    public void Fossoyeur_UsesZeroAsMinimumTargetCost()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        AddOwned(state, player, "fleaux:fossoyeur", CardZone.Hand);
+        CardInstance copper = AddOwned(state, player, "base:cuivre", CardZone.Hand);
+        state.SupplyPiles.Add(new SupplyPileSnapshot("base:cuivre", 46));
+        state.SupplyPiles.Add(new SupplyPileSnapshot("base:domaine", 8));
+        Assert.That(ResolutionQueue.TryBegin(state, player.PlayerId, out ResolutionQueue queue, out string beginError), Is.True, beginError);
+        Assert.That(TrashRules.TryTrashFromHand(state, player, copper.InstanceId, 0,
+            queue.Events, out string trashError), Is.True, trashError);
+        Assert.That(TriggerResolver.ResolvePending(queue, state, Resolve, new Random(1)).Status,
+            Is.EqualTo(EffectResolutionStatus.WaitingForChoice));
+
+        GameRuleResult gainChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            queue.PendingDecision.DecisionId, new[] { "react" }, Resolve, new Random(1));
+
+        Assert.That(gainChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), gainChoice.Error);
+        Assert.That(queue.PendingDecision.CandidateDefinitionIds, Is.EquivalentTo(new[] { "base:cuivre" }));
     }
 
     [Test]

@@ -98,7 +98,7 @@
     { "id": "horreurs", "name": "Horreurs", "fixedCount": 10, "shuffle": false, "cardIds": ["horreur"] }
   ],
   "cards": [
-    { "id": "fossoyeur", "name": "Fossoyeur", "cost": 2, "types": ["Action", "Réaction"], "image": "fossoyeur.png", "text": "+1 Action\n+1 🪙\n\nLorsque vous recevez cette carte, recevez une Maladie.\n\nLorsque vous recevez une Maladie, vous pouvez révéler Fossoyeur depuis votre main : +1 Carte, puis défaussez 1 carte.", "abilities": [
+    { "id": "fossoyeur", "name": "Fossoyeur", "cost": 3, "types": ["Action", "Réaction"], "image": "fossoyeur.png", "text": "+1 Action\n+1 🪙\n\nLorsque vous recevez cette carte, recevez une Maladie.\n\nLorsque vous écartez une carte, vous pouvez défausser Fossoyeur depuis votre main pour recevoir une carte de la Réserve coûtant exactement 1 🪙 de moins que la carte écartée (jamais moins de 0 🪙).", "abilities": [
       { "when": "play", "effects": [
         { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
         { "op": "add_resource", "target": "self", "resource": "coins", "amount": 1 }
@@ -106,11 +106,12 @@
       { "when": "card_gained", "effects": [
         { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:maladies", "amount": 1, "destinationZone": "discard" }
       ] },
-      { "when": "disease_gained", "scope": "in_hand", "filter": { "eventPlayer": "self", "cardType": "Maladie" }, "effects": [
-        { "op": "choose_options", "target": "self", "min": 0, "max": 1, "prompt": "Vous pouvez révéler Fossoyeur.", "options": [ { "id": "reveal", "label": "Révéler Fossoyeur" } ] },
-        { "op": "draw", "target": "self", "amount": 1, "requiresSelectedOption": "reveal" },
-        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "minUpToAvailable": true, "prompt": "Défaussez une carte.", "requiresSelectedOption": "reveal" },
-        { "op": "discard_selected", "target": "self", "requiresSelectedOption": "reveal" }
+      { "when": "card_trashed", "scope": "in_hand", "filter": { "eventPlayer": "self" }, "effects": [
+        { "op": "choose_options", "target": "self", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez défausser Fossoyeur pour recevoir une carte coûtant exactement 1 🪙 de moins que la carte écartée.", "options": [ { "id": "react", "label": "Défausser Fossoyeur" } ] },
+        { "op": "remember_trigger_card_cost", "target": "self", "requiresSelectedOption": "react" },
+        { "op": "discard_source_card", "target": "self", "sourceZone": "hand", "requiresSelectedOption": "react" },
+        { "op": "choose_supply", "target": "self", "min": 1, "max": 1, "useLastSelectionCost": true, "costOffset": -1, "exactCost": true, "allowNoEligible": true, "requiresSelectedOption": "react", "prompt": "Recevez une carte coûtant exactement 1 🪙 de moins que la carte écartée." },
+        { "op": "gain_selected_supply", "target": "self", "destinationZone": "discard", "requiresSelectedOption": "react" }
       ] }
     ] },
     { "id": "soeurs", "name": "Sœurs", "cost": 3, "types": ["Action"], "image": "soeurs.png", "text": "+1 Carte\n\nVous pouvez jouer une carte Action coûtant jusqu’à 2 🪙 de votre main.", "abilities": [ { "when": "play", "effects": [
