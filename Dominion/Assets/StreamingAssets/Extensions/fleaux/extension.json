@@ -182,7 +182,7 @@
       { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "discard", "requiresSelectedOption": "discard", "prompt": "Défaussez les cartes." },
       { "op": "move_all_ordered", "target": "self", "sourceZone": "inspected", "destinationZone": "deck", "requiresSelectedOption": "replace", "prompt": "Replacez les cartes dans l’ordre de votre choix." },
 	  { "op": "draw", "target": "self", "amount": 1 },
-      { "op": "take_artifact", "target": "self", "artifactId": "fleaux:phylactere", "requiresMinDistinctTypesInHand": 6 }
+      { "op": "take_artifact", "target": "self", "artifactId": "fleaux:phylactere", "requiresMinDistinctTypesInHand": 5 }
     ] } ] },
     { "id": "cultiste", "name": "Cultiste", "cost": 4, "types": ["Action", "Durée"], "image": "cultiste.png", "text": "Prenez la Dague rituelle ou l’Encens noir.\n\n Au début de votre prochain tour : +2 Cartes.\n\nPuis, si vous contrôlez les deux artefacts, écartez cette carte et recevez une Horreur.", "abilities": [
       { "when": "play", "effects": [

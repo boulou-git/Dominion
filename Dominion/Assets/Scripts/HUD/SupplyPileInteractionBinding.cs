@@ -10,8 +10,8 @@ using UnityEngine.UI;
 public sealed class SupplyPileInteractionBinding : MonoBehaviour
 {
     private static readonly Color AvailableColor = Color.white;
-    private static readonly Color UnavailableColor = new Color(0.68f, 0.68f, 0.68f, 1f);
-    private static readonly Color EmptyColor = new Color(0.42f, 0.42f, 0.42f, 1f);
+    private static readonly Color UnavailableColor = new Color(0.5f, 0.5f, 0.5f, 1f);
+    private static readonly Color EmptyColor = new Color(0.2f, 0.2f, 0.2f, 1f);
 
     private string _definitionId;
     private Image _image;
