@@ -20,7 +20,9 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
     private RectTransform _baseSupplyRoot;
     private RectTransform _kingdomSupplyRoot;
     private RectTransform _handRoot;
+    private RectTransform _inPlayPanel;
     private RectTransform _inPlayRoot;
+    private RectTransform _artifactStackRoot;
     private RectTransform _discardPanel;
     private GameObject _discardTopObject;
     private GameObject _zoomOverlay;
@@ -28,6 +30,13 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
     private Button _nextPhaseButton;
     private GameScreenController _screenController;
     private GameObject _artifactTilePrefab;
+
+    private const float ArtifactRailWidth = 180f;
+    private const float ArtifactTileHeight = 60f;
+    private const float ArtifactTopInset = 44f;
+    private const float ArtifactBottomInset = 12f;
+    private const float ArtifactMinimumOverlap = 18f;
+    private const float ArtifactMaximumOverlap = 34f;
 
     private bool _reserveLayoutReady;
     private bool _cleanupAnimating;
@@ -122,6 +131,11 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             _handRoot = handRect;
 
         Transform inPlayPanel = FindDeepChild(transform, "InPlayPanel");
+        if (inPlayPanel is RectTransform inPlayPanelRect)
+        {
+            _inPlayPanel = inPlayPanelRect;
+            EnsureArtifactStackRoot();
+        }
         Transform inPlayCards = FindDirectChild(inPlayPanel, "Cards");
         if (inPlayCards is RectTransform inPlayRect)
             _inPlayRoot = inPlayRect;
@@ -141,6 +155,80 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         Transform nextPhase = FindDeepChild(transform, "NextPhaseButton");
         if (nextPhase != null)
             _nextPhaseButton = nextPhase.GetComponent<Button>();
+    }
+
+    private void EnsureArtifactStackRoot()
+    {
+        if (_artifactStackRoot != null || _inPlayPanel == null)
+            return;
+
+        Transform existing = FindDirectChild(_inPlayPanel, "ArtifactStack");
+        if (existing is RectTransform existingRect)
+        {
+            _artifactStackRoot = existingRect;
+            return;
+        }
+
+        GameObject stack = new GameObject("ArtifactStack", typeof(RectTransform));
+        stack.layer = _inPlayPanel.gameObject.layer;
+        _artifactStackRoot = stack.GetComponent<RectTransform>();
+        _artifactStackRoot.SetParent(_inPlayPanel, false);
+        _artifactStackRoot.anchorMin = new Vector2(0f, 1f);
+        _artifactStackRoot.anchorMax = new Vector2(0f, 1f);
+        _artifactStackRoot.pivot = new Vector2(0f, 1f);
+        _artifactStackRoot.anchoredPosition = new Vector2(12f, -ArtifactTopInset);
+        _artifactStackRoot.SetAsLastSibling();
+        _artifactStackRoot.gameObject.SetActive(false);
+    }
+
+    private void ConfigureArtifactRail(bool visible)
+    {
+        EnsureArtifactStackRoot();
+        if (_artifactStackRoot != null)
+        {
+            float panelHeight = _inPlayPanel != null ? _inPlayPanel.rect.height : 0f;
+            float railHeight = Mathf.Max(ArtifactTileHeight,
+                panelHeight - ArtifactTopInset - ArtifactBottomInset);
+            _artifactStackRoot.sizeDelta = new Vector2(ArtifactRailWidth, railHeight);
+            _artifactStackRoot.gameObject.SetActive(visible);
+        }
+
+        HorizontalLayoutGroup layout = _inPlayRoot != null
+            ? _inPlayRoot.GetComponent<HorizontalLayoutGroup>()
+            : null;
+        if (layout != null)
+        {
+            RectOffset padding = layout.padding;
+            int desiredLeft = visible ? Mathf.CeilToInt(ArtifactRailWidth + 20f) : 0;
+            if (padding.left != desiredLeft)
+            {
+                padding.left = desiredLeft;
+                layout.padding = padding;
+            }
+        }
+    }
+
+    private void LayoutArtifactTiles(List<RectTransform> tiles)
+    {
+        if (_artifactStackRoot == null || tiles == null || tiles.Count == 0)
+            return;
+
+        float availableHeight = Mathf.Max(ArtifactTileHeight, _artifactStackRoot.rect.height);
+        float overlap = tiles.Count <= 1
+            ? 0f
+            : Mathf.Clamp((availableHeight - ArtifactTileHeight) / (tiles.Count - 1),
+                ArtifactMinimumOverlap, ArtifactMaximumOverlap);
+
+        for (int index = 0; index < tiles.Count; index++)
+        {
+            RectTransform tile = tiles[index];
+            tile.anchorMin = new Vector2(0f, 1f);
+            tile.anchorMax = new Vector2(0f, 1f);
+            tile.pivot = new Vector2(0f, 1f);
+            tile.sizeDelta = new Vector2(ArtifactRailWidth, ArtifactTileHeight);
+            tile.anchoredPosition = new Vector2(0f, -index * overlap);
+            tile.SetSiblingIndex(index);
+        }
     }
 
     /// <summary>
@@ -330,7 +418,13 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
     {
         Clear(_inPlayObjects);
         if (_inPlayRoot == null || state == null || viewedPlayer == null)
+        {
+            ConfigureArtifactRail(false);
             return;
+        }
+
+        bool hasArtifacts = viewedPlayer.Artifacts != null && viewedPlayer.Artifacts.Count > 0;
+        ConfigureArtifactRail(hasArtifacts);
 
         Dictionary<string, List<CardInstance>> groups = new Dictionary<string, List<CardInstance>>(StringComparer.OrdinalIgnoreCase);
         List<string> order = new List<string>();
@@ -384,6 +478,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             return;
         }
 
+        List<RectTransform> artifactTiles = new List<RectTransform>();
         foreach (int instanceId in viewedPlayer.Artifacts)
         {
             CardInstance instance = NetworkGameState.FindCardInstance(state, instanceId);
@@ -391,8 +486,19 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
                     out ExtensionPackageData extension, out ExtensionCardData definition))
                 continue;
 
-            GameObject tile = Instantiate(_artifactTilePrefab, _inPlayRoot, false);
+            EnsureArtifactStackRoot();
+            if (_artifactStackRoot == null)
+                return;
+
+            GameObject tile = Instantiate(_artifactTilePrefab, _artifactStackRoot, false);
             tile.name = "Artifact_" + definition.id;
+            RectTransform tileRect = tile.transform as RectTransform;
+            if (tileRect != null)
+            {
+                LayoutElement tileLayout = tile.GetComponent<LayoutElement>();
+                if (tileLayout != null) tileLayout.ignoreLayout = true;
+                artifactTiles.Add(tileRect);
+            }
             Transform labelTransform = FindDeepChild(tile.transform, "Label");
             Text label = labelTransform != null ? labelTransform.GetComponent<Text>() : null;
             if (label != null) label.text = definition.name;
@@ -425,6 +531,8 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             }
             _inPlayObjects.Add(tile);
         }
+
+        LayoutArtifactTiles(artifactTiles);
     }
 
     private GameObject CreateInPlayStack(string cardId, Sprite sprite, ExtensionCardData definition, int count)
