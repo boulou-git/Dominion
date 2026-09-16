@@ -42,6 +42,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
     private bool _cleanupAnimating;
     private int _lastAutoCleanupVersion = -1;
     private bool _missingArtifactTileLogged;
+    private bool _missingArtifactStackLogged;
 
     private void Awake()
     {
@@ -134,7 +135,12 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         if (inPlayPanel is RectTransform inPlayPanelRect)
         {
             _inPlayPanel = inPlayPanelRect;
-            EnsureArtifactStackRoot();
+            _artifactStackRoot = FindDirectChild(inPlayPanel, "ArtifactStack") as RectTransform;
+            if (_artifactStackRoot == null && !_missingArtifactStackLogged)
+            {
+                _missingArtifactStackLogged = true;
+                Debug.LogError("Required GameScreen/InPlayPanel/ArtifactStack prefab object is missing.", this);
+            }
         }
         Transform inPlayCards = FindDirectChild(inPlayPanel, "Cards");
         if (inPlayCards is RectTransform inPlayRect)
@@ -157,40 +163,16 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             _nextPhaseButton = nextPhase.GetComponent<Button>();
     }
 
-    private void EnsureArtifactStackRoot()
-    {
-        if (_artifactStackRoot != null || _inPlayPanel == null)
-            return;
-
-        Transform existing = FindDirectChild(_inPlayPanel, "ArtifactStack");
-        if (existing is RectTransform existingRect)
-        {
-            _artifactStackRoot = existingRect;
-            return;
-        }
-
-        GameObject stack = new GameObject("ArtifactStack", typeof(RectTransform));
-        stack.layer = _inPlayPanel.gameObject.layer;
-        _artifactStackRoot = stack.GetComponent<RectTransform>();
-        _artifactStackRoot.SetParent(_inPlayPanel, false);
-        _artifactStackRoot.anchorMin = new Vector2(0f, 1f);
-        _artifactStackRoot.anchorMax = new Vector2(0f, 1f);
-        _artifactStackRoot.pivot = new Vector2(0f, 1f);
-        _artifactStackRoot.anchoredPosition = new Vector2(12f, -ArtifactTopInset);
-        _artifactStackRoot.SetAsLastSibling();
-        _artifactStackRoot.gameObject.SetActive(false);
-    }
-
     private void ConfigureArtifactRail(bool visible)
     {
-        EnsureArtifactStackRoot();
+        bool railVisible = visible && _artifactStackRoot != null;
         if (_artifactStackRoot != null)
         {
             float panelHeight = _inPlayPanel != null ? _inPlayPanel.rect.height : 0f;
             float railHeight = Mathf.Max(ArtifactTileHeight,
                 panelHeight - ArtifactTopInset - ArtifactBottomInset);
             _artifactStackRoot.sizeDelta = new Vector2(ArtifactRailWidth, railHeight);
-            _artifactStackRoot.gameObject.SetActive(visible);
+            _artifactStackRoot.gameObject.SetActive(railVisible);
         }
 
         HorizontalLayoutGroup layout = _inPlayRoot != null
@@ -199,7 +181,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         if (layout != null)
         {
             RectOffset padding = layout.padding;
-            int desiredLeft = visible ? Mathf.CeilToInt(ArtifactRailWidth + 20f) : 0;
+            int desiredLeft = railVisible ? Mathf.CeilToInt(ArtifactRailWidth + 20f) : 0;
             if (padding.left != desiredLeft)
             {
                 padding.left = desiredLeft;
@@ -478,6 +460,9 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             return;
         }
 
+        if (_artifactStackRoot == null)
+            return;
+
         List<RectTransform> artifactTiles = new List<RectTransform>();
         foreach (int instanceId in viewedPlayer.Artifacts)
         {
@@ -485,10 +470,6 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             if (instance == null || !RoomGameSetup.TryResolveCard(instance.DefinitionId,
                     out ExtensionPackageData extension, out ExtensionCardData definition))
                 continue;
-
-            EnsureArtifactStackRoot();
-            if (_artifactStackRoot == null)
-                return;
 
             GameObject tile = Instantiate(_artifactTilePrefab, _artifactStackRoot, false);
             tile.name = "Artifact_" + definition.id;

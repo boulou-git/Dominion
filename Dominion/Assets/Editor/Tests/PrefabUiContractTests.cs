@@ -203,6 +203,10 @@ public sealed class PrefabUiContractTests
         Assert.Less(baseGrid.cellSize.x, kingdomGrid.cellSize.x);
         Assert.Less(baseGrid.cellSize.y, kingdomGrid.cellSize.y);
         Assert.NotNull(gameScreen.GetComponent<ReserveExtrasController>());
+        RectTransform artifactStack = gameScreen.transform.Find("InPlayPanel/ArtifactStack") as RectTransform;
+        Assert.NotNull(artifactStack, "The owned-Artifact stack must be authored in GameScreen.prefab.");
+        Assert.AreEqual(new Vector2(0f, 1f), artifactStack.anchorMin);
+        Assert.AreEqual(new Vector2(0f, 1f), artifactStack.anchorMax);
         Assert.NotNull(gameScreen.transform.Find("CardZoomOverlay/Card")?.GetComponent<AdaptiveCardZoomView>());
 
         GameObject extras = Load("ReserveExtrasUi");
