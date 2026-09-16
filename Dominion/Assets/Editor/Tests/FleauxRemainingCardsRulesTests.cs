@@ -113,6 +113,44 @@ public sealed class FleauxRemainingCardsRulesTests
     }
 
     [Test]
+    public void CharretteFunebre_CanTrashItselfForFiveCoins()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance cart = AddOwned(state, player, "fleaux:charrette_funebre", CardZone.Hand);
+
+        GameRuleResult choice = GameRules.TryPlayCard(state, player.PlayerId, cart.InstanceId, Resolve, new Random(1));
+        Assert.That(choice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), choice.Error);
+        GameRuleResult finished = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "self" }, Resolve, new Random(1));
+
+        Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
+        Assert.That(state.TrashedCards, Does.Contain(cart.InstanceId));
+        Assert.That(player.InPlay, Does.Not.Contain(cart.InstanceId));
+        Assert.That(player.Coins, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void CharretteFunebre_CanTrashActionFromHandForFiveCoins()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance action = AddOwned(state, player, "base:village", CardZone.Hand);
+        CardInstance cart = AddOwned(state, player, "fleaux:charrette_funebre", CardZone.Hand);
+
+        GameRuleResult sourceChoice = GameRules.TryPlayCard(state, player.PlayerId, cart.InstanceId, Resolve, new Random(1));
+        Assert.That(sourceChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), sourceChoice.Error);
+        GameRuleResult cardChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "action" }, Resolve, new Random(1));
+        Assert.That(cardChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), cardChoice.Error);
+        GameRuleResult finished = GameRules.TrySubmitDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { action.InstanceId }, Resolve, new Random(1));
+
+        Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
+        Assert.That(state.TrashedCards, Does.Contain(action.InstanceId));
+        Assert.That(player.InPlay, Does.Contain(cart.InstanceId));
+        Assert.That(player.Coins, Is.EqualTo(5));
+    }
+
+    [Test]
     public void Cloitre_DiscardsThenKeepsOneCardUntilNextTurn()
     {
         GameStateSnapshot state = NewState(out PlayerStateSnapshot player);

@@ -291,19 +291,20 @@
       ] },
       { "when": "card_trashed", "effects": [ { "op": "draw", "target": "self", "amount": 1 } ] }
     ] },
-    { "id": "charrette_funebre", "name": "Charrette funèbre", "cost": 4, "types": ["Action"], "image": "charette_funebre.png", "text": "Lorsque vous recevez cette carte, recevez 2 Maladies.\n\n+2 🪙\n\nVous pouvez jouer ou écarter une Maladie de votre main. Si vous le faites : +2 🪙.", "abilities": [
-      { "when": "card_gained", "effects": [ { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:maladies", "amount": 2, "destinationZone": "discard" } ] },
+    { "id": "charrette_funebre", "name": "Charrette funèbre", "cost": 4, "types": ["Action"], "image": "charette_funebre.png", "text": "Lorsque vous recevez cette carte, recevez 2 Maladies.\n\nVous pouvez écarter cette carte ou une carte Action de votre main pour obtenir +5 🪙.", "abilities": [
+      { "when": "card_gained", "effects": [
+        { "op": "gain_special_pile", "target": "self", "specialPileId": "fleaux:maladies", "amount": 2, "destinationZone": "discard" }
+      ] },
       { "when": "play", "effects": [
-        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2 },
-        { "op": "choose_options", "target": "self", "min": 0, "max": 1, "prompt": "Vous pouvez jouer ou écarter une Maladie.", "options": [
-          { "id": "play", "label": "Jouer" }, { "id": "trash", "label": "Écarter" }
+        { "op": "choose_options", "target": "self", "min": 0, "max": 1, "allowPass": true, "prompt": "Vous pouvez écarter Charrette funèbre ou une carte Action de votre main pour obtenir +5 🪙.", "options": [
+          { "id": "self", "label": "Écarter Charrette funèbre" },
+          { "id": "action", "label": "Écarter une Action de votre main" }
         ] },
-        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "cardType": "Maladie", "allowNoEligible": true, "prompt": "Choisissez une Maladie à jouer.", "requiresSelectedOption": "play" },
-        { "op": "play_selected", "target": "self", "sourceZone": "hand", "requiresSelectedOption": "play" },
-        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "play", "requiresLastSelection": true },
-        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "cardType": "Maladie", "allowNoEligible": true, "prompt": "Choisissez une Maladie à écarter.", "requiresSelectedOption": "trash" },
-        { "op": "trash_selected", "target": "self", "sourceZone": "hand", "requiresSelectedOption": "trash" },
-        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "trash", "requiresLastSelection": true }
+        { "op": "trash_source_card", "target": "self", "requiresSelectedOption": "self" },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 5, "requiresSelectedOption": "self" },
+        { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "cardType": "Action", "allowNoEligible": true, "prompt": "Choisissez une carte Action de votre main à écarter.", "requiresSelectedOption": "action" },
+        { "op": "trash_selected", "target": "self", "sourceZone": "hand", "requiresSelectedOption": "action" },
+        { "op": "add_resource", "target": "self", "resource": "coins", "amount": 5, "requiresSelectedOption": "action", "requiresLastSelection": true }
       ] }
     ] },
     { "id": "charognard", "name": "Charognard", "cost": 5, "types": ["Action", "Victoire"], "image": "charognard.png", "text": "+2 🪙\n\nVous pouvez recevoir une Maladie. Si vous le faites : +2 🪙\n\n———\n\n1 VP", "abilities": [ { "when": "play", "effects": [
