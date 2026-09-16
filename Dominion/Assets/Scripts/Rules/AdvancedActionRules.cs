@@ -338,10 +338,12 @@ public static class AdvancedActionRules
         PendingDecisionSnapshot continuation, Func<string, ExtensionCardData> resolve)
     {
         List<int> selected = resolution.TakeSelectedInstanceIds();
-        if (selected.Count != 1 || !TrashRules.TryTrashFromHand(state, player, selected[0],
-                continuation.SourceCardInstanceId, resolution.Events, out string trashError))
-            return GameRuleResult.Rejected(selected.Count == 1 ? trashError : "Repeated trash selection is invalid.",
+        if (selected.Count != 1)
+            return GameRuleResult.Rejected("Repeated trash selection is invalid.",
                 resolution.Events.SnapshotHistory());
+        if (!TrashRules.TryTrashFromHand(state, player, selected[0],
+                continuation.SourceCardInstanceId, resolution.Events, out string trashError))
+            return GameRuleResult.Rejected(trashError, resolution.Events.SnapshotHistory());
 
         int remaining = continuation.TargetHandSize;
         if (remaining <= 0)
