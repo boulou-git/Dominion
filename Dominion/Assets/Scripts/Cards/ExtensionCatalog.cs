@@ -75,6 +75,7 @@ public sealed class CardChoiceOptionData
     public string resource;
     public int amount;
     public string artifactId;
+    public bool trashFromHand;
 }
 
 [Serializable]

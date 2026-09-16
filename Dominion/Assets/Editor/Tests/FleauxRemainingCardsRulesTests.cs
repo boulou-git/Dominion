@@ -28,13 +28,37 @@ public sealed class FleauxRemainingCardsRulesTests
         GameRuleResult first = GameRules.TryPlayCard(state, player.PlayerId, robber.InstanceId, Resolve, new Random(1));
         Assert.That(first.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), first.Error);
         GameRuleResult second = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
-            state.Resolution.PendingDecision.DecisionId, new[] { "action" }, Resolve, new Random(1));
+            state.Resolution.PendingDecision.DecisionId, new[] { "coin" }, Resolve, new Random(1));
         Assert.That(second.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), second.Error);
         GameRuleResult finished = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
-            state.Resolution.PendingDecision.DecisionId, new[] { "action" }, Resolve, new Random(1));
+            state.Resolution.PendingDecision.DecisionId, new[] { "coin" }, Resolve, new Random(1));
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
-        Assert.That(player.Actions, Is.EqualTo(2));
+        Assert.That(player.Coins, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void PilleurDeTombes_TrashChoiceResumesRemainingChoices()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        state.SupplyPiles.Add(new SupplyPileSnapshot("fleaux:rats", 0, true));
+        CardInstance copper = AddOwned(state, player, "base:cuivre", CardZone.Hand);
+        CardInstance robber = AddOwned(state, player, "fleaux:pilleur_de_tombes", CardZone.Hand);
+
+        GameRuleResult option = GameRules.TryPlayCard(state, player.PlayerId, robber.InstanceId, Resolve, new Random(1));
+        Assert.That(option.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), option.Error);
+        GameRuleResult cardChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "trash" }, Resolve, new Random(1));
+        Assert.That(cardChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), cardChoice.Error);
+        GameRuleResult remainingChoice = GameRules.TrySubmitDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { copper.InstanceId }, Resolve, new Random(1));
+        Assert.That(remainingChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), remainingChoice.Error);
+        GameRuleResult finished = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "coin" }, Resolve, new Random(1));
+
+        Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
+        Assert.That(state.TrashedCards, Does.Contain(copper.InstanceId));
+        Assert.That(player.Coins, Is.EqualTo(1));
     }
 
     [Test]

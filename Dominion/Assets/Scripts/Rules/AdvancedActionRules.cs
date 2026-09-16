@@ -15,6 +15,7 @@ public static class AdvancedActionRules
     private const string EachOtherOptionPrefix = "each_other_discard_or_gain|";
     private const string EachOtherDiscardPrefix = "each_other_discard_cards|";
     private const string RepeatedOptionsOperation = "choose_options_repeated_per_empty_kingdom_pile";
+    private const string RepeatedOptionTrashOperation = "repeated_option_trash_from_hand";
 
     public static bool IsContinuation(string operation)
     {
@@ -22,6 +23,7 @@ public static class AdvancedActionRules
         return operation.StartsWith(DrawToSizePrefix, StringComparison.OrdinalIgnoreCase) ||
                operation.StartsWith(MoveAllOrderedPrefix, StringComparison.OrdinalIgnoreCase) ||
                operation.StartsWith(EachOtherDiscardPrefix, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(operation, RepeatedOptionTrashOperation, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(operation, SimultaneousPassLeftOperation, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -179,19 +181,8 @@ public static class AdvancedActionRules
         if (state == null || player == null || resolution == null || effect == null || choiceCount <= 0 ||
             effect.options == null || effect.options.Count == 0 || effect.options.Count > 4)
             return GameRuleResult.Rejected("Invalid repeated-option effect.", resolution != null ? resolution.Events.SnapshotHistory() : null);
-        List<string> ids = new List<string>(); List<string> labels = new List<string>();
-        foreach (CardChoiceOptionData option in effect.options)
-        {
-            if (option == null || string.IsNullOrWhiteSpace(option.id) || string.IsNullOrWhiteSpace(option.label))
-                return GameRuleResult.Rejected("Repeated option is incomplete.", resolution.Events.SnapshotHistory());
-            ids.Add(option.id); labels.Add(option.label);
-        }
-        if (!resolution.TrySuspendForOptionDecision(player.PlayerId, RepeatedOptionsOperation, effect.prompt,
-                sourceCardInstanceId, 1, 1, ids, labels, triggerEvent, timing, listenerCardInstanceId,
-                abilityIndex, effectIndex, out string error))
-            return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
-        resolution.PendingDecision.TargetHandSize = choiceCount;
-        return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+        return SuspendRepeatedOptionDecision(state, player, resolution, effect, choiceCount,
+            sourceCardInstanceId, triggerEvent, timing, listenerCardInstanceId, abilityIndex, effectIndex);
     }
 
     public static GameRuleResult TryStartEachOtherChooseDiscardOrGain(
@@ -268,15 +259,23 @@ public static class AdvancedActionRules
                 resolution.Events, out _, out string artifactError))
             return GameRuleResult.Rejected(artifactError, resolution.Events.SnapshotHistory());
         int remaining = continuation.TargetHandSize - 1;
+        if (option.trashFromHand)
+        {
+            List<int> candidates = responder.Hand != null ? new List<int>(responder.Hand) : new List<int>();
+            if (candidates.Count == 0)
+                return GameRuleResult.Rejected("The repeated trash option has no card in hand.", resolution.Events.SnapshotHistory());
+            if (!resolution.TrySuspendForDecision(responder.PlayerId, RepeatedOptionTrashOperation, "hand",
+                    "Écartez une carte de votre main.", continuation.SourceCardInstanceId, 1, 1, candidates,
+                    RestoreEvent(continuation), continuation.Timing, continuation.ListenerCardInstanceId,
+                    continuation.AbilityIndex, continuation.EffectIndex, out string trashError))
+                return GameRuleResult.Rejected(trashError, resolution.Events.SnapshotHistory());
+            resolution.PendingDecision.TargetHandSize = remaining;
+            return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+        }
         if (remaining <= 0) return GameRuleResult.Applied(resolution.Events.SnapshotHistory());
-        List<string> ids = new List<string>(); List<string> labels = new List<string>();
-        foreach (CardChoiceOptionData candidate in effect.options) { ids.Add(candidate.id); labels.Add(candidate.label); }
-        if (!resolution.TrySuspendForOptionDecision(responder.PlayerId, RepeatedOptionsOperation, continuation.Prompt,
-                continuation.SourceCardInstanceId, 1, 1, ids, labels, RestoreEvent(continuation), continuation.Timing,
-                continuation.ListenerCardInstanceId, continuation.AbilityIndex, continuation.EffectIndex, out string error))
-            return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
-        resolution.PendingDecision.TargetHandSize = remaining;
-        return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+        return SuspendRepeatedOptionDecision(state, responder, resolution, effect, remaining,
+            continuation.SourceCardInstanceId, RestoreEvent(continuation), continuation.Timing,
+            continuation.ListenerCardInstanceId, continuation.AbilityIndex, continuation.EffectIndex);
     }
 
     public static GameRuleResult ResolveSupplyContinuation(
@@ -326,10 +325,78 @@ public static class AdvancedActionRules
             return ResolveMoveAllOrderedDecision(player, resolution, continuation);
         if (operation.StartsWith(EachOtherDiscardPrefix, StringComparison.OrdinalIgnoreCase))
             return ResolveEachOtherDiscardDecision(state, player, resolution, continuation);
+        if (string.Equals(operation, RepeatedOptionTrashOperation, StringComparison.OrdinalIgnoreCase))
+            return ResolveRepeatedOptionTrash(state, player, resolution, continuation, resolve);
         if (string.Equals(operation, SimultaneousPassLeftOperation, StringComparison.OrdinalIgnoreCase))
             return ResolveSimultaneousPassLeftDecision(state, player, resolution, continuation);
 
         return GameRuleResult.Rejected("Unsupported advanced action continuation: " + operation, resolution.Events.SnapshotHistory());
+    }
+
+    private static GameRuleResult ResolveRepeatedOptionTrash(
+        GameStateSnapshot state, PlayerStateSnapshot player, ResolutionQueue resolution,
+        PendingDecisionSnapshot continuation, Func<string, ExtensionCardData> resolve)
+    {
+        List<int> selected = resolution.TakeSelectedInstanceIds();
+        if (selected.Count != 1 || !TrashRules.TryTrashFromHand(state, player, selected[0],
+                continuation.SourceCardInstanceId, resolution.Events, out string trashError))
+            return GameRuleResult.Rejected(selected.Count == 1 ? trashError : "Repeated trash selection is invalid.",
+                resolution.Events.SnapshotHistory());
+
+        int remaining = continuation.TargetHandSize;
+        if (remaining <= 0)
+            return GameRuleResult.Applied(resolution.Events.SnapshotHistory());
+
+        CardEffectData effect = ResolveRepeatedEffect(state, continuation, resolve);
+        if (effect == null)
+            return GameRuleResult.Rejected("Repeated-option effect is no longer available.",
+                resolution.Events.SnapshotHistory());
+        return SuspendRepeatedOptionDecision(state, player, resolution, effect, remaining,
+            continuation.SourceCardInstanceId, RestoreEvent(continuation), continuation.Timing,
+            continuation.ListenerCardInstanceId, continuation.AbilityIndex, continuation.EffectIndex);
+    }
+
+    private static GameRuleResult SuspendRepeatedOptionDecision(
+        GameStateSnapshot state, PlayerStateSnapshot player, ResolutionQueue resolution,
+        CardEffectData effect, int remaining, int sourceCardInstanceId, GameEvent triggerEvent,
+        string timing, int listenerCardInstanceId, int abilityIndex, int effectIndex)
+    {
+        List<string> ids = new List<string>();
+        List<string> labels = new List<string>();
+        foreach (CardChoiceOptionData option in effect.options)
+        {
+            if (option == null || string.IsNullOrWhiteSpace(option.id) || string.IsNullOrWhiteSpace(option.label))
+                return GameRuleResult.Rejected("Repeated option is incomplete.", resolution.Events.SnapshotHistory());
+            if (option.trashFromHand && (player.Hand == null || player.Hand.Count == 0))
+                continue;
+            ids.Add(option.id);
+            labels.Add(option.label);
+        }
+        if (ids.Count == 0)
+            return GameRuleResult.Rejected("Repeated-option effect has no available choice.",
+                resolution.Events.SnapshotHistory());
+        if (!resolution.TrySuspendForOptionDecision(player.PlayerId, RepeatedOptionsOperation, effect.prompt,
+                sourceCardInstanceId, 1, 1, ids, labels, triggerEvent, timing, listenerCardInstanceId,
+                abilityIndex, effectIndex, out string error))
+            return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
+        resolution.PendingDecision.TargetHandSize = remaining;
+        return GameRuleResult.WaitingForChoice(resolution.Events.SnapshotHistory());
+    }
+
+    private static CardEffectData ResolveRepeatedEffect(
+        GameStateSnapshot state, PendingDecisionSnapshot continuation,
+        Func<string, ExtensionCardData> resolve)
+    {
+        CardInstance source = FindCard(state, continuation.ListenerCardInstanceId);
+        ExtensionCardData definition = source != null ? resolve(source.DefinitionId) : null;
+        if (definition == null || definition.abilities == null || continuation.AbilityIndex < 0 ||
+            continuation.AbilityIndex >= definition.abilities.Count ||
+            definition.abilities[continuation.AbilityIndex] == null ||
+            definition.abilities[continuation.AbilityIndex].effects == null ||
+            continuation.EffectIndex < 0 ||
+            continuation.EffectIndex >= definition.abilities[continuation.AbilityIndex].effects.Count)
+            return null;
+        return definition.abilities[continuation.AbilityIndex].effects[continuation.EffectIndex];
     }
 
     private static GameRuleResult ResolveEachOtherOption(GameStateSnapshot state, PlayerStateSnapshot responder,

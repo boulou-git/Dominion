@@ -155,12 +155,12 @@
       { "when": "play", "effects": [ { "op": "draw", "target": "self", "amount": 3 } ] },
       { "when": "card_trashed", "effects": [ { "op": "gain_card", "target": "self", "cardId": "base:duche", "amount": 1, "destinationZone": "discard" } ] }
     ] },
-    { "id": "pilleur_de_tombes", "name": "Pilleur de tombes", "cost": 3, "types": ["Action"], "image": "pilleur_de_tombes.png", "text": "Choisissez 1 + le nombre de piles Royaume vides. Vous pouvez choisir plusieurs fois la même option : prenez la Dent en or ; +1 Carte ; +1 Action ; +1 Achat.", "abilities": [ { "when": "play", "effects": [
+    { "id": "pilleur_de_tombes", "name": "Pilleur de tombes", "cost": 3, "types": ["Action"], "image": "pilleur_de_tombes.png", "text": "Choisissez 1 + le nombre de piles Royaume vides. Vous pouvez choisir plusieurs fois la même option : prenez la Dent en or ; +1 Carte ; +1 🪙 ; écartez une carte de votre main.", "abilities": [ { "when": "play", "effects": [
       { "op": "choose_options_repeated_per_empty_kingdom_pile", "target": "self", "min": 1, "max": 1, "prompt": "Choisissez un avantage.", "options": [
         { "id": "artifact", "label": "Prendre la Dent en or", "artifactId": "fleaux:dent_en_or" },
         { "id": "card", "label": "+1 Carte", "resource": "cards", "amount": 1 },
-        { "id": "action", "label": "+1 Action", "resource": "actions", "amount": 1 },
-        { "id": "buy", "label": "+1 Achat", "resource": "buys", "amount": 1 }
+        { "id": "coin", "label": "+1 🪙", "resource": "coins", "amount": 1 },
+        { "id": "trash", "label": "Écarter une carte de votre main", "trashFromHand": true }
       ] }
     ] } ] },
     { "id": "ossuaire", "name": "Ossuaire", "cost": 5, "types": ["Action"], "image": "ossuaire.png", "text": "Choisissez une option : +2 🪙 ; prenez dans votre main une carte coûtant jusqu’à 3 🪙 du Rebut ; prenez le Sac d’ossements.", "abilities": [ { "when": "play", "effects": [
