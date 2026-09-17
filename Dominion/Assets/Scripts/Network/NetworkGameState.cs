@@ -145,6 +145,26 @@ public static class NetworkGameState
         GameStateSnapshot next = Clone(_state); next.ManualPauseRequested = paused; UpdatePauseState(next); return CommitState(next);
     }
 
+    /// <summary>
+    /// Host-only developer shortcut that publishes a normal durable end-game state.
+    /// Keeping this mutation here ensures it uses the validated binary Photon payload
+    /// instead of bypassing CommitState with an oversized JSON string.
+    /// </summary>
+    public static bool ForceEndGameForTest()
+    {
+        if (!CanWrite() || _state == null || _state.IsGameOver) return false;
+        GameStateSnapshot next = Clone(_state);
+        next.IsGameOver = true;
+        next.GameEndReason = "Fin forcée par l’hôte (test).";
+        next.EndedTurnNumber = _state.TurnNumber;
+        next.Phase = GameEndRules.GameOverPhase;
+        next.IsStarted = false;
+        next.IsPaused = false;
+        next.ManualPauseRequested = false;
+        next.PauseReason = string.Empty;
+        return CommitState(next);
+    }
+
     public static bool SetPlayerConnectivity(Player photonPlayer, bool connected)
     {
         if (!CanWrite() || _state == null || photonPlayer == null) return false;

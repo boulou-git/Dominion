@@ -1,5 +1,4 @@
 using System;
-using ExitGames.Client.Photon;
 using Photon.Pun;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -15,8 +14,6 @@ public sealed class GamePauseMenu : MonoBehaviour
 {
     private const string RootName = "DominionPauseMenu";
     private const string PrefabResourcePath = "UI/GamePauseMenu";
-    private const string StatePropertyKey = "dominion.gameState.v1";
-
     private GameObject _panel;
     private Button _pauseButton;
     private Text _pauseButtonText;
@@ -178,29 +175,7 @@ public sealed class GamePauseMenu : MonoBehaviour
         if (!PhotonNetwork.InRoom || !PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null)
             return;
 
-        GameStateSnapshot current = NetworkGameState.State;
-        if (current == null || current.IsGameOver)
-            return;
-
-        GameStateSnapshot next = JsonUtility.FromJson<GameStateSnapshot>(JsonUtility.ToJson(current));
-        if (next == null)
-            return;
-
-        next.Version = current.Version + 1;
-        next.IsGameOver = true;
-        next.GameEndReason = "Fin forcée par l’hôte (test).";
-        next.EndedTurnNumber = current.TurnNumber;
-        next.IsStarted = false;
-        next.IsPaused = false;
-        next.ManualPauseRequested = false;
-        next.PauseReason = string.Empty;
-
-        Hashtable properties = new Hashtable
-        {
-            { StatePropertyKey, JsonUtility.ToJson(next) }
-        };
-
-        if (PhotonNetwork.CurrentRoom.SetCustomProperties(properties))
+        if (NetworkGameState.ForceEndGameForTest())
             _panel.SetActive(false);
     }
 
