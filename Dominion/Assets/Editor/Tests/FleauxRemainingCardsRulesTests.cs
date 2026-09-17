@@ -62,6 +62,54 @@ public sealed class FleauxRemainingCardsRulesTests
     }
 
     [Test]
+    public void Ossuaire_GainsUpToCostFourFromTrashIntoDiscard()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance silver = new CardInstance(state.NextCardInstanceId++, "base:argent", string.Empty);
+        state.CardInstances.Add(silver);
+        state.TrashedCards.Add(silver.InstanceId);
+        CardInstance ossuary = AddOwned(state, player, "fleaux:ossuaire", CardZone.Hand);
+
+        GameRuleResult options = GameRules.TryPlayCard(state, player.PlayerId, ossuary.InstanceId, Resolve, new Random(1));
+        Assert.That(options.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), options.Error);
+        GameRuleResult cardChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "gain_trash" }, Resolve, new Random(1));
+
+        Assert.That(cardChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), cardChoice.Error);
+        Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds, Does.Contain(silver.InstanceId));
+        GameRuleResult finished = GameRules.TrySubmitDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { silver.InstanceId }, Resolve, new Random(1));
+
+        Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
+        Assert.That(player.Discard, Does.Contain(silver.InstanceId));
+        Assert.That(state.TrashedCards, Does.Not.Contain(silver.InstanceId));
+    }
+
+    [Test]
+    public void Ossuaire_TrashesOnlyNonTreasureFromDiscard()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance copper = AddOwned(state, player, "base:cuivre", CardZone.Discard);
+        CardInstance estate = AddOwned(state, player, "base:domaine", CardZone.Discard);
+        CardInstance ossuary = AddOwned(state, player, "fleaux:ossuaire", CardZone.Hand);
+
+        GameRuleResult options = GameRules.TryPlayCard(state, player.PlayerId, ossuary.InstanceId, Resolve, new Random(1));
+        Assert.That(options.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), options.Error);
+        GameRuleResult cardChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "trash_discard" }, Resolve, new Random(1));
+
+        Assert.That(cardChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), cardChoice.Error);
+        Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds, Does.Contain(estate.InstanceId));
+        Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds, Does.Not.Contain(copper.InstanceId));
+        GameRuleResult finished = GameRules.TrySubmitDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { estate.InstanceId }, Resolve, new Random(1));
+
+        Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
+        Assert.That(state.TrashedCards, Does.Contain(estate.InstanceId));
+        Assert.That(player.Discard, Does.Contain(copper.InstanceId));
+    }
+
+    [Test]
     public void Inquisiteur_DiscardsNamedTreasureAndRewardsAttacker()
     {
         GameStateSnapshot state = NewState(out PlayerStateSnapshot attacker);

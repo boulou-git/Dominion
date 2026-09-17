@@ -163,14 +163,17 @@
         { "id": "trash", "label": "Écarter une carte de votre main", "trashFromHand": true }
       ] }
     ] } ] },
-    { "id": "ossuaire", "name": "Ossuaire", "cost": 5, "types": ["Action"], "image": "ossuaire.png", "text": "Choisissez une option : +2 🪙 ; prenez dans votre main une carte coûtant jusqu’à 3 🪙 du Rebut ; prenez le Sac d’ossements.", "abilities": [ { "when": "play", "effects": [
+    { "id": "ossuaire", "name": "Ossuaire", "cost": 5, "types": ["Action"], "image": "ossuaire.png", "text": "Choisissez : recevez une carte du Rebut coûtant jusqu’à 4 🪙 ; prenez le Sac d’ossements ; ou écartez une carte non-Trésor de votre défausse.", "abilities": [ { "when": "play", "effects": [
       { "op": "choose_options", "target": "self", "min": 1, "max": 1, "prompt": "Choisissez une option.", "options": [
-        { "id": "coins", "label": "+2 🪙" }, { "id": "trash", "label": "Prendre une carte du Rebut" }, { "id": "artifact", "label": "Prendre le Sac d’ossements" }
+        { "id": "gain_trash", "label": "Recevoir une carte du Rebut" },
+        { "id": "artifact", "label": "Prendre le Sac d’ossements" },
+        { "id": "trash_discard", "label": "Écarter une carte non-Trésor de votre défausse" }
       ] },
-      { "op": "add_resource", "target": "self", "resource": "coins", "amount": 2, "requiresSelectedOption": "coins" },
-      { "op": "choose_cards", "target": "self", "zone": "trash", "min": 1, "max": 1, "maxCost": 3, "allowNoEligible": true, "prompt": "Prenez une carte coûtant jusqu’à 3 🪙 du Rebut.", "requiresSelectedOption": "trash" },
-      { "op": "gain_selected_trash", "target": "self", "destinationZone": "hand", "requiresSelectedOption": "trash" },
-      { "op": "take_artifact", "target": "self", "artifactId": "fleaux:sac_d_ossements", "requiresSelectedOption": "artifact" }
+      { "op": "choose_cards", "target": "self", "zone": "trash", "min": 1, "max": 1, "maxCost": 4, "allowNoEligible": true, "prompt": "Recevez une carte du Rebut coûtant jusqu’à 4 🪙.", "requiresSelectedOption": "gain_trash" },
+      { "op": "gain_selected_trash", "target": "self", "destinationZone": "discard", "requiresSelectedOption": "gain_trash" },
+      { "op": "take_artifact", "target": "self", "artifactId": "fleaux:sac_d_ossements", "requiresSelectedOption": "artifact" },
+      { "op": "choose_cards", "target": "self", "zone": "discard", "min": 1, "max": 1, "excludedCardType": "Trésor", "allowNoEligible": true, "prompt": "Écartez une carte non-Trésor de votre défausse.", "requiresSelectedOption": "trash_discard" },
+      { "op": "trash_selected", "target": "self", "sourceZone": "discard", "requiresSelectedOption": "trash_discard" }
     ] } ] },
     { "id": "necromancien", "name": "Nécromancien", "cost": 5, "types": ["Action"], "image": "necromancien.png", "text": "+1 Carte\n+1 Action\n\nVous pouvez écarter une carte de votre main ou une carte Action d'une pile de la Réserve.\n\nSi vous aviez déjà écarté une autre carte ce tour-ci, prenez le Nécronomicon.", "abilities": [ { "when": "play", "effects": [
       { "op": "draw", "target": "self", "amount": 1 },

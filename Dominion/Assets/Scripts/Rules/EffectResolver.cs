@@ -234,7 +234,8 @@ public static class EffectResolver
             return EffectResolutionResult.Rejected("choose_cards currently supports hand, discard, inspected and trash zones.");
         int min = Math.Max(0, e.min), max = e.max > 0 ? e.max : min;
         List<int> candidates = Eligible(c.State, c.Actor, z, e.cardId, e.cardType,
-            e.lastMovedOnly ? c.Resolution.LastMovedCardInstanceId : 0, e.maxCost, e.excludedCardId);
+            e.lastMovedOnly ? c.Resolution.LastMovedCardInstanceId : 0, e.maxCost, e.excludedCardId,
+            e.excludedCardType);
         if (e.minUpToAvailable) min = Math.Min(min, candidates.Count);
         max = Math.Min(max, candidates.Count);
         if (candidates.Count == 0 && e.allowNoEligible) { c.Resolution.ClearSelection(); return EffectResolutionResult.Applied(); }
@@ -1013,7 +1014,7 @@ public static class EffectResolver
     }
 
     private static List<int> Eligible(GameStateSnapshot state, PlayerStateSnapshot p, CardZone z, string cardId, string cardType,
-        int onlyId, int maxCost = -1, string excludedCardId = null)
+        int onlyId, int maxCost = -1, string excludedCardId = null, string excludedCardType = null)
     {
         List<int> r = new List<int>(); List<int> source = CardZoneRules.ResolveZone(state, p, z); if (source == null) return r;
         foreach (int id in source)
@@ -1023,6 +1024,7 @@ public static class EffectResolver
             if (!string.IsNullOrWhiteSpace(excludedCardId) && string.Equals(i.DefinitionId, excludedCardId, StringComparison.OrdinalIgnoreCase)) continue;
             ExtensionCardData definition = Def(i.DefinitionId);
             if (!string.IsNullOrWhiteSpace(cardType) && !CardDefinitionRules.HasType(definition, cardType)) continue;
+            if (!string.IsNullOrWhiteSpace(excludedCardType) && CardDefinitionRules.HasType(definition, excludedCardType)) continue;
             if (maxCost >= 0 && (definition == null || CostRules.GetEffectiveCost(state, definition) > maxCost)) continue;
             r.Add(id);
         }

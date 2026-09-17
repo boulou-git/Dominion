@@ -98,6 +98,7 @@ public sealed class CardEffectData
     public string cardId;
     public string excludedCardId;
     public string cardType;
+    public string excludedCardType;
 
     public bool lastMovedOnly;
     public bool requiresLastSelection;
@@ -373,6 +374,7 @@ public static class ExtensionCatalog
                     effect.destinationZone = (effect.destinationZone ?? string.Empty).Trim();
                     effect.cardId = (effect.cardId ?? string.Empty).Trim();
                     effect.cardType = (effect.cardType ?? string.Empty).Trim();
+                    effect.excludedCardType = (effect.excludedCardType ?? string.Empty).Trim();
                     effect.prompt = (effect.prompt ?? string.Empty).Trim();
                     effect.requiresSelectedOption = (effect.requiresSelectedOption ?? string.Empty).Trim();
                     effect.requiresNoCardType = (effect.requiresNoCardType ?? string.Empty).Trim();
