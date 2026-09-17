@@ -10,6 +10,7 @@ public sealed class CardInstance
     public int InstanceId;
     public string DefinitionId;
     public string OwnerPlayerId;
+    public int VictoryPointBonus;
 
     public CardInstance(int instanceId, string definitionId, string ownerPlayerId)
     {

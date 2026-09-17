@@ -75,6 +75,7 @@ public static class EffectResolver
         {"move_trigger_card", MoveTriggerCard},
         {"discard_others_named_card", DiscardOthersNamedCard}, {"end_action_phase", EndActionPhase},
         {"modify_next_cleanup_draw", ModifyNextCleanupDraw},
+        {"set_trigger_card_victory_bonus_per_trashed_this_turn", SetTriggerCardVictoryBonusPerTrashedThisTurn},
         {ReactionRules.DrawDiscardOperation, AttackReactionDrawDiscard}
     };
 
@@ -156,6 +157,17 @@ public static class EffectResolver
             case "actions": c.Actor.Actions += e.amount; break; case "buys": c.Actor.Buys += e.amount; break; case "coins": c.Actor.Coins += e.amount; break;
             default: return EffectResolutionResult.Rejected("Unsupported resource: " + e.resource);
         }
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult SetTriggerCardVictoryBonusPerTrashedThisTurn(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Self(e) || e.amount < 0 || c.TriggerEvent == null || c.TriggerEvent.CardInstanceId <= 0)
+            return EffectResolutionResult.Rejected("Invalid set_trigger_card_victory_bonus_per_trashed_this_turn effect.");
+        CardInstance gainedCard = Find(c.State, c.TriggerEvent.CardInstanceId);
+        if (gainedCard == null)
+            return EffectResolutionResult.Rejected("Gained card instance was not found for its victory-point bonus.");
+        gainedCard.VictoryPointBonus = c.Actor.CardsTrashedThisTurn * e.amount;
         return EffectResolutionResult.Applied();
     }
 

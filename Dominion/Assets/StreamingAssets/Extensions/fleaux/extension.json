@@ -266,10 +266,11 @@
         { "op": "set_aside_trigger_until_turn_end", "target": "self" }
       ] }
     ] },
-    { "id": "cimetiere", "name": "Cimetière", "cost": 6, "types": ["Action", "Victoire"], "image": "cimetiere.png", "text": "+1 Action\n\nSi vous avez écarté ou défaussé une carte ce tour-ci : +2 Cartes\n\n———\n\nVaut 1 VP par tranche de 6 cartes dans le Rebut.", "abilities": [ { "when": "play", "effects": [
-      { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1 },
-      { "op": "draw", "target": "self", "amount": 2, "requiresMinDiscardedOrTrashedThisTurn": 1 }
-    ] } ] },
+    { "id": "cimetiere", "name": "Cimetière", "cost": 7, "types": ["Victoire"], "image": "cimetiere.png", "text": "2 VP\n\nLorsque vous recevez cette carte, elle vaut +2 VP par carte que vous avez écartée ce tour-ci.", "abilities": [
+      { "when": "card_gained", "effects": [
+        { "op": "set_trigger_card_victory_bonus_per_trashed_this_turn", "target": "self", "amount": 2 }
+      ] }
+    ] },
     { "id": "execution_publique", "name": "Exécution publique", "cost": 5, "types": ["Action"], "image": "execution_publique.png", "text": "Piochez jusqu’à avoir 8 cartes en main.\n\nSi vous avez au moins 3 cartes Victoire, Malédiction ou Maladie en main, vous pouvez jouer une carte Action de votre main.\n\nPuis terminez votre phase d’Action.", "abilities": [ { "when": "play", "effects": [
       { "op": "draw_to_hand_size", "target": "self", "amount": 8 },
       { "op": "choose_cards", "target": "self", "zone": "hand", "min": 0, "max": 1, "allowPass": true, "cardType": "Action", "prompt": "Vous pouvez jouer une carte Action de votre main.", "requiresMinMatchingCardsInHand": 3, "matchingCardTypes": ["Victoire", "Malédiction", "Maladie"] },

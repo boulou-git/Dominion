@@ -1,7 +1,7 @@
 {
   "extensionId": "fleaux",
   "cards": [
-    { "cardId": "cimetiere", "pointsPerTrashedCards": 1, "trashedCardsPerPoint": 6 },
+    { "cardId": "cimetiere", "fixedPoints": 2 },
     { "cardId": "charognard", "fixedPoints": 1 }
   ]
 }

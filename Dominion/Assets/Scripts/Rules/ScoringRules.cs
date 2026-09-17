@@ -25,8 +25,8 @@ public sealed class CardScoringData
     public string ownedCardId;
     public int pointsPerOwnedCard;
 
-    // Global Trash/Rebut scaling. Cimetière scores from the number of physical
-    // cards in the match-wide trash, independently for each owned copy.
+    // Optional global Trash/Rebut scaling for cards that score from the number of
+    // physical cards in the match-wide trash, independently for each owned copy.
     public int pointsPerTrashedCards;
     public int trashedCardsPerPoint;
 }
@@ -86,6 +86,7 @@ public static class ScoringRules
 
         HashSet<int> ownedInstances = CollectOwnedCardInstances(player);
         Dictionary<string, int> copiesByDefinition = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, int> bonusPointsByDefinition = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         foreach (int instanceId in ownedInstances)
         {
@@ -96,6 +97,9 @@ public static class ScoringRules
             if (!copiesByDefinition.ContainsKey(instance.DefinitionId))
                 copiesByDefinition[instance.DefinitionId] = 0;
             copiesByDefinition[instance.DefinitionId]++;
+            if (!bonusPointsByDefinition.ContainsKey(instance.DefinitionId))
+                bonusPointsByDefinition[instance.DefinitionId] = 0;
+            bonusPointsByDefinition[instance.DefinitionId] += instance.VictoryPointBonus;
         }
 
         int totalCards = ownedInstances.Count;
@@ -117,7 +121,8 @@ public static class ScoringRules
                 pointsPerCopy += ((state.TrashedCards != null ? state.TrashedCards.Count : 0) /
                                   scoring.trashedCardsPerPoint) * scoring.pointsPerTrashedCards;
 
-            int subtotal = pointsPerCopy * pair.Value;
+            int instanceBonuses = bonusPointsByDefinition.TryGetValue(pair.Key, out int bonusPoints) ? bonusPoints : 0;
+            int subtotal = pointsPerCopy * pair.Value + instanceBonuses;
             totalPoints += subtotal;
 
             ExtensionCardData definition = ResolveCardDefinition(pair.Key);

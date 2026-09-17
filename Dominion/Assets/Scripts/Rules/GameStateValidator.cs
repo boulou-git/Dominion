@@ -144,6 +144,8 @@ public static class GameStateValidator
 
             if (string.IsNullOrEmpty(card.DefinitionId))
                 errors.Add("Card instance " + card.InstanceId + " has no definition id.");
+            if (card.VictoryPointBonus < 0)
+                errors.Add("Card instance " + card.InstanceId + " has a negative victory-point bonus.");
             if (!string.IsNullOrEmpty(card.OwnerPlayerId) && !players.ContainsKey(card.OwnerPlayerId))
                 errors.Add("Card instance " + card.InstanceId + " has an unknown owner: " + (card.OwnerPlayerId ?? "<null>") + ".");
         }

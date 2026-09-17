@@ -73,6 +73,7 @@ public sealed partial class EndGameFlowController : MonoBehaviour
         public Text CopiesText;
         public Text PointsText;
         public int RevealedCopies;
+        public int RevealedPoints;
     }
 
     private void Awake()

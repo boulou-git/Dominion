@@ -63,7 +63,8 @@ public sealed partial class EndGameFlowController
             Root = row,
             CopiesText = copies,
             PointsText = points,
-            RevealedCopies = animated ? 0 : data.Copies
+            RevealedCopies = animated ? 0 : data.Copies,
+            RevealedPoints = animated ? 0 : data.TotalPoints
         };
     }
 
@@ -86,8 +87,9 @@ public sealed partial class EndGameFlowController
             RoomGameSetup.TryResolveCard(instance.DefinitionId, out ExtensionPackageData extension, out ExtensionCardData definition);
             RectTransform destination = scores ? _animatedRows[instance.DefinitionId].Root : _nonScoringSink;
             CardScoreBreakdown scoredCard = scores ? scoring[instance.DefinitionId] : null;
+            int arrivalPoints = scoredCard != null ? scoredCard.PointsPerCopy + instance.VictoryPointBonus : 0;
             _activeCardAnimations++;
-            StartCoroutine(FlyCard(sprite, definition, destination, scores, scoredCard));
+            StartCoroutine(FlyCard(sprite, definition, destination, scores, scoredCard, arrivalPoints));
             yield return new WaitForSeconds(0.045f);
         }
 
@@ -101,6 +103,7 @@ public sealed partial class EndGameFlowController
             if (!_animatedRows.TryGetValue(data.DefinitionId, out ScoreRowVisual row))
                 continue;
             row.RevealedCopies = data.Copies;
+            row.RevealedPoints = data.TotalPoints;
             if (row.CopiesText != null) row.CopiesText.text = "× " + data.Copies;
             if (row.PointsText != null) row.PointsText.text = data.TotalPoints.ToString();
         }
@@ -110,11 +113,12 @@ public sealed partial class EndGameFlowController
         _scoreRoutine = null;
     }
 
-    private IEnumerator FlyCard(Sprite sprite, ExtensionCardData definition, RectTransform destination, bool scores, CardScoreBreakdown scoringData)
+    private IEnumerator FlyCard(Sprite sprite, ExtensionCardData definition, RectTransform destination, bool scores,
+        CardScoreBreakdown scoringData, int arrivalPoints)
     {
         if (_animationLayer == null || _sourceDeck == null || destination == null)
         {
-            ApplyScoreArrival(scores, scoringData);
+            ApplyScoreArrival(scores, scoringData, arrivalPoints);
             _activeCardAnimations--;
             yield break;
         }
@@ -122,7 +126,7 @@ public sealed partial class EndGameFlowController
         RuntimeCardView cardView = RuntimeCardView.Create(_animationLayer, "ScoringCard", definition, sprite, false);
         if (cardView == null)
         {
-            ApplyScoreArrival(scores, scoringData);
+            ApplyScoreArrival(scores, scoringData, arrivalPoints);
             _activeCardAnimations--;
             yield break;
         }
@@ -137,7 +141,7 @@ public sealed partial class EndGameFlowController
         {
             Debug.LogError("RuntimeCard prefab must contain a CanvasGroup for scoring animations.", obj);
             Destroy(obj);
-            ApplyScoreArrival(scores, scoringData);
+            ApplyScoreArrival(scores, scoringData, arrivalPoints);
             _activeCardAnimations--;
             yield break;
         }
@@ -163,21 +167,21 @@ public sealed partial class EndGameFlowController
             yield return null;
         }
 
-        ApplyScoreArrival(scores, scoringData);
+        ApplyScoreArrival(scores, scoringData, arrivalPoints);
         Destroy(obj);
         _activeCardAnimations--;
     }
 
-    private void ApplyScoreArrival(bool scores, CardScoreBreakdown scoringData)
+    private void ApplyScoreArrival(bool scores, CardScoreBreakdown scoringData, int arrivalPoints)
     {
         if (!scores || scoringData == null || !_animatedRows.TryGetValue(scoringData.DefinitionId, out ScoreRowVisual row))
             return;
 
         row.RevealedCopies = Mathf.Min(row.Data.Copies, row.RevealedCopies + 1);
+        row.RevealedPoints += arrivalPoints;
         if (row.CopiesText != null) row.CopiesText.text = "× " + row.RevealedCopies;
-        int subtotal = row.RevealedCopies * row.Data.PointsPerCopy;
-        if (row.PointsText != null) row.PointsText.text = subtotal.ToString();
-        _animatedRunningTotal += row.Data.PointsPerCopy;
+        if (row.PointsText != null) row.PointsText.text = row.RevealedPoints.ToString();
+        _animatedRunningTotal += arrivalPoints;
         if (_scoreTotalText != null) _scoreTotalText.text = _animatedRunningTotal.ToString();
     }
 

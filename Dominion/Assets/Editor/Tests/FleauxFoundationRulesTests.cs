@@ -202,22 +202,28 @@ public sealed class FleauxFoundationRulesTests
     }
 
     [Test]
-    public void Cemetery_ScoresFromGlobalTrashInGroupsOfSix()
+    public void Cemetery_SnapshotsTrashedThisTurnAsItsPermanentVictoryBonusWhenGained()
     {
         GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
-        CardInstance cemetery = AddOwned(state, player, "fleaux:cimetiere", CardZone.Deck);
-        for (int index = 0; index < 12; index++)
-        {
-            CardInstance trashed = new CardInstance(state.NextCardInstanceId++, "base:cuivre", player.PlayerId);
-            state.CardInstances.Add(trashed);
-            state.TrashedCards.Add(trashed.InstanceId);
-        }
+        player.CardsTrashedThisTurn = 3;
+        state.SupplyPiles.Add(new SupplyPileSnapshot("fleaux:cimetiere", 8, true));
+        Assert.That(ResolutionQueue.TryBegin(state, player.PlayerId, out ResolutionQueue queue, out string beginError),
+            Is.True, beginError);
+        Assert.That(GainRules.TryGainFromSupply(state, player, "fleaux:cimetiere", CardZone.Discard,
+            0, queue.Events, out int cemeteryId, out string gainError), Is.True, gainError);
 
+        TriggerResolutionResult resolution = TriggerResolver.ResolvePending(queue, state, Resolve, new Random(1));
+
+        Assert.That(resolution.Status, Is.EqualTo(EffectResolutionStatus.Applied), resolution.Error);
+        CardInstance cemetery = state.CardInstances.Find(card => card.InstanceId == cemeteryId);
+        Assert.That(cemetery, Is.Not.Null);
+        Assert.That(cemetery.VictoryPointBonus, Is.EqualTo(6));
+        player.CardsTrashedThisTurn = 0;
         PlayerScoreResult score = ScoringRules.CalculatePlayerScore(state, player);
         CardScoreBreakdown row = new System.Collections.Generic.List<CardScoreBreakdown>(score.Breakdown)
             .Find(candidate => candidate.DefinitionId == cemetery.DefinitionId);
         Assert.That(row, Is.Not.Null);
-        Assert.That(row.TotalPoints, Is.EqualTo(2));
+        Assert.That(row.TotalPoints, Is.EqualTo(8));
     }
 
     [Test]
