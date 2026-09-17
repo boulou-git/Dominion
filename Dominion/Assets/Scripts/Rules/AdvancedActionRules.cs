@@ -601,7 +601,7 @@ public static class AdvancedActionRules
             if (trashedDefinition == null)
                 return GameRuleResult.Rejected("Trashed top-card definition could not be resolved.", resolution.Events.SnapshotHistory());
 
-            List<string> candidates = ExactCostSupplyCandidates(state, CostRules.GetEffectiveCost(state, trashedDefinition), resolve);
+            List<string> candidates = ExactCostSupplyCandidates(state, CostRules.GetEffectiveCost(state, trashedDefinition, resolve), resolve);
             if (candidates.Count == 0) continue;
             string operation = ReplaceEachOtherTopPrefix + target.PlayerId;
             if (!resolution.TrySuspendForSupplyDecision(actor.PlayerId, operation,
@@ -624,7 +624,7 @@ public static class AdvancedActionRules
         {
             if (pile == null || pile.RemainingCount <= 0 || string.IsNullOrEmpty(pile.DefinitionId)) continue;
             ExtensionCardData definition = resolve(pile.DefinitionId);
-            if (definition != null && CostRules.GetEffectiveCost(state, definition) == cost) result.Add(pile.DefinitionId);
+            if (definition != null && CostRules.GetEffectiveCost(state, definition, resolve) == cost) result.Add(pile.DefinitionId);
         }
         return result;
     }

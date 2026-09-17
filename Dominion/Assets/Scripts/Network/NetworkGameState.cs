@@ -615,6 +615,7 @@ public static class NetworkGameState
             if (player.Inspected == null) player.Inspected = new List<int>();
             if (player.Artifacts == null) player.Artifacts = new List<int>();
             if (player.ResolvedDurationCards == null) player.ResolvedDurationCards = new List<int>();
+            if (player.ConditionalCostModifiers == null) player.ConditionalCostModifiers = new List<ConditionalCostModifierSnapshot>();
         }
         ResolutionQueue.EnsureSnapshot(state);
     }

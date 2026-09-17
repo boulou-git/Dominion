@@ -9,7 +9,7 @@ using System.Collections.Generic;
 [Serializable]
 public class GameStateSnapshot
 {
-    public const int CurrentSchemaVersion = 7;
+    public const int CurrentSchemaVersion = 8;
 
     // Version of the serialized snapshot shape. This is deliberately separate from
     // Version, which is the monotonic revision number of one running match.
@@ -190,6 +190,10 @@ public class PlayerStateSnapshot
     // remain in play until this player's next Cleanup, then become discardable.
     public List<int> ResolvedDurationCards = new List<int>();
 
+    // Persistent source-bound cost penalties. Duration attacks register them on their
+    // affected opponents and remove them when the source effect expires.
+    public List<ConditionalCostModifierSnapshot> ConditionalCostModifiers = new List<ConditionalCostModifierSnapshot>();
+
     public int Actions;
     public int Buys;
     public int Coins;
@@ -206,4 +210,12 @@ public class PlayerStateSnapshot
 
     // Applied to the next cleanup hand draw, then reset. Insomnie uses -1.
     public int NextCleanupDrawModifier;
+}
+
+[Serializable]
+public sealed class ConditionalCostModifierSnapshot
+{
+    public int SourceCardInstanceId;
+    public int Amount;
+    public List<string> MatchingCardTypes = new List<string>();
 }

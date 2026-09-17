@@ -43,6 +43,8 @@ public static class GameStateSnapshotMigration
             UpgradeV5ToV6(state);
         if (state.SchemaVersion == 6)
             UpgradeV6ToV7(state);
+        if (state.SchemaVersion == 7)
+            UpgradeV7ToV8(state);
 
         return state.SchemaVersion == GameStateSnapshot.CurrentSchemaVersion;
     }
@@ -95,5 +97,14 @@ public static class GameStateSnapshotMigration
     {
         // VictoryPointBonus is additive and defaults to zero on older card instances.
         state.SchemaVersion = 7;
+    }
+
+    private static void UpgradeV7ToV8(GameStateSnapshot state)
+    {
+        if (state.Players != null)
+            foreach (PlayerStateSnapshot player in state.Players)
+                if (player != null && player.ConditionalCostModifiers == null)
+                    player.ConditionalCostModifiers = new System.Collections.Generic.List<ConditionalCostModifierSnapshot>();
+        state.SchemaVersion = 8;
     }
 }

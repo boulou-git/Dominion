@@ -355,7 +355,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             ExtensionPackageData extension;
             ExtensionCardData definition;
             bool resolved = RoomGameSetup.TryResolveCard(pair.Key, out extension, out definition);
-            int effectiveCost = resolved ? CostRules.GetEffectiveCost(state, definition) : -1;
+            int effectiveCost = resolved ? CostRules.GetPurchaseCost(state, definition) : -1;
             bool buyable = resolved &&
                            remaining.HasValue && remaining.Value > 0 &&
                            localTurn &&

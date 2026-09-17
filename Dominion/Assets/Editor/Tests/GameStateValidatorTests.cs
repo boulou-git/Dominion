@@ -51,6 +51,20 @@ public sealed class GameStateValidatorTests
         StringAssert.Contains("newer than supported", error);
     }
 
+    [Test]
+    public void VersionSevenSnapshot_InitialisesConditionalCostModifiers()
+    {
+        GameStateSnapshot state = CreateValidState();
+        state.SchemaVersion = 7;
+        state.Players[0].ConditionalCostModifiers = null;
+
+        bool upgraded = GameStateSnapshotMigration.TryUpgradeToCurrent(state, out string error);
+
+        Assert.That(upgraded, Is.True, error);
+        Assert.That(state.Players[0].ConditionalCostModifiers, Is.Not.Null);
+        Assert.That(GameStateValidator.TryValidate(state, out error), Is.True, error);
+    }
+
     private static GameStateSnapshot CreateValidState()
     {
         GameStateSnapshot state = new GameStateSnapshot

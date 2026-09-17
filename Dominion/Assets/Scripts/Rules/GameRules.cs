@@ -46,7 +46,7 @@ public static class GameRules
         if (s == null || string.IsNullOrEmpty(playerId) || string.IsNullOrEmpty(definitionId) || resolve == null) return GameRuleResult.Rejected("Invalid buy request.");
         if (s.Phase != BuyPhase) return GameRuleResult.Rejected("Cards can only be bought during the Buy phase.");
         PlayerStateSnapshot p = Player(s, playerId); if (p == null || p.Buys <= 0) return GameRuleResult.Rejected("Player was not found or has no Buys.");
-        ExtensionCardData d = resolve(definitionId); int effectiveCost = CostRules.GetEffectiveCost(s, d);
+        ExtensionCardData d = resolve(definitionId); int effectiveCost = CostRules.GetPurchaseCost(s, d, resolve);
         if (d == null || effectiveCost < 0 || effectiveCost > p.Coins) return GameRuleResult.Rejected("Card definition/cost is invalid for this purchase.");
         if (!GainRules.CanGainFromSupply(s, definitionId, out string gainCheckErr)) return GameRuleResult.Rejected(gainCheckErr);
         if (!ResolutionQueue.TryBegin(s, playerId, out ResolutionQueue q, out string err)) return GameRuleResult.Rejected(err);

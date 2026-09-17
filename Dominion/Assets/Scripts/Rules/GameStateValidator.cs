@@ -95,6 +95,13 @@ public static class GameStateValidator
                         errors.Add("Resolved Duration " + instanceId + " is not in play for " + player.PlayerId + ".");
             if (player.CostReductionThisTurn < 0)
                 errors.Add("Player " + player.PlayerId + " has a negative turn cost reduction.");
+            if (player.ConditionalCostModifiers == null)
+                errors.Add("Player " + player.PlayerId + " has a null conditional cost-modifier list.");
+            else
+                foreach (ConditionalCostModifierSnapshot modifier in player.ConditionalCostModifiers)
+                    if (modifier == null || modifier.SourceCardInstanceId <= 0 || modifier.Amount <= 0 ||
+                        modifier.MatchingCardTypes == null || modifier.MatchingCardTypes.Count == 0)
+                        errors.Add("Player " + player.PlayerId + " has an invalid conditional cost modifier.");
             if (player.ActionsPlayedThisTurn < 0)
                 errors.Add("Player " + player.PlayerId + " has a negative played-Action count.");
         }

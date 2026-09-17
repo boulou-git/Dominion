@@ -72,7 +72,7 @@ public sealed class DynamicCardCostView : MonoBehaviour
         EnsureText();
         if (_costText == null)
             return;
-        int cost = CostRules.GetEffectiveCost(state, _definition);
+        int cost = CostRules.GetPurchaseCost(state, _definition);
         _displayedCost = cost;
         _costText.gameObject.SetActive(cost >= 0);
         if (cost >= 0)

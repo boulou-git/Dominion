@@ -264,6 +264,47 @@ public sealed class FleauxRemainingCardsRulesTests
     }
 
     [Test]
+    public void Pestifere_GivesDiseaseToOthersHandAndRaisesOnlyTheirPurchaseCostsUntilNextTurn()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot attacker);
+        PlayerStateSnapshot defender = new PlayerStateSnapshot
+        {
+            PlayerId = "p2", NickName = "P2", Actions = 1, Buys = 1, Coins = 5
+        };
+        state.Players.Add(defender);
+        SpecialPileSnapshot diseases = new SpecialPileSnapshot("fleaux:maladies", "Maladies");
+        state.SpecialPiles.Add(diseases);
+        CardInstance disease = new CardInstance(state.NextCardInstanceId++, "fleaux:fievre", string.Empty);
+        state.CardInstances.Add(disease);
+        diseases.CardInstanceIds.Add(disease.InstanceId);
+        CardInstance pestiferous = AddOwned(state, attacker, "fleaux:pestifere", CardZone.Hand);
+
+        GameRuleResult played = GameRules.TryPlayCard(state, attacker.PlayerId, pestiferous.InstanceId, Resolve, new Random(1));
+
+        Assert.That(played.Status, Is.EqualTo(GameRuleStatus.Applied), played.Error);
+        Assert.That(defender.Hand, Does.Contain(disease.InstanceId));
+        Assert.That(attacker.Hand.Contains(disease.InstanceId), Is.False);
+        Assert.That(defender.ConditionalCostModifiers.Count, Is.EqualTo(1));
+        state.ActivePlayerId = defender.PlayerId;
+        ExtensionCardData silver = Resolve("base:argent");
+        Assert.That(CostRules.GetEffectiveCost(state, silver, Resolve), Is.EqualTo(3));
+        Assert.That(CostRules.GetPurchaseCost(state, silver, Resolve), Is.EqualTo(4));
+
+        defender.Hand.Remove(disease.InstanceId);
+        defender.Discard.Add(disease.InstanceId);
+        Assert.That(CostRules.GetPurchaseCost(state, silver, Resolve), Is.EqualTo(3));
+        defender.Discard.Remove(disease.InstanceId);
+        defender.Hand.Add(disease.InstanceId);
+        state.ActivePlayerId = attacker.PlayerId;
+        state.TurnNumber = 2;
+        GameRuleResult nextTurn = TurnLifecycleRules.TryResolveTurnStarted(state, attacker, Resolve, new Random(1));
+
+        Assert.That(nextTurn.Status, Is.EqualTo(GameRuleStatus.Applied), nextTurn.Error);
+        Assert.That(defender.ConditionalCostModifiers, Is.Empty);
+        Assert.That(attacker.ResolvedDurationCards, Does.Contain(pestiferous.InstanceId));
+    }
+
+    [Test]
     public void MortVivant_ReturnsToItsSupplyPileAtTurnEnd()
     {
         GameStateSnapshot state = NewState(out PlayerStateSnapshot player);

@@ -67,6 +67,8 @@ public static class EffectResolver
         {"gain_special_pile", GainSpecialPile}, {"take_artifact", TakeArtifact},
         {"gain_trigger_card_from_trash", GainTriggerCardFromTrash},
         {"add_resource_per_distinct_type_in_play", AddResourcePerDistinctTypeInPlay},
+        {"add_conditional_cost_increase", AddConditionalCostIncrease},
+        {"clear_conditional_cost_increase", ClearConditionalCostIncrease},
         {"set_next_cleanup_draw_penalty", SetNextCleanupDrawPenalty}, {"mark_duration_resolved", MarkDurationResolved},
         {"set_aside_selected_until_next_turn", SetAsideSelectedUntilNextTurn},
         {"set_aside_top_until_next_turn", SetAsideTopUntilNextTurn},
@@ -197,6 +199,26 @@ public static class EffectResolver
         return CostRules.AddReductionForCurrentTurn(c.State, c.Actor, e.amount, out string error)
             ? EffectResolutionResult.Applied()
             : EffectResolutionResult.Rejected(error);
+    }
+
+    private static EffectResolutionResult AddConditionalCostIncrease(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Others(e) || e.amount <= 0 || c.SourceCardInstanceId <= 0 ||
+            e.matchingCardTypes == null || e.matchingCardTypes.Count == 0)
+            return EffectResolutionResult.Rejected("Invalid add_conditional_cost_increase effect.");
+        if (c.State.Players == null) return EffectResolutionResult.Applied();
+        foreach (PlayerStateSnapshot player in c.State.Players)
+            if (player != null && player.PlayerId != c.Actor.PlayerId && !SkipAttackTarget(c, player))
+                CostRules.AddConditionalModifier(player, c.SourceCardInstanceId, e.amount, e.matchingCardTypes);
+        return EffectResolutionResult.Applied();
+    }
+
+    private static EffectResolutionResult ClearConditionalCostIncrease(CardEffectData e, EffectExecutionContext c)
+    {
+        if (!Others(e) || c.SourceCardInstanceId <= 0)
+            return EffectResolutionResult.Rejected("Invalid clear_conditional_cost_increase effect.");
+        CostRules.RemoveConditionalModifiers(c.State, c.SourceCardInstanceId);
+        return EffectResolutionResult.Applied();
     }
 
     private static EffectResolutionResult Draw(CardEffectData e, EffectExecutionContext c)
@@ -473,7 +495,7 @@ public static class EffectResolver
         if (c.Resolution.SelectedInstanceIds.Count == 0) { c.Resolution.SetLastSelectedCardCost(-1); return EffectResolutionResult.Applied(); }
         if (c.Resolution.SelectedInstanceIds.Count != 1) return EffectResolutionResult.Rejected("remember_selected_card_cost requires at most one selected card.");
         CardInstance i = Find(c.State, c.Resolution.SelectedInstanceIds[0]); ExtensionCardData d = i != null ? Def(i.DefinitionId) : null;
-        int effectiveCost = CostRules.GetEffectiveCost(c.State, d);
+        int effectiveCost = CostRules.GetEffectiveCost(c.State, d, Def);
         if (d == null || effectiveCost < 0) return EffectResolutionResult.Rejected("Selected card definition/cost is invalid.");
         c.Resolution.SetLastSelectedCardCost(effectiveCost); return EffectResolutionResult.Applied();
     }
@@ -510,7 +532,7 @@ public static class EffectResolver
         List<string> candidates = new List<string>(); if (c.State.SupplyPiles != null) foreach (SupplyPileSnapshot p in c.State.SupplyPiles)
         {
             if (p == null || p.RemainingCount <= 0 || string.IsNullOrEmpty(p.DefinitionId)) continue; ExtensionCardData d = Def(p.DefinitionId); if (d == null) continue;
-            int effectiveCost = CostRules.GetEffectiveCost(c.State, d);
+            int effectiveCost = CostRules.GetEffectiveCost(c.State, d, Def);
             if (effectiveCost < 0 || (ceiling >= 0 && effectiveCost > ceiling) || (exact >= 0 && effectiveCost != exact)) continue; if (!string.IsNullOrWhiteSpace(e.cardId) && !string.Equals(p.DefinitionId, e.cardId, StringComparison.OrdinalIgnoreCase)) continue;
             if (!string.IsNullOrWhiteSpace(e.cardType) && !CardDefinitionRules.HasType(d, e.cardType)) continue; candidates.Add(p.DefinitionId);
         }
@@ -1037,7 +1059,7 @@ public static class EffectResolver
             ExtensionCardData definition = Def(i.DefinitionId);
             if (!string.IsNullOrWhiteSpace(cardType) && !CardDefinitionRules.HasType(definition, cardType)) continue;
             if (!string.IsNullOrWhiteSpace(excludedCardType) && CardDefinitionRules.HasType(definition, excludedCardType)) continue;
-            if (maxCost >= 0 && (definition == null || CostRules.GetEffectiveCost(state, definition) > maxCost)) continue;
+            if (maxCost >= 0 && (definition == null || CostRules.GetEffectiveCost(state, definition, Def) > maxCost)) continue;
             r.Add(id);
         }
         return r;

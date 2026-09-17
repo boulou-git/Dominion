@@ -151,6 +151,7 @@ public static class TrashRules
 
         if (owner.ResolvedDurationCards != null)
             owner.ResolvedDurationCards.Remove(instanceId);
+        CostRules.RemoveConditionalModifiers(state, instanceId);
 
         owner.CardsTrashedThisTurn++;
         eventBus?.Publish(new GameEvent(
