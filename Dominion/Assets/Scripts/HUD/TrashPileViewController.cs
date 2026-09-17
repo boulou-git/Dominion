@@ -111,6 +111,10 @@ public sealed class TrashPileViewController : MonoBehaviour
         BuildUi();
         int count = state != null && state.TrashedCards != null ? state.TrashedCards.Count : 0;
         if (_openButtonText != null) _openButtonText.text = "ÉCART (" + count + ")";
+        bool decisionLocked = PendingDecisionInputLock.IsActive(state);
+        if (_openButton != null) _openButton.interactable = !decisionLocked;
+        if (decisionLocked && _overlay != null && _overlay.activeSelf)
+            Close();
 
         if (_overlay == null || !_overlay.activeSelf) return;
         int version = state != null ? state.Version : -1;
@@ -120,6 +124,7 @@ public sealed class TrashPileViewController : MonoBehaviour
 
     private void Open()
     {
+        if (PendingDecisionInputLock.IsActive(NetworkGameState.State)) return;
         if (_overlay == null) BuildUi();
         if (_overlay == null) return;
         _overlay.SetActive(true);

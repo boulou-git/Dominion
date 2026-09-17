@@ -94,7 +94,8 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     public void SendChatMessage(string message)
     {
         GameStateSnapshot state = NetworkGameState.State;
-        if (state == null || !state.IsStarted || string.IsNullOrWhiteSpace(message)) return;
+        if (state == null || !state.IsStarted || PendingDecisionInputLock.IsActive(state) ||
+            string.IsNullOrWhiteSpace(message)) return;
         message = message.Trim();
         if (message.Length > JournalRules.MaxChatLength)
             message = message.Substring(0, JournalRules.MaxChatLength);

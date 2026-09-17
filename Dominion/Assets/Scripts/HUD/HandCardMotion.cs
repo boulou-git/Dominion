@@ -76,7 +76,7 @@ public sealed class HandCardMotion : MonoBehaviour,
 
     public void OnPointerEnter(PointerEventData eventData)
     {
-        if (_playing || _dragging)
+        if (PendingDecisionInputLock.IsActive(NetworkGameState.State) || _playing || _dragging)
             return;
 
         _targetOffset = new Vector3(0f, _hoverLift, 0f);
@@ -110,7 +110,8 @@ public sealed class HandCardMotion : MonoBehaviour,
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (eventData.button != PointerEventData.InputButton.Left || _playing || _dragging)
+        if (PendingDecisionInputLock.IsActive(NetworkGameState.State) ||
+            eventData.button != PointerEventData.InputButton.Left || _playing || _dragging)
             return;
 
         RectTransform parentRect = transform.parent as RectTransform;

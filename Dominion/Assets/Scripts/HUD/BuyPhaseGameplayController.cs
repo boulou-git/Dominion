@@ -92,7 +92,8 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         RenderInPlay(state, viewedPlayer ?? activePlayer);
         RenderDiscardTop(state, viewedPlayer ?? activePlayer);
 
-        if (state == null || localPlayer == null || state.IsPaused || _cleanupAnimating)
+        if (state == null || localPlayer == null || state.IsPaused ||
+            PendingDecisionInputLock.IsActive(state) || _cleanupAnimating)
             return;
 
         bool localTurn = state.ActivePlayerId == localPlayer.PlayerId;
@@ -359,7 +360,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
                            remaining.HasValue && remaining.Value > 0 &&
                            localTurn &&
                            buyPhase &&
-                           state != null && !state.IsPaused &&
+                           state != null && !state.IsPaused && !PendingDecisionInputLock.IsActive(state) &&
                            localPlayer.Buys > 0 &&
                            effectiveCost >= 0 && effectiveCost <= localPlayer.Coins;
             binding.SetBuyable(buyable);
@@ -388,7 +389,8 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
                             RoomGameSetup.TryResolveCard(instance.DefinitionId, out extension, out definition) &&
                             IsTreasure(definition);
 
-            bool playable = treasure && localTurn && buyPhase && state != null && !state.IsPaused;
+            bool playable = treasure && localTurn && buyPhase && state != null && !state.IsPaused &&
+                            !PendingDecisionInputLock.IsActive(state);
             HandGameplayInteraction gameplay = child.GetComponent<HandGameplayInteraction>();
             if (gameplay == null)
                 gameplay = child.gameObject.AddComponent<HandGameplayInteraction>();
@@ -494,7 +496,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             Button button = tile.GetComponent<Button>();
             if (button != null)
             {
-                button.interactable = sprite != null;
+                button.interactable = sprite != null && !PendingDecisionInputLock.IsActive(state);
                 if (sprite != null)
                 {
                     Sprite capturedSprite = sprite;
@@ -597,13 +599,13 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
 
     private void RequestPlayCard(int instanceId)
     {
-        if (PlayersTurnsHandler.Instance != null)
+        if (!PendingDecisionInputLock.IsActive(NetworkGameState.State) && PlayersTurnsHandler.Instance != null)
             PlayersTurnsHandler.Instance.PlayCard(instanceId);
     }
 
     private void RequestBuyCard(string definitionId)
     {
-        if (PlayersTurnsHandler.Instance != null)
+        if (!PendingDecisionInputLock.IsActive(NetworkGameState.State) && PlayersTurnsHandler.Instance != null)
             PlayersTurnsHandler.Instance.BuyCard(definitionId);
     }
 
@@ -614,7 +616,8 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
 
         GameStateSnapshot state = NetworkGameState.State;
         PlayerStateSnapshot localPlayer = ResolveLocalPlayer(state);
-        if (state == null || localPlayer == null || state.IsPaused || state.ActivePlayerId != localPlayer.PlayerId)
+        if (state == null || localPlayer == null || state.IsPaused ||
+            PendingDecisionInputLock.IsActive(state) || state.ActivePlayerId != localPlayer.PlayerId)
             return;
 
         // The same existing button owns both transitions. Action -> Buy is immediate and
@@ -718,7 +721,8 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
 
     private void ShowZoom(Sprite sprite, ExtensionCardData definition, bool showCost = true)
     {
-        if (_zoomOverlay == null || _zoomImage == null || sprite == null)
+        if (PendingDecisionInputLock.IsActive(NetworkGameState.State) ||
+            _zoomOverlay == null || _zoomImage == null || sprite == null)
             return;
 
         _zoomImage.sprite = sprite;

@@ -285,7 +285,9 @@ public static class NetworkGameState
 
     public static bool TrySendChatMessage(string requesterPlayerId, string message, int expectedAuthorityEpoch)
     {
-        if (!CanWrite() || _state == null || !_state.IsStarted || _state.AuthorityEpoch != expectedAuthorityEpoch) return false;
+        if (!CanWrite() || _state == null || !_state.IsStarted ||
+            PendingDecisionInputLock.IsActive(_state) ||
+            _state.AuthorityEpoch != expectedAuthorityEpoch) return false;
         GameStateSnapshot next = Clone(_state);
         if (!JournalRules.TryRecordChat(next, requesterPlayerId, message,
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), out string error))

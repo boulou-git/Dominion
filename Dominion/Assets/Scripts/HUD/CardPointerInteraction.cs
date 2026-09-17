@@ -20,10 +20,21 @@ public sealed class CardPointerInteraction : MonoBehaviour, IPointerDownHandler,
     private bool _longPressTriggered;
     private float _pointerDownTime;
     private PointerEventData.InputButton _button;
+    private bool _decisionCandidate;
+
+    public bool IsDecisionCandidate => _decisionCandidate;
+
+    public void SetDecisionCandidate(bool candidate)
+    {
+        _decisionCandidate = candidate;
+        if (!candidate && PendingDecisionInputLock.IsActive(NetworkGameState.State))
+            ResetPointerState();
+    }
 
     private void Update()
     {
-        if (!_pointerIsDown || _longPressTriggered || !InspectOnLongPress)
+        if (PendingDecisionInputLock.IsActive(NetworkGameState.State) ||
+            !_pointerIsDown || _longPressTriggered || !InspectOnLongPress)
             return;
 
         if (Time.unscaledTime - _pointerDownTime < LongPressSeconds)
@@ -35,6 +46,10 @@ public sealed class CardPointerInteraction : MonoBehaviour, IPointerDownHandler,
 
     public void OnPointerDown(PointerEventData eventData)
     {
+        if (PendingDecisionInputLock.IsActive(NetworkGameState.State) &&
+            (!_decisionCandidate || eventData.button != PointerEventData.InputButton.Left))
+            return;
+
         _pointerIsDown = true;
         _longPressTriggered = false;
         _pointerDownTime = Time.unscaledTime;
@@ -48,6 +63,10 @@ public sealed class CardPointerInteraction : MonoBehaviour, IPointerDownHandler,
 
     public void OnPointerClick(PointerEventData eventData)
     {
+        bool decisionLocked = PendingDecisionInputLock.IsActive(NetworkGameState.State);
+        if (decisionLocked && (!_decisionCandidate || eventData.button != PointerEventData.InputButton.Left))
+            return;
+
         if (_longPressTriggered)
         {
             _longPressTriggered = false;
@@ -65,6 +84,11 @@ public sealed class CardPointerInteraction : MonoBehaviour, IPointerDownHandler,
     }
 
     private void OnDisable()
+    {
+        ResetPointerState();
+    }
+
+    private void ResetPointerState()
     {
         _pointerIsDown = false;
         _longPressTriggered = false;

@@ -147,8 +147,14 @@ public sealed class GameScreenController : MonoBehaviour
         ResolveDynamicRoots();
         EnsureBoardControls();
         _boardSelection.Synchronise(state);
+        bool decisionLocked = PendingDecisionInputLock.IsActive(state);
         if (_followActiveToggle != null)
+        {
             _followActiveToggle.SetIsOnWithoutNotify(_boardSelection.FollowActivePlayer);
+            _followActiveToggle.interactable = !decisionLocked;
+        }
+        if (decisionLocked && _zoomOverlay != null)
+            _zoomOverlay.SetActive(false);
         RefreshPlayerPills(state);
 
         if (!_kingdomBuilt)
@@ -203,7 +209,7 @@ public sealed class GameScreenController : MonoBehaviour
         bool localTurn = state.ActivePlayerId == NetworkGameState.LocalPlayerId ||
                          (localPlayer != null && activePlayer == localPlayer);
         if (_nextPhaseButton != null)
-            _nextPhaseButton.interactable = localTurn && state.IsStarted && !state.IsPaused;
+            _nextPhaseButton.interactable = localTurn && state.IsStarted && !state.IsPaused && !decisionLocked;
         if (_nextPhaseButtonText != null)
             _nextPhaseButtonText.text = NextPhaseLabel(state.Phase, localTurn);
 
@@ -211,6 +217,13 @@ public sealed class GameScreenController : MonoBehaviour
         {
             if (state.IsPaused)
                 _statusText.text = state.PauseReason;
+            else if (decisionLocked)
+            {
+                PendingDecisionSnapshot pending = state.Resolution.PendingDecision;
+                _statusText.text = pending != null && pending.PlayerId == NetworkGameState.LocalPlayerId
+                    ? "Choix en cours — répondez au choix ou appuyez sur Échap"
+                    : "Choix en cours — en attente du joueur concerné";
+            }
             else if (viewedPlayer != null && activePlayer != null && viewedPlayer.PlayerId != activePlayer.PlayerId)
                 _statusText.text = "Consultation — " + viewedPlayer.NickName;
             else if (localTurn)
@@ -361,7 +374,10 @@ public sealed class GameScreenController : MonoBehaviour
             Button button = pill.GetComponent<Button>();
             string capturedPlayerId = player.PlayerId;
             if (button != null)
+            {
+                button.interactable = !PendingDecisionInputLock.IsActive(state);
                 button.onClick.AddListener(() => SelectBoardPlayer(capturedPlayerId));
+            }
 
             _playerPills.Add(pill);
         }
@@ -404,6 +420,8 @@ public sealed class GameScreenController : MonoBehaviour
     private void SelectBoardPlayer(string playerId)
     {
         GameStateSnapshot state = NetworkGameState.State;
+        if (PendingDecisionInputLock.IsActive(state))
+            return;
         if (!_boardSelection.SelectPlayer(state, playerId))
             return;
         Refresh(state);
@@ -413,6 +431,8 @@ public sealed class GameScreenController : MonoBehaviour
     private void HandleFollowActiveChanged(bool follow)
     {
         GameStateSnapshot state = NetworkGameState.State;
+        if (PendingDecisionInputLock.IsActive(state))
+            return;
         if (!_boardSelection.SetFollowActivePlayer(state, follow))
             return;
         Refresh(state);
@@ -688,7 +708,8 @@ public sealed class GameScreenController : MonoBehaviour
 
     private void ShowZoom(Sprite sprite, ExtensionCardData definition)
     {
-        if (_zoomOverlay == null || _zoomImage == null || sprite == null)
+        if (PendingDecisionInputLock.IsActive(NetworkGameState.State) ||
+            _zoomOverlay == null || _zoomImage == null || sprite == null)
             return;
 
         _zoomImage.sprite = sprite;
@@ -706,7 +727,7 @@ public sealed class GameScreenController : MonoBehaviour
 
     private void RequestNextPhase()
     {
-        if (PlayersTurnsHandler.Instance != null)
+        if (!PendingDecisionInputLock.IsActive(NetworkGameState.State) && PlayersTurnsHandler.Instance != null)
             PlayersTurnsHandler.Instance.AdvancePhase();
     }
 

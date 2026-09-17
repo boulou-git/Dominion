@@ -125,6 +125,10 @@ public sealed class ReserveExtrasController : MonoBehaviour
             RebuildArtifacts(state);
         }
 
+        bool decisionLocked = PendingDecisionInputLock.IsActive(state);
+        foreach (Button button in _extrasUi.GetComponentsInChildren<Button>(true))
+            if (button != null) button.interactable = !decisionLocked;
+
         ScheduleLayoutRefresh();
     }
 
@@ -233,7 +237,8 @@ public sealed class ReserveExtrasController : MonoBehaviour
 
     private void ShowDetail(Sprite sprite, ExtensionCardData definition, bool showCost)
     {
-        if (sprite == null || _zoomOverlay == null || _zoomImage == null)
+        if (PendingDecisionInputLock.IsActive(NetworkGameState.State) ||
+            sprite == null || _zoomOverlay == null || _zoomImage == null)
             return;
 
         _zoomImage.sprite = sprite;

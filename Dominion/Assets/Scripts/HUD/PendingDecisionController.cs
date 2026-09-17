@@ -22,6 +22,7 @@ public sealed class PendingDecisionController : MonoBehaviour
     private readonly Dictionary<string, Image> _optionButtons = new Dictionary<string, Image>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<CardPointerInteraction, Action> _selectionHandlers = new Dictionary<CardPointerInteraction, Action>();
     private readonly Dictionary<Image, Color> _originalImageColors = new Dictionary<Image, Color>();
+    private readonly Dictionary<Graphic, bool> _originalRaycastTargets = new Dictionary<Graphic, bool>();
     private readonly List<CardSelectionHalo> _selectionHalos = new List<CardSelectionHalo>();
     private readonly List<GameObject> _externalCards = new List<GameObject>();
 
@@ -69,12 +70,20 @@ public sealed class PendingDecisionController : MonoBehaviour
         ClearCardBindings();
         ClearExternalCards();
         ClearSupplyDecisionVisuals();
+        ReleaseInputLock();
     }
 
     private void Refresh(GameStateSnapshot state)
     {
+        bool inputLocked = PendingDecisionInputLock.IsActive(state);
         PendingDecisionSnapshot decision = ResolveLocalDecision(state);
-        if (decision == null) { HideDecision(); return; }
+        if (decision == null)
+        {
+            HideDecision();
+            if (inputLocked) ApplyInputLock();
+            else ReleaseInputLock();
+            return;
+        }
         EnsurePanel();
 
         bool newDecision = !string.Equals(_boundDecisionId, decision.DecisionId, StringComparison.Ordinal);
@@ -133,6 +142,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         }
 
         RefreshSelectionUi(decision);
+        ApplyInputLock();
     }
 
     private static bool IsSupplyDecision(PendingDecisionSnapshot decision) =>
@@ -214,6 +224,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             if (image != null) image.color = candidate ? _originalImageColors[image] : MultiplyRgb(_originalImageColors[image], 0.55f);
 
             CardPointerInteraction pointer = child.GetComponent<CardPointerInteraction>();
+            if (pointer != null) pointer.SetDecisionCandidate(candidate);
             if (!candidate || pointer == null || _selectionHandlers.ContainsKey(pointer)) continue;
             int capturedId = instanceId;
             Action handler = () => ToggleSelection(capturedId);
@@ -258,6 +269,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             GameObject card = cardView.gameObject;
             CardPointerInteraction pointer = cardView.Pointer;
             pointer.InspectOnLongPress = false;
+            pointer.SetDecisionCandidate(selectable);
             if (selectable)
             {
                 int capturedId = instanceId;
@@ -496,6 +508,41 @@ public sealed class PendingDecisionController : MonoBehaviour
         if (_cardDrawer != null) _cardDrawer.SetActive(false);
     }
 
+    private void ApplyInputLock()
+    {
+        foreach (Graphic graphic in GetComponentsInChildren<Graphic>(true))
+        {
+            if (graphic == null) continue;
+            if (!_originalRaycastTargets.ContainsKey(graphic))
+                _originalRaycastTargets.Add(graphic, graphic.raycastTarget);
+
+            CardPointerInteraction pointer = graphic.GetComponentInParent<CardPointerInteraction>();
+            bool decisionCandidate = pointer != null && pointer.IsDecisionCandidate;
+            bool decisionControl = IsChildOf(graphic.transform, _panel) ||
+                                   IsChildOf(graphic.transform, _instructionBar) ||
+                                   IsChildOf(graphic.transform, _cardDrawer);
+            graphic.raycastTarget = _originalRaycastTargets[graphic] &&
+                                    (decisionCandidate || decisionControl);
+        }
+    }
+
+    private void ReleaseInputLock()
+    {
+        foreach (KeyValuePair<Graphic, bool> pair in _originalRaycastTargets)
+            if (pair.Key != null) pair.Key.raycastTarget = pair.Value;
+        _originalRaycastTargets.Clear();
+    }
+
+    private static bool IsChildOf(Transform child, Component parent)
+    {
+        return child != null && parent != null && child.IsChildOf(parent.transform);
+    }
+
+    private static bool IsChildOf(Transform child, GameObject parent)
+    {
+        return child != null && parent != null && child.IsChildOf(parent.transform);
+    }
+
     private void ClearSupplyDecisionVisuals()
     {
         SupplyPileInteractionBinding[] bindings = GetComponentsInChildren<SupplyPileInteractionBinding>(true);
@@ -506,7 +553,11 @@ public sealed class PendingDecisionController : MonoBehaviour
     private void ClearCardBindings()
     {
         foreach (KeyValuePair<CardPointerInteraction, Action> pair in _selectionHandlers)
-            if (pair.Key != null) pair.Key.PrimaryActionRequested -= pair.Value;
+            if (pair.Key != null)
+            {
+                pair.Key.PrimaryActionRequested -= pair.Value;
+                pair.Key.SetDecisionCandidate(false);
+            }
         _selectionHandlers.Clear();
         foreach (KeyValuePair<Image, Color> pair in _originalImageColors) if (pair.Key != null) pair.Key.color = pair.Value;
         _originalImageColors.Clear();

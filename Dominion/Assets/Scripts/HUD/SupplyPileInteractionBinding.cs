@@ -117,6 +117,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         _decisionCandidate = candidate;
         _decisionSelected = selected;
         _decisionRequested = active ? decisionRequested : null;
+        if (_pointer != null) _pointer.SetDecisionCandidate(active && candidate);
         RefreshAvailabilityVisual();
     }
 
