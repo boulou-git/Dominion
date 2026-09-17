@@ -67,6 +67,11 @@ public sealed class PrefabUiContractTests
     [Test]
     public void TrashAndDecisionPrefabs_ExposeTheirRuntimeContracts()
     {
+        GameObject gameScreen = Load("GameScreen");
+        Transform nestedTrash = gameScreen.transform.Find("TrashPileUi");
+        Assert.NotNull(nestedTrash, "TrashPileUi must be instanced directly in GameScreen.prefab.");
+        Assert.NotNull(nestedTrash.Find("TrashPileButton")?.GetComponent<Button>());
+
         GameObject trash = Load("TrashPileUi");
         Assert.NotNull(trash.transform.Find("TrashPileButton")?.GetComponent<Button>());
         Transform cards = trash.transform.Find("TrashPileOverlay/Panel/CardsScroll/Viewport/Cards");

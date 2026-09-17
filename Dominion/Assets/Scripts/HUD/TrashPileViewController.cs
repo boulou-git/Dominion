@@ -7,11 +7,10 @@ using UnityEngine.UI;
 
 /// <summary>
 /// Public, read-only view of the match-wide trash.
-/// The visual hierarchy is authored in Resources/UI/TrashPileUi.prefab.
+/// The visual hierarchy is a nested TrashPileUi instance authored directly in GameScreen.prefab.
 /// </summary>
 public sealed class TrashPileViewController : MonoBehaviour
 {
-    private const string PrefabResourcePath = "UI/TrashPileUi";
     private static readonly BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
 
     private GameScreenController _screen;
@@ -60,18 +59,16 @@ public sealed class TrashPileViewController : MonoBehaviour
     private void BuildUi()
     {
         if (_openButton != null || _screen == null || _uiBindingFailed) return;
-        GameObject prefab = Resources.Load<GameObject>(PrefabResourcePath);
-        if (prefab == null)
+        Transform ui = transform.Find("TrashPileUi");
+        if (ui == null)
         {
-            Debug.LogError("TrashPileUi prefab missing at Resources/UI/TrashPileUi.", this);
+            Debug.LogError("GameScreen.prefab contract is incomplete: nested TrashPileUi instance is missing.", this);
             _uiBindingFailed = true;
             return;
         }
 
-        GameObject ui = Instantiate(prefab, transform);
-        ui.name = "TrashPileUi";
-        Transform buttonTransform = ui.transform.Find("TrashPileButton");
-        Transform overlayTransform = ui.transform.Find("TrashPileOverlay");
+        Transform buttonTransform = ui.Find("TrashPileButton");
+        Transform overlayTransform = ui.Find("TrashPileOverlay");
         Transform panel = overlayTransform != null ? overlayTransform.Find("Panel") : null;
         Transform scroll = panel != null ? panel.Find("CardsScroll") : null;
         Transform viewport = scroll != null ? scroll.Find("Viewport") : null;
@@ -94,7 +91,6 @@ public sealed class TrashPileViewController : MonoBehaviour
             _cardsGrid == null || backgroundClose == null || closeButton == null)
         {
             Debug.LogError("TrashPileUi prefab contract is incomplete.", ui);
-            Destroy(ui);
             _openButton = null;
             _uiBindingFailed = true;
             return;

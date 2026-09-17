@@ -1602,6 +1602,7 @@ RectTransform:
   - {fileID: 1241936530237569574}
   - {fileID: 8279867874176126739}
   - {fileID: 8604216609786934766}
+  - {fileID: 7000000000000000002}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -4177,3 +4178,21 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!1001 &7000000000000000001
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 3048241531610877182}
+    m_Modifications: []
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: a42789ff7d5c4725929f0e9d4e45903f, type: 3}
+--- !u!224 &7000000000000000002 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 1001, guid: a42789ff7d5c4725929f0e9d4e45903f, type: 3}
+  m_PrefabInstance: {fileID: 7000000000000000001}
+  m_PrefabAsset: {fileID: 0}
