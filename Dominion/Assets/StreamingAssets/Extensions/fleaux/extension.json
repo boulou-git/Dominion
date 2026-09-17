@@ -329,17 +329,17 @@
       { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1 },
       { "op": "add_resource_per_distinct_type_in_play", "target": "self", "resource": "coins", "amount": 1, "max": 6 }
     ] } ] },
-    { "id": "elixir", "name": "Élixir", "cost": 5, "types": ["Action", "Consommable"], "image": "elixir.png", "returnsToPileAfterPlay": true, "text": "Choisissez deux : +1 Carte, +1 Action, +1 Achat ; +3 🪙 ; jouez une carte Action de votre main deux fois puis écartez-la.\n\nAprès utilisation, Élixir retourne sur sa pile.", "abilities": [ { "when": "play", "effects": [
+    { "id": "elixir", "name": "Élixir", "cost": 5, "types": ["Action", "Consommable"], "image": "elixir.png", "returnsToPileAfterPlay": true, "text": "Choisissez deux : +1 Carte, +1 Action, +1 Achat ; +3 🪙 ; jouez une carte Action non-Durée de votre main deux fois puis écartez-la.\n\nAprès utilisation, Élixir retourne sur sa pile.", "abilities": [ { "when": "play", "effects": [
       { "op": "choose_options", "target": "self", "min": 2, "max": 2, "prompt": "Choisissez deux options.", "options": [
         { "id": "versatile", "label": "+1 Carte, +1 Action, +1 Achat" },
         { "id": "coins", "label": "+3 🪙" },
-        { "id": "double", "label": "Jouer une Action deux fois puis l’écarter" }
+        { "id": "double", "label": "Jouer une Action non-Durée deux fois puis l’écarter" }
       ] },
       { "op": "draw", "target": "self", "amount": 1, "requiresSelectedOption": "versatile" },
       { "op": "add_resource", "target": "self", "resource": "actions", "amount": 1, "requiresSelectedOption": "versatile" },
       { "op": "add_resource", "target": "self", "resource": "buys", "amount": 1, "requiresSelectedOption": "versatile" },
       { "op": "add_resource", "target": "self", "resource": "coins", "amount": 3, "requiresSelectedOption": "coins" },
-      { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "minUpToAvailable": true, "cardType": "Action", "prompt": "Choisissez une carte Action à jouer deux fois puis écarter.", "requiresSelectedOption": "double" },
+      { "op": "choose_cards", "target": "self", "zone": "hand", "min": 1, "max": 1, "minUpToAvailable": true, "cardType": "Action", "excludedCardType": "Durée", "prompt": "Choisissez une carte Action non-Durée à jouer deux fois puis écarter.", "requiresSelectedOption": "double" },
       { "op": "play_selected_twice_then_trash", "target": "self", "sourceZone": "hand", "requiresSelectedOption": "double" }
     ] } ] },
     { "id": "paladin", "name": "Paladin", "cost": 4, "types": ["Action"], "image": "paladin.png", "text": "+2 🪙\n\nLorsque vous recevez ou écartez cette carte, prenez l’Étendard divin.", "abilities": [

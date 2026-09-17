@@ -305,7 +305,7 @@ public sealed class FleauxRemainingCardsRulesTests
     }
 
     [Test]
-    public void Elixir_DoublePlaysThenTrashesSelectedAction()
+    public void Elixir_DoublePlaysThenTrashesSelectedNonDurationAction()
     {
         GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
         SupplyPileSnapshot pile = new SupplyPileSnapshot("fleaux:elixir", 9, true);
@@ -313,6 +313,7 @@ public sealed class FleauxRemainingCardsRulesTests
         AddOwned(state, player, "base:cuivre", CardZone.Deck);
         AddOwned(state, player, "base:argent", CardZone.Deck);
         CardInstance village = AddOwned(state, player, "base:village", CardZone.Hand);
+        CardInstance cultist = AddOwned(state, player, "fleaux:cultiste", CardZone.Hand);
         CardInstance elixir = AddOwned(state, player, "fleaux:elixir", CardZone.Hand);
 
         GameRuleResult options = GameRules.TryPlayCard(state, player.PlayerId, elixir.InstanceId, Resolve, new Random(1));
@@ -320,6 +321,8 @@ public sealed class FleauxRemainingCardsRulesTests
         GameRuleResult cardChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
             state.Resolution.PendingDecision.DecisionId, new[] { "coins", "double" }, Resolve, new Random(1));
         Assert.That(cardChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), cardChoice.Error);
+        Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds, Does.Contain(village.InstanceId));
+        Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds, Does.Not.Contain(cultist.InstanceId));
         GameRuleResult finished = GameRules.TrySubmitDecision(state, player.PlayerId,
             state.Resolution.PendingDecision.DecisionId, new[] { village.InstanceId }, Resolve, new Random(1));
 
