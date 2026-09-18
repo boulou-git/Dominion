@@ -246,6 +246,7 @@
         { "op": "add_conditional_cost_increase", "target": "others", "amount": 1, "matchingCardTypes": ["Maladie"] }
       ] },
       { "when": "turn_started", "scope": "in_play", "filter": { "eventPlayer": "self" }, "effects": [
+		{ "op": "draw", "target": "self", "amount": 1 },
         { "op": "clear_conditional_cost_increase", "target": "others" },
         { "op": "mark_duration_resolved", "target": "self" }
       ] }
