@@ -191,13 +191,8 @@ public sealed class PendingDecisionController : MonoBehaviour
         if (decision == null || _submitPending || !IsSupplyDecision(decision) ||
             decision.CandidateDefinitionIds == null || !decision.CandidateDefinitionIds.Contains(definitionId)) return;
 
-        if (_selectedSupply.Contains(definitionId)) _selectedSupply.Remove(definitionId);
-        else
-        {
-            int max = Math.Max(decision.MinSelections, decision.MaxSelections);
-            if (_selectedSupply.Count >= max) return;
-            _selectedSupply.Add(definitionId);
-        }
+        int max = Math.Max(decision.MinSelections, decision.MaxSelections);
+        if (!PendingDecisionSelectionRules.Toggle(_selectedSupply, definitionId, max)) return;
 
         BindSupplyPiles(decision);
         RefreshSelectionUi(decision);
@@ -384,13 +379,8 @@ public sealed class PendingDecisionController : MonoBehaviour
         PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
         if (decision == null || _submitPending || !IsOptionDecision(decision) ||
             decision.CandidateDefinitionIds == null || !decision.CandidateDefinitionIds.Contains(optionId)) return;
-        if (_selectedOptions.Contains(optionId)) _selectedOptions.Remove(optionId);
-        else
-        {
-            int max = Math.Max(decision.MinSelections, decision.MaxSelections);
-            if (_selectedOptions.Count >= max) return;
-            _selectedOptions.Add(optionId);
-        }
+        int max = Math.Max(decision.MinSelections, decision.MaxSelections);
+        if (!PendingDecisionSelectionRules.Toggle(_selectedOptions, optionId, max)) return;
         RefreshOptionButtons();
         RefreshSelectionUi(decision);
     }
@@ -407,13 +397,8 @@ public sealed class PendingDecisionController : MonoBehaviour
     {
         PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
         if (decision == null || _submitPending || decision.CandidateInstanceIds == null || !decision.CandidateInstanceIds.Contains(instanceId)) return;
-        if (_selected.Contains(instanceId)) _selected.Remove(instanceId);
-        else
-        {
-            int max = Math.Max(decision.MinSelections, decision.MaxSelections);
-            if (_selected.Count >= max) return;
-            _selected.Add(instanceId);
-        }
+        int max = Math.Max(decision.MinSelections, decision.MaxSelections);
+        if (!PendingDecisionSelectionRules.Toggle(_selected, instanceId, max)) return;
         RefreshSelectionUi(decision);
     }
 
@@ -727,4 +712,22 @@ public sealed class PendingDecisionController : MonoBehaviour
     { if (parent == null) return null; for (int i = 0; i < parent.childCount; i++) { Transform child = parent.GetChild(i); if (string.Equals(child.name, name, StringComparison.Ordinal)) return child; } return null; }
     private static Transform FindDeepChild(Transform parent, string name)
     { if (parent == null) return null; for (int i = 0; i < parent.childCount; i++) { Transform child = parent.GetChild(i); if (string.Equals(child.name, name, StringComparison.Ordinal)) return child; Transform nested = FindDeepChild(child, name); if (nested != null) return nested; } return null; }
+}
+
+public static class PendingDecisionSelectionRules
+{
+    public static bool Toggle<T>(HashSet<T> selected, T value, int maxSelections)
+    {
+        if (selected == null) return false;
+        if (selected.Contains(value))
+        {
+            selected.Remove(value);
+            return true;
+        }
+        if (maxSelections <= 0) return false;
+        if (maxSelections == 1) selected.Clear();
+        else if (selected.Count >= maxSelections) return false;
+        selected.Add(value);
+        return true;
+    }
 }
