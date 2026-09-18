@@ -76,7 +76,14 @@ public sealed class DecisionWorkspaceTests
         {
             Transform scroll = prefab.transform.Find("Panel/" + zone + "/Scroll");
             Assert.NotNull(scroll.GetComponent<ScrollRect>());
-            Assert.NotNull(scroll.Find("Viewport").GetComponent<Mask>());
+            Mask mask = scroll.Find("Viewport").GetComponent<Mask>();
+            Assert.NotNull(mask);
+            Assert.IsFalse(mask.showMaskGraphic, "Hide the mask using its setting, not a transparent vertex color.");
+            Image maskImage = mask.GetComponent<Image>();
+            Assert.NotNull(maskImage);
+            Color32 vertexColor = maskImage.color;
+            Assert.AreEqual(255, (int)vertexColor.a,
+                "A near-zero alpha becomes zero in UI vertex colors and prevents the stencil from exposing its children.");
             Assert.NotNull(scroll.Find("Viewport/Content").GetComponent<GridLayoutGroup>());
         }
         Assert.NotNull(prefab.transform.Find("Panel/Available").GetComponent<DecisionDropZone>());
