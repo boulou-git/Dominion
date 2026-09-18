@@ -56,6 +56,9 @@ public sealed class PendingDecisionController : MonoBehaviour
     private string _boundDecisionId;
     private bool _submitPending;
     private bool _panelBindingFailed;
+    private DecisionWorkspaceView _workspace;
+    private DecisionSourceView _sourceContext;
+    private bool _usingWorkspace;
 
     private void Awake()
     {
@@ -86,6 +89,8 @@ public sealed class PendingDecisionController : MonoBehaviour
         }
         EnsurePanel();
 
+        if (_panel == null) return;
+
         bool newDecision = !string.Equals(_boundDecisionId, decision.DecisionId, StringComparison.Ordinal);
         if (newDecision)
         {
@@ -103,6 +108,30 @@ public sealed class PendingDecisionController : MonoBehaviour
         bool optionChoice = IsOptionDecision(decision);
         bool deckPositionChoice = IsDeckPositionDecision(decision);
         bool cardNameChoice = IsCardNameDecision(decision);
+        _usingWorkspace = _workspace != null && !supplyChoice && !deckPositionChoice && !cardNameChoice;
+        if (_workspace != null) _workspace.gameObject.SetActive(_usingWorkspace);
+        if (_sourceContext != null)
+        {
+            _sourceContext.gameObject.SetActive(!_usingWorkspace);
+            if (!_usingWorkspace)
+            {
+                _sourceContext.Bind(state, decision);
+                _sourceContext.transform.SetAsLastSibling();
+            }
+        }
+        if (_usingWorkspace)
+        {
+            _panel.gameObject.SetActive(false);
+            _instructionBar.SetActive(false);
+            _cardDrawer.SetActive(false);
+            _workspace.transform.SetAsLastSibling();
+            if (newDecision)
+                _workspace.Configure(state, decision, _selected, _selectedOptions,
+                    ToggleSelection, ToggleOptionSelection, ResetWorkspaceSelection, Submit);
+            _workspace.RefreshSelection(_submitPending);
+            ApplyInputLock();
+            return;
+        }
         bool hasCardPreview = optionChoice && decision.CandidateInstanceIds != null && decision.CandidateInstanceIds.Count > 0;
         CardZone choiceZone = ResolveDecisionZone(decision);
         ConfigurePanel(choiceZone, supplyChoice, optionChoice, deckPositionChoice, cardNameChoice, hasCardPreview, newDecision);
@@ -405,11 +434,14 @@ public sealed class PendingDecisionController : MonoBehaviour
     private void RefreshSelectionUi(PendingDecisionSnapshot decision)
     {
         if (decision == null) return;
+        if (_usingWorkspace)
+        {
+            _workspace.RefreshSelection(_submitPending);
+            return;
+        }
         int selectedCount = IsOptionDecision(decision) ? _selectedOptions.Count : IsSupplyDecision(decision) ? _selectedSupply.Count : _selected.Count;
         if (_countText != null)
-            _countText.text = decision.MinSelections == decision.MaxSelections
-                ? selectedCount + " / " + decision.MaxSelections
-                : selectedCount + " sélectionnée(s) — " + decision.MinSelections + " à " + decision.MaxSelections;
+            _countText.text = DecisionPresentation.CountLabel(decision, selectedCount);
         if (_confirmButton != null)
             _confirmButton.interactable = ((selectedCount == 0 && decision.AllowPass) ||
                 (selectedCount >= decision.MinSelections && selectedCount <= decision.MaxSelections)) && !_submitPending;
@@ -465,6 +497,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         PlayersTurnsHandler handler = PlayersTurnsHandler.Instance;
         if (handler == null) return;
         _submitPending = true;
+        if (_usingWorkspace) _workspace.RefreshSelection(true);
         if (_confirmButton != null) _confirmButton.interactable = false;
 
         if (IsOptionDecision(decision))
@@ -486,6 +519,9 @@ public sealed class PendingDecisionController : MonoBehaviour
 
     private void HideDecision()
     {
+        _usingWorkspace = false;
+        if (_workspace != null) { _workspace.Clear(); _workspace.gameObject.SetActive(false); }
+        if (_sourceContext != null) _sourceContext.gameObject.SetActive(false);
         ClearCardBindings(); ClearExternalCards(); ClearSupplyDecisionVisuals();
         _selected.Clear(); _selectedSupply.Clear(); _selectedOptions.Clear(); _boundDecisionId = string.Empty; _submitPending = false;
         if (_panel != null) _panel.gameObject.SetActive(false);
@@ -504,6 +540,8 @@ public sealed class PendingDecisionController : MonoBehaviour
             CardPointerInteraction pointer = graphic.GetComponentInParent<CardPointerInteraction>();
             bool decisionCandidate = pointer != null && pointer.IsDecisionCandidate;
             bool decisionControl = IsChildOf(graphic.transform, _panel) ||
+                                   IsChildOf(graphic.transform, _workspace) ||
+                                   IsChildOf(graphic.transform, _sourceContext) ||
                                    IsChildOf(graphic.transform, _instructionBar) ||
                                    IsChildOf(graphic.transform, _cardDrawer);
             graphic.raycastTarget = _originalRaycastTargets[graphic] &&
@@ -652,6 +690,26 @@ public sealed class PendingDecisionController : MonoBehaviour
         _panel.gameObject.SetActive(false);
         _instructionBar.SetActive(false);
         _cardDrawer.SetActive(false);
+        GameObject workspacePrefab = Resources.Load<GameObject>("UI/DecisionWorkspace");
+        GameObject contextPrefab = Resources.Load<GameObject>("UI/DecisionSourceContext");
+        if (workspacePrefab != null)
+        {
+            _workspace = Instantiate(workspacePrefab, transform).GetComponent<DecisionWorkspaceView>();
+            if (_workspace != null) _workspace.gameObject.SetActive(false);
+        }
+        if (contextPrefab != null)
+        {
+            _sourceContext = Instantiate(contextPrefab, transform).GetComponent<DecisionSourceView>();
+            if (_sourceContext != null) _sourceContext.gameObject.SetActive(false);
+        }
+    }
+
+    private void ResetWorkspaceSelection()
+    {
+        if (_submitPending) return;
+        _selected.Clear();
+        _selectedOptions.Clear();
+        RefreshSelectionUi(ResolveLocalDecision(NetworkGameState.State));
     }
 
     private void ConfigurePanel(CardZone zone, bool supplyChoice, bool optionChoice,
