@@ -7,6 +7,34 @@ using UnityEngine.UI;
 
 public sealed class DecisionWorkspaceTests
 {
+    [TestCase("hand", "choose_cards", 1, false, "UI/DecisionHandSelection")]
+    [TestCase("discard", "choose_cards", 3, false, "UI/DecisionCardSelection")]
+    [TestCase("inspected", "move_all_ordered|deck", 1, false, "UI/DecisionDeckOrder")]
+    [TestCase("options", "choose_options", 1, true, "UI/DecisionCardEffectChoice")]
+    [TestCase("options", "choose_options", 1, false, "UI/DecisionSingleOption")]
+    [TestCase("options", "choose_options", 2, false, "UI/DecisionMultipleOptions")]
+    [TestCase("options", "choose_options", 2, true, "UI/DecisionMultipleOptions")]
+    [TestCase("supply", "choose_supply", 1, false, null)]
+    [TestCase("options", "name_card", 1, false, null)]
+    [TestCase("options", "insert_selected_into_deck|hand", 1, true, null)]
+    public void DecisionType_RoutesToItsOwnPrefab(string zone, string operation, int max, bool preview, string expected)
+    {
+        var choice = new PendingDecisionSnapshot { Zone = zone, Operation = operation, MaxSelections = max };
+        if (preview) choice.CandidateInstanceIds.Add(12);
+        Assert.AreEqual(expected, DecisionPresentation.WorkspacePrefab(choice));
+    }
+
+    [Test]
+    public void ArtifactTriggerPreview_UsesTheCardEffectPrefab()
+    {
+        var choice = new PendingDecisionSnapshot {
+            Zone = "options", MaxSelections = 1, PlayerId = "local", ListenerCardInstanceId = 4,
+            TriggerEvent = new GameEventSnapshot { PlayerId = "local", CardInstanceId = 8 }
+        };
+        Assert.AreEqual("UI/DecisionCardEffectChoice", DecisionPresentation.WorkspacePrefab(choice));
+        choice.TriggerEvent.PlayerId = "other";
+        Assert.AreEqual("UI/DecisionSingleOption", DecisionPresentation.WorkspacePrefab(choice));
+    }
     [Test]
     public void ArtifactListener_IsPresentedInsteadOfTheOriginalAction()
     {
@@ -62,10 +90,16 @@ public sealed class DecisionWorkspaceTests
         CollectionAssert.AreEquivalent(new[] { 1, 2 }, selected);
     }
 
-    [Test]
-    public void Workspace_HasPrefabAuthoredControlsAndScrollableDropZones()
+    [TestCase("DecisionWorkspace")]
+    [TestCase("DecisionHandSelection")]
+    [TestCase("DecisionCardSelection")]
+    [TestCase("DecisionCardEffectChoice")]
+    [TestCase("DecisionSingleOption")]
+    [TestCase("DecisionMultipleOptions")]
+    [TestCase("DecisionDeckOrder")]
+    public void Workspace_HasPrefabAuthoredControlsAndScrollableDropZones(string prefabName)
     {
-        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/UI/DecisionWorkspace.prefab");
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/UI/" + prefabName + ".prefab");
         Assert.NotNull(prefab);
         Assert.NotNull(prefab.GetComponent<DecisionWorkspaceView>());
         var serialized = new SerializedObject(prefab.GetComponent<DecisionWorkspaceView>());

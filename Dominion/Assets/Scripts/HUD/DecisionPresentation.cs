@@ -4,6 +4,29 @@ using System.Collections.Generic;
 /// <summary>Presentation hints only: never infer actions from translated prompt text.</summary>
 public static class DecisionPresentation
 {
+    public static bool HasOptionPreview(PendingDecisionSnapshot decision) =>
+        (decision.CandidateInstanceIds != null && decision.CandidateInstanceIds.Count > 0) ||
+        (decision.TriggerEvent != null && decision.TriggerEvent.PlayerId == decision.PlayerId &&
+         decision.TriggerEvent.CardInstanceId > 0 && decision.TriggerEvent.CardInstanceId != SourceId(decision));
+
+    // Routing chooses a prefab, never changes its layout at runtime.
+    public static string WorkspacePrefab(PendingDecisionSnapshot decision)
+    {
+        if (decision == null) return null;
+        string op = decision.Operation ?? string.Empty;
+        if (string.Equals(decision.Zone, "supply", StringComparison.OrdinalIgnoreCase)) return null;
+        if (string.Equals(decision.Zone, "options", StringComparison.OrdinalIgnoreCase))
+        {
+            if (op.StartsWith("insert_selected_into_deck|", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(op, "name_card", StringComparison.OrdinalIgnoreCase)) return null;
+            if (decision.MaxSelections > 1) return "UI/DecisionMultipleOptions";
+            return HasOptionPreview(decision) ? "UI/DecisionCardEffectChoice" : "UI/DecisionSingleOption";
+        }
+        if (op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase)) return "UI/DecisionDeckOrder";
+        return string.Equals(decision.Zone, "hand", StringComparison.OrdinalIgnoreCase)
+            ? "UI/DecisionHandSelection" : "UI/DecisionCardSelection";
+    }
+
     public static int SourceId(PendingDecisionSnapshot decision) =>
         decision.ListenerCardInstanceId > 0 ? decision.ListenerCardInstanceId : decision.SourceCardInstanceId;
 

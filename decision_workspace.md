@@ -2,9 +2,29 @@
 
 Les chemins ci-dessous partent du projet Unity `Dominion/`.
 
+## Un prefab par famille de demande
+
+Tous ces prefabs sont dans `Assets/Resources/UI/`. Les six fenêtres sont indépendantes : modifier leurs ancres, tailles ou grilles ne modifie pas les autres familles. Elles utilisent le même script de comportement `DecisionWorkspaceView` et les mêmes vignettes, remplaçables via ses champs Card Prefab et Option Prefab.
+
+| Demande | Prefab à modifier |
+|---|---|
+| Sélectionner une ou plusieurs cartes de la main | `DecisionHandSelection.prefab` |
+| Sélectionner des cartes de la défausse, des cartes regardées, de l'Écart… | `DecisionCardSelection.prefab` |
+| Choisir un effet sur les cartes montrées, par exemple défausser ou replacer | `DecisionCardEffectChoice.prefab` |
+| Choisir une seule option sans cartes concernées | `DecisionSingleOption.prefab` |
+| Choisir plusieurs options, avec ou sans cartes concernées | `DecisionMultipleOptions.prefab` |
+| Choisir l'ordre des cartes à replacer sur le deck | `DecisionDeckOrder.prefab` |
+| Choisir une pile dans la Réserve | `DecisionSupplyChoice.prefab` + piles existantes + `DecisionSourceContext.prefab` |
+| Choisir une position dans le deck | `DeckPositionDecision.prefab` dans `PendingDecisionPanel.prefab` |
+| Nommer une carte | `CardNameDecision.prefab` dans `PendingDecisionPanel.prefab` |
+
+`DecisionPresentation.WorkspacePrefab()` choisit la famille à partir de l'opération et des données de décision, jamais du texte de la consigne. Le contrôleur charge chaque fenêtre à la demande et masque/vide la précédente. Les tailles ne sont pas réécrites en C#.
+
+`DecisionWorkspace.prefab` reste le modèle de référence initial ; modifier ce fichier ne change pas les six fenêtres indépendantes. Dans le tableau de réglages ci-dessous, remplacer `DecisionWorkspace.prefab` par le prefab de la famille souhaitée. Le nombre de cartes sélectionnables reste une règle de jeu, pas une valeur à changer dans un prefab.
+
 ## Comportement
 
-- Les choix de cartes et d'options génériques s'affichent dans `DecisionWorkspace`.
+- Les choix de cartes et d'options génériques s'affichent dans le prefab de leur famille.
 - L'origine de l'effet reste visible : priorité à l'Artefact ou la Réaction qui écoute l'événement, sinon à la carte source.
 - Clic sur une carte : ajout/retrait de la sélection. À une seule sélection, une nouvelle carte remplace l'ancienne.
 - Glisser une carte vers la destination : sélection. La ramener dans les cartes disponibles : désélection.

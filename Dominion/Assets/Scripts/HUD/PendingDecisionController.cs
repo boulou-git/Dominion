@@ -10,7 +10,7 @@ using UnityEngine.UI;
 public sealed class PendingDecisionController : MonoBehaviour
 {
     private const string PanelPrefabResourcePath = "UI/PendingDecisionPanel";
-    private const string InstructionBarPrefabResourcePath = "UI/DecisionInstructionBar";
+    private const string InstructionBarPrefabResourcePath = "UI/DecisionSupplyChoice";
     private const string CardDrawerPrefabResourcePath = "UI/DecisionCardDrawer";
     private const string OptionPrefabResourcePath = "UI/DecisionOption";
     private const string DeckPositionPrefabResourcePath = "UI/DeckPositionDecision";
@@ -57,6 +57,7 @@ public sealed class PendingDecisionController : MonoBehaviour
     private bool _submitPending;
     private bool _panelBindingFailed;
     private DecisionWorkspaceView _workspace;
+    private readonly Dictionary<string, DecisionWorkspaceView> _workspaces = new Dictionary<string, DecisionWorkspaceView>();
     private DecisionSourceView _sourceContext;
     private bool _usingWorkspace;
 
@@ -108,6 +109,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         bool optionChoice = IsOptionDecision(decision);
         bool deckPositionChoice = IsDeckPositionDecision(decision);
         bool cardNameChoice = IsCardNameDecision(decision);
+        SelectWorkspace(DecisionPresentation.WorkspacePrefab(decision));
         _usingWorkspace = _workspace != null && !supplyChoice && !deckPositionChoice && !cardNameChoice;
         if (_workspace != null) _workspace.gameObject.SetActive(_usingWorkspace);
         if (_sourceContext != null)
@@ -690,13 +692,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         _panel.gameObject.SetActive(false);
         _instructionBar.SetActive(false);
         _cardDrawer.SetActive(false);
-        GameObject workspacePrefab = Resources.Load<GameObject>("UI/DecisionWorkspace");
         GameObject contextPrefab = Resources.Load<GameObject>("UI/DecisionSourceContext");
-        if (workspacePrefab != null)
-        {
-            _workspace = Instantiate(workspacePrefab, transform).GetComponent<DecisionWorkspaceView>();
-            if (_workspace != null) _workspace.gameObject.SetActive(false);
-        }
         if (contextPrefab != null)
         {
             _sourceContext = Instantiate(contextPrefab, transform).GetComponent<DecisionSourceView>();
@@ -710,6 +706,28 @@ public sealed class PendingDecisionController : MonoBehaviour
         _selected.Clear();
         _selectedOptions.Clear();
         RefreshSelectionUi(ResolveLocalDecision(NetworkGameState.State));
+    }
+
+    private void SelectWorkspace(string resourcePath)
+    {
+        DecisionWorkspaceView next = null;
+        if (resourcePath != null && !_workspaces.TryGetValue(resourcePath, out next))
+        {
+            GameObject prefab = Resources.Load<GameObject>(resourcePath);
+            if (prefab != null && prefab.GetComponent<DecisionWorkspaceView>() != null)
+            {
+                next = Instantiate(prefab, transform).GetComponent<DecisionWorkspaceView>();
+                next.gameObject.SetActive(false);
+                _workspaces.Add(resourcePath, next);
+            }
+            else Debug.LogError("Decision workspace prefab missing or incomplete: " + resourcePath, this);
+        }
+        if (_workspace != null && _workspace != next)
+        {
+            _workspace.Clear();
+            _workspace.gameObject.SetActive(false);
+        }
+        _workspace = next;
     }
 
     private void ConfigurePanel(CardZone zone, bool supplyChoice, bool optionChoice,
