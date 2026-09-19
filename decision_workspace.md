@@ -8,6 +8,7 @@ Tous ces prefabs sont dans `Assets/Resources/UI/Choices/`. Les fenêtres détail
 
 | Demande | Prefab à modifier |
 |---|---|
+| Choix immédiat : une option, ou une action explicite sur une seule carte hors plateau | `DecisionQuickChoice.prefab` |
 | Sélectionner une ou plusieurs cartes de la main | `DecisionInstructionBar.prefab` + cartes de la main existantes |
 | Sélectionner des cartes de la défausse, des cartes regardées, de l'Écart… | `DecisionCardSelection.prefab` |
 | Tout défausser ou ordonner sur le deck (Alchimiste, Fièvre) | `DecisionCardDestinations.prefab` |
@@ -21,7 +22,7 @@ Tous ces prefabs sont dans `Assets/Resources/UI/Choices/`. Les fenêtres détail
 
 `DecisionPresentation.WorkspacePrefab()` choisit la famille à partir de l'opération et des données de décision, jamais du texte de la consigne. Le contrôleur charge chaque fenêtre à la demande et masque/vide la précédente. Les tailles ne sont pas réécrites en C#.
 
-Deux structures sont conservées : le panneau générique et le panneau de destinations. Les titres, options, compteurs et consignes viennent du contexte ; les choix simples et multiples partagent le même prefab. Dans le tableau de réglages ci-dessous, utilisez le prefab de la famille souhaitée. Le nombre de cartes sélectionnables reste une règle de jeu, pas une valeur à changer dans un prefab.
+Trois structures sont conservées : le petit panneau de réponse immédiate, le panneau générique et le panneau de destinations. Les titres, options, compteurs et consignes viennent du contexte ; les choix simples et multiples partagent le même prefab. Dans le tableau de réglages ci-dessous, utilisez le prefab de la famille souhaitée. Le nombre de cartes sélectionnables reste une règle de jeu, pas une valeur à changer dans un prefab.
 
 Les anciens modèles inutilisés `DecisionWorkspace`, `DecisionHandSelection` et `DecisionSupplyChoice` ont été supprimés. La main et la Réserve partagent un seul petit bandeau en haut, sans panneau latéral de source. La consigne conserve les contraintes de l’effet.
 
@@ -110,3 +111,15 @@ Tests EditMode ajoutés : `Assets/Editor/Tests/DecisionWorkspaceTests.cs` (prés
 9. Cliquer deux fois sur Confirmer : aucun second envoi ni interaction pendant l'attente.
 
 Les validations YAML / références des prefabs peuvent être réalisées hors Unity. La compilation, les tests EditMode et le rendu Play Mode nécessitent l'éditeur Unity.
+
+## Choix rapides
+
+`DecisionQuickChoice.prefab` présente la source à droite, la carte concernée à gauche et les boutons de réponse. Aucune zone Sélection, aucun bouton Réinitialiser ou Confirmer. Un clic envoie directement la réponse ; les boutons sont désactivés pendant l’envoi. Échap et la pause restent disponibles.
+
+- Vassal et cas déclaratifs équivalents : **Jouer / Laisser en défausse**. La carte a déjà été défaussée avant la décision : le second bouton la laisse à sa place.
+- Une seule carte candidate hors main/Réserve, suivie de `play_selected`, `trash_selected` ou `discard_selected` : bouton portant l’action, avec Passer quand autorisé.
+- Choix d’une option unique, jusqu’à quatre réponses et au plus une carte concernée : boutons directs avec leurs libellés déclaratifs.
+- Plusieurs cartes, plusieurs options à sélectionner, recherche de nom, position dans le deck et ordre du deck : conserver les contrôles spécialisés.
+- Main / Réserve : conserver le bandeau et la sélection sur le plateau.
+
+Routage : `DecisionPresentation.IsQuickChoice`. Comportement : `DecisionQuickChoiceView`. Dimensions et disposition : prefab uniquement. Pour tester : Vassal jouer/refuser, choix d’option obligatoire/facultatif, double clic, pause/reprise et passage à un choix multiple.

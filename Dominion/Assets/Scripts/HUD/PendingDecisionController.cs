@@ -60,6 +60,7 @@ public sealed class PendingDecisionController : MonoBehaviour
     private readonly Dictionary<string, DecisionWorkspaceView> _workspaces = new Dictionary<string, DecisionWorkspaceView>();
     private DecisionSourceView _sourceContext;
     private bool _usingWorkspace;
+    private DecisionQuickChoiceView _quickChoice;
 
     private void Awake()
     {
@@ -112,6 +113,29 @@ public sealed class PendingDecisionController : MonoBehaviour
         CardInstance sourceCard = NetworkGameState.FindCardInstance(state, DecisionPresentation.SourceId(decision));
         ExtensionCardData sourceDefinition = null;
         if (sourceCard != null) RoomGameSetup.TryResolveCard(sourceCard.DefinitionId, out _, out sourceDefinition);
+        bool quick = DecisionPresentation.IsQuickChoice(decision, sourceDefinition);
+        if (quick && _quickChoice == null)
+        {
+            GameObject prefab = Resources.Load<GameObject>("UI/Choices/DecisionQuickChoice");
+            if (prefab != null) _quickChoice = Instantiate(prefab, transform).GetComponent<DecisionQuickChoiceView>();
+        }
+        if (_quickChoice != null) _quickChoice.gameObject.SetActive(quick);
+        if (quick && _quickChoice != null)
+        {
+            SelectWorkspace(null); _usingWorkspace = false;
+            _panel.gameObject.SetActive(false); _instructionBar.SetActive(false); _cardDrawer.SetActive(false);
+            if (_sourceContext != null) _sourceContext.gameObject.SetActive(false);
+            _quickChoice.transform.SetAsLastSibling();
+            if (newDecision) _quickChoice.Configure(state, decision, sourceDefinition, (cards, options) =>
+            {
+                if (_submitPending || PlayersTurnsHandler.Instance == null) return;
+                _selected.Clear(); foreach (int id in cards) _selected.Add(id);
+                _selectedOptions.Clear(); foreach (string id in options) _selectedOptions.Add(id);
+                Submit();
+            });
+            _quickChoice.SetBusy(_submitPending || state.IsPaused);
+            ApplyInputLock(); return;
+        }
         SelectWorkspace(DecisionPresentation.WorkspacePrefab(decision, sourceDefinition));
         _usingWorkspace = _workspace != null && !supplyChoice && !deckPositionChoice && !cardNameChoice;
         if (_workspace != null) _workspace.gameObject.SetActive(_usingWorkspace);
@@ -510,6 +534,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         if (handler == null) return;
         _submitPending = true;
         if (_usingWorkspace) _workspace.RefreshSelection(true);
+        if (_quickChoice != null && _quickChoice.gameObject.activeSelf) _quickChoice.SetBusy(true);
         if (_confirmButton != null) _confirmButton.interactable = false;
 
         if (IsOptionDecision(decision))
@@ -533,6 +558,7 @@ public sealed class PendingDecisionController : MonoBehaviour
 
     private void HideDecision()
     {
+        if (_quickChoice != null) { _quickChoice.Clear(); _quickChoice.gameObject.SetActive(false); }
         _usingWorkspace = false;
         if (_workspace != null) { _workspace.Clear(); _workspace.gameObject.SetActive(false); }
         if (_sourceContext != null) _sourceContext.gameObject.SetActive(false);
@@ -555,6 +581,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             bool decisionCandidate = pointer != null && pointer.IsDecisionCandidate;
             bool decisionControl = IsChildOf(graphic.transform, _panel) ||
                                    IsChildOf(graphic.transform, _workspace) ||
+                                   IsChildOf(graphic.transform, _quickChoice) ||
                                    IsChildOf(graphic.transform, _sourceContext) ||
                                    IsChildOf(graphic.transform, _instructionBar) ||
                                    IsChildOf(graphic.transform, _cardDrawer);

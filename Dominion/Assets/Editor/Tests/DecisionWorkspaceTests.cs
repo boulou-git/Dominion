@@ -27,6 +27,50 @@ public sealed class DecisionWorkspaceTests
     }
 
     [Test]
+    public void QuickChoice_RecognizesSingleCardPlayWithoutUsingCardNames()
+    {
+        var source = new ExtensionCardData { abilities = new List<CardAbilityData> {
+            new CardAbilityData { effects = new List<CardEffectData> {
+                new CardEffectData { op = "choose_cards" }, new CardEffectData { op = "play_selected" }
+            } }
+        } };
+        var decision = new PendingDecisionSnapshot { Zone = "discard", Operation = "choose_cards",
+            MinSelections = 0, MaxSelections = 1, AbilityIndex = 0, EffectIndex = 0 };
+        decision.CandidateInstanceIds.Add(12);
+        Assert.IsTrue(DecisionPresentation.IsQuickChoice(decision, source));
+        Assert.AreEqual("Jouer", DecisionPresentation.QuickCardAction(decision, source));
+        decision.CandidateInstanceIds.Add(13);
+        Assert.IsFalse(DecisionPresentation.IsQuickChoice(decision, source));
+        decision.CandidateInstanceIds.Remove(13); decision.Zone = "hand";
+        Assert.IsFalse(DecisionPresentation.IsQuickChoice(decision, source));
+    }
+
+    [Test]
+    public void QuickChoice_LeavesMultipleSelectionsAndCardGroupsInTheWorkspace()
+    {
+        var decision = new PendingDecisionSnapshot { Zone = "options", Operation = "choose_options",
+            MinSelections = 1, MaxSelections = 1 };
+        decision.CandidateDefinitionIds.AddRange(new[] { "yes", "no" });
+        Assert.IsTrue(DecisionPresentation.IsQuickChoice(decision, null));
+        decision.MaxSelections = 2;
+        Assert.IsFalse(DecisionPresentation.IsQuickChoice(decision, null));
+        decision.MaxSelections = 1; decision.CandidateInstanceIds.AddRange(new[] { 1, 2 });
+        Assert.IsFalse(DecisionPresentation.IsQuickChoice(decision, null));
+    }
+
+    [Test]
+    public void QuickChoicePrefab_HasNoSelectionOrConfirmationArea()
+    {
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/UI/Choices/DecisionQuickChoice.prefab");
+        Assert.NotNull(prefab.GetComponent<DecisionQuickChoiceView>());
+        Assert.NotNull(prefab.transform.Find("Panel/Source").GetComponent<DecisionSourceView>());
+        Assert.NotNull(prefab.transform.Find("Panel/Options/Scroll/Viewport/Content").GetComponent<GridLayoutGroup>());
+        Assert.IsNull(prefab.transform.Find("Panel/Confirm"));
+        Assert.IsNull(prefab.transform.Find("Panel/Reset"));
+        Assert.IsNull(prefab.transform.Find("Panel/Chosen"));
+    }
+
+    [Test]
     public void ArtifactTriggerPreview_UsesTheCardEffectPrefab()
     {
         var choice = new PendingDecisionSnapshot {

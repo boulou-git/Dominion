@@ -4,7 +4,7 @@ Tous les chemins partent de `Dominion/Assets/Resources/UI/`.
 
 | Dossier | Éléments |
 |---|---|
-| Choices | `CardNameDecision`, `DecisionCardDrawer`, `DecisionCardSelection`, `DecisionCardDestinations`, `DecisionInstructionBar`, `DecisionOption`, `DecisionSourceContext`, `DecisionWorkspaceCard`, `DecisionWorkspaceOption`, `DeckPositionDecision`, `PendingDecisionPanel` |
+| Choices | `CardNameDecision`, `DecisionCardDrawer`, `DecisionQuickChoice`, `DecisionCardSelection`, `DecisionCardDestinations`, `DecisionInstructionBar`, `DecisionOption`, `DecisionSourceContext`, `DecisionWorkspaceCard`, `DecisionWorkspaceOption`, `DeckPositionDecision`, `PendingDecisionPanel` |
 | Cards | `CardBackReference`, `CardCostOverlay`, `CardZoomOverlay`, `RuntimeCard`, `SupplyCard`, `VictoryPointShield` |
 | Connection | `ConnectionScreen`, `StartupSplash` |
 | Lobby | `CardSelectionTile`, `ExtensionTile`, `KingdomRevealScreen`, `LobbyReadyPlayerRow`, `LobbyRevealControls`, `LobbySetupScreen` |

@@ -27,6 +27,39 @@ public static class DecisionPresentation
         return "UI/Choices/DecisionCardSelection";
     }
 
+    // Compact decisions answer immediately; multi-card drafts keep their confirmation.
+    public static bool IsQuickChoice(PendingDecisionSnapshot decision, ExtensionCardData source)
+    {
+        if (decision == null || decision.MaxSelections != 1 ||
+            string.Equals(decision.Zone, "hand", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(decision.Zone, "supply", StringComparison.OrdinalIgnoreCase)) return false;
+        if (decision.Zone == "options")
+            return decision.Operation != "name_card" &&
+                !(decision.Operation ?? "").StartsWith("insert_selected_into_deck|", StringComparison.OrdinalIgnoreCase) &&
+                !DeckChoiceRules.TryDescribe(decision, source, out _, out _, out _) &&
+                (decision.CandidateInstanceIds == null || decision.CandidateInstanceIds.Count <= 1) &&
+                decision.CandidateDefinitionIds != null && decision.CandidateDefinitionIds.Count > 0 &&
+                decision.CandidateDefinitionIds.Count + (decision.AllowPass || decision.MinSelections == 0 ? 1 : 0) <= 4;
+        return QuickCardAction(decision, source) != null;
+    }
+
+    public static string QuickCardAction(PendingDecisionSnapshot decision, ExtensionCardData source)
+    {
+        if (decision == null || decision.Operation != "choose_cards" || decision.MaxSelections != 1 ||
+            decision.CandidateInstanceIds == null || decision.CandidateInstanceIds.Count != 1 ||
+            source?.abilities == null || decision.AbilityIndex < 0 || decision.AbilityIndex >= source.abilities.Count) return null;
+        var effects = source.abilities[decision.AbilityIndex]?.effects;
+        int next = decision.EffectIndex + 1;
+        if (effects == null || decision.EffectIndex < 0 || next >= effects.Count) return null;
+        switch (effects[next]?.op)
+        {
+            case "play_selected": return "Jouer";
+            case "trash_selected": return "Écarter";
+            case "discard_selected": return "Défausser";
+            default: return null;
+        }
+    }
+
     public static int SourceId(PendingDecisionSnapshot decision) =>
         decision.ListenerCardInstanceId > 0 ? decision.ListenerCardInstanceId : decision.SourceCardInstanceId;
 
