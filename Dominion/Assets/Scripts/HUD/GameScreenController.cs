@@ -354,7 +354,7 @@ public sealed class GameScreenController : MonoBehaviour
                 if (!_missingPlayerTabLogged)
                 {
                     _missingPlayerTabLogged = true;
-                    Debug.LogError("Required UI prefab Resources/UI/PlayerBoardTab.prefab is missing.", this);
+                    Debug.LogError("Required UI prefab Resources/UI/Board/PlayerBoardTab.prefab is missing.", this);
                 }
                 return;
             }
@@ -442,7 +442,7 @@ public sealed class GameScreenController : MonoBehaviour
     private void EnsureBoardControls()
     {
         if (_playerTabPrefab == null)
-            _playerTabPrefab = Resources.Load<GameObject>("UI/PlayerBoardTab");
+            _playerTabPrefab = Resources.Load<GameObject>("UI/Board/PlayerBoardTab");
         if (_followActiveToggle == null)
         {
             Transform existing = FindDeepChild(transform, "FollowActivePlayerToggle");

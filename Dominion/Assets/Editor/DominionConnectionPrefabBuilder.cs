@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 public static class DominionConnectionPrefabBuilder
 {
-    private const string RootFolder = "Assets/Resources/UI";
+    private const string RootFolder = "Assets/Resources/UI/Connection";
     private const string PrefabPath = RootFolder + "/ConnectionScreen.prefab";
     private const string LogoPath = "Assets/2D/Game_Logo.png";
 

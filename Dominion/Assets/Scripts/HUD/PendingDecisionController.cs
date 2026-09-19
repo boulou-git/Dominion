@@ -9,12 +9,12 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class PendingDecisionController : MonoBehaviour
 {
-    private const string PanelPrefabResourcePath = "UI/PendingDecisionPanel";
-    private const string InstructionBarPrefabResourcePath = "UI/DecisionInstructionBar";
-    private const string CardDrawerPrefabResourcePath = "UI/DecisionCardDrawer";
-    private const string OptionPrefabResourcePath = "UI/DecisionOption";
-    private const string DeckPositionPrefabResourcePath = "UI/DeckPositionDecision";
-    private const string CardNamePrefabResourcePath = "UI/CardNameDecision";
+    private const string PanelPrefabResourcePath = "UI/Choices/PendingDecisionPanel";
+    private const string InstructionBarPrefabResourcePath = "UI/Choices/DecisionInstructionBar";
+    private const string CardDrawerPrefabResourcePath = "UI/Choices/DecisionCardDrawer";
+    private const string OptionPrefabResourcePath = "UI/Choices/DecisionOption";
+    private const string DeckPositionPrefabResourcePath = "UI/Choices/DeckPositionDecision";
+    private const string CardNamePrefabResourcePath = "UI/Choices/CardNameDecision";
     private const int MaximumGenericOptions = 4;
     private readonly HashSet<int> _selected = new HashSet<int>();
     private readonly HashSet<string> _selectedSupply = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -320,7 +320,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         GameObject optionPrefab = Resources.Load<GameObject>(OptionPrefabResourcePath);
         if (optionPrefab == null)
         {
-            Debug.LogError("DecisionOption prefab missing at Resources/UI/DecisionOption.", this);
+            Debug.LogError("DecisionOption prefab missing at Resources/UI/Choices/DecisionOption.", this);
             return;
         }
         List<string> ids = decision.CandidateDefinitionIds ?? new List<string>();
@@ -611,7 +611,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         GameObject prefab = Resources.Load<GameObject>(PanelPrefabResourcePath);
         if (prefab == null)
         {
-            Debug.LogError("PendingDecisionPanel prefab missing at Resources/UI/PendingDecisionPanel.", this);
+            Debug.LogError("PendingDecisionPanel prefab missing at Resources/UI/Choices/PendingDecisionPanel.", this);
             _panelBindingFailed = true;
             return;
         }
@@ -697,7 +697,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         _panel.gameObject.SetActive(false);
         _instructionBar.SetActive(false);
         _cardDrawer.SetActive(false);
-        GameObject contextPrefab = Resources.Load<GameObject>("UI/DecisionSourceContext");
+        GameObject contextPrefab = Resources.Load<GameObject>("UI/Choices/DecisionSourceContext");
         if (contextPrefab != null)
         {
             _sourceContext = Instantiate(contextPrefab, transform).GetComponent<DecisionSourceView>();

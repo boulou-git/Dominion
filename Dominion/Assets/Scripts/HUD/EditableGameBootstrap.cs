@@ -4,13 +4,13 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Single bootstrap for the in-game UI. Loads the editable Resources/UI/GameScreen prefab.
+/// Single bootstrap for the in-game UI. Loads the editable Resources/UI/Board/GameScreen prefab.
 /// </summary>
 public static class EditableGameBootstrap
 {
     private const string GameSceneName = "Game";
     private const string RootName = "DominionGameUI";
-    private const string PrefabResourcePath = "UI/GameScreen";
+    private const string PrefabResourcePath = "UI/Board/GameScreen";
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Register()

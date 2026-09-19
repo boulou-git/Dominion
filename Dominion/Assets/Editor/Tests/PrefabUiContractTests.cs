@@ -27,7 +27,7 @@ public sealed class PrefabUiContractTests
     [Test]
     public void RuntimeCard_IsTheSharedCompleteCardVisual()
     {
-        GameObject prefab = Load("RuntimeCard");
+        GameObject prefab = Load("Cards/RuntimeCard");
         Assert.NotNull(prefab.GetComponent<Image>());
         Assert.NotNull(prefab.GetComponent<LayoutElement>());
         Assert.NotNull(prefab.GetComponent<CanvasGroup>());
@@ -38,7 +38,7 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(runtimeCost?.GetComponent<Text>());
         Assert.NotNull(prefab.transform.Find("RemainingCount/Text")?.GetComponent<Text>());
 
-        RectTransform detachedCost = Load("CardCostOverlay").GetComponent<RectTransform>();
+        RectTransform detachedCost = Load("Cards/CardCostOverlay").GetComponent<RectTransform>();
         Assert.NotNull(detachedCost?.GetComponent<Text>());
         Assert.AreEqual(runtimeCost.anchorMin, detachedCost.anchorMin);
         Assert.AreEqual(runtimeCost.anchorMax, detachedCost.anchorMax);
@@ -47,7 +47,7 @@ public sealed class PrefabUiContractTests
     [Test]
     public void SupplyCard_IsASeparateSquareCroppedVisual()
     {
-        GameObject prefab = Load("SupplyCard");
+        GameObject prefab = Load("Cards/SupplyCard");
         Assert.NotNull(prefab.transform.Find("CropViewport")?.GetComponent<Mask>());
         Assert.NotNull(prefab.GetComponent<RuntimeCardView>());
         Assert.NotNull(prefab.GetComponent<CardPointerInteraction>());
@@ -67,18 +67,18 @@ public sealed class PrefabUiContractTests
     [Test]
     public void TrashAndDecisionPrefabs_ExposeTheirRuntimeContracts()
     {
-        GameObject gameScreen = Load("GameScreen");
+        GameObject gameScreen = Load("Board/GameScreen");
         Transform nestedTrash = gameScreen.transform.Find("TrashPileUi");
         Assert.NotNull(nestedTrash, "TrashPileUi must be instanced directly in GameScreen.prefab.");
         Assert.NotNull(nestedTrash.Find("TrashPileButton")?.GetComponent<Button>());
 
-        GameObject trash = Load("TrashPileUi");
+        GameObject trash = Load("Board/TrashPileUi");
         Assert.NotNull(trash.transform.Find("TrashPileButton")?.GetComponent<Button>());
         Transform cards = trash.transform.Find("TrashPileOverlay/Panel/CardsScroll/Viewport/Cards");
         Assert.NotNull(cards?.GetComponent<GridLayoutGroup>());
         Assert.NotNull(trash.transform.Find("TrashPileOverlay/Panel/CardsScroll")?.GetComponent<ScrollRect>());
 
-        GameObject decision = Load("PendingDecisionPanel");
+        GameObject decision = Load("Choices/PendingDecisionPanel");
         Transform prompt = decision.transform.Find("Prompt");
         Assert.NotNull(prompt?.GetComponent<Text>());
         Assert.NotNull(prompt?.GetComponent<DraggableDecisionPanel>());
@@ -95,9 +95,9 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(optionPreviewOptions?.GetComponent<GridLayoutGroup>());
         Assert.NotNull(optionPreviewOptions?.GetComponent<DecisionScrollGrid>());
         Assert.NotNull(decision.transform.Find("ConfirmDecision")?.GetComponent<Button>());
-        Assert.NotNull(Load("DecisionOption").transform.Find("Label")?.GetComponent<Text>());
+        Assert.NotNull(Load("Choices/DecisionOption").transform.Find("Label")?.GetComponent<Text>());
 
-        GameObject instructionBar = Load("DecisionInstructionBar");
+        GameObject instructionBar = Load("Choices/DecisionInstructionBar");
         RectTransform instructionRect = instructionBar.GetComponent<RectTransform>();
         Transform instructionPrompt = instructionBar.transform.Find("Prompt");
         Assert.NotNull(instructionPrompt?.GetComponent<Text>());
@@ -106,7 +106,7 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(instructionBar.transform.Find("ConfirmDecision")?.GetComponent<Button>());
         Assert.Less(instructionRect.anchorMax.y - instructionRect.anchorMin.y, 0.12f);
 
-        GameObject cardDrawer = Load("DecisionCardDrawer");
+        GameObject cardDrawer = Load("Choices/DecisionCardDrawer");
         Assert.IsNull(cardDrawer.GetComponent<Graphic>(), "The full-screen drawer root must not block board clicks.");
         Transform expandedDrawer = cardDrawer.transform.Find("Expanded");
         Transform drawerCards = expandedDrawer?.Find("DecisionCards");
@@ -118,12 +118,12 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(drawerCards?.GetComponent<DecisionScrollGrid>());
         Assert.NotNull(cardDrawer.transform.Find("CollapsedTab")?.GetComponent<Button>());
 
-        GameObject deckPosition = Load("DeckPositionDecision");
+        GameObject deckPosition = Load("Choices/DeckPositionDecision");
         Assert.NotNull(deckPosition.GetComponent<DeckPositionDecisionView>());
         Assert.NotNull(deckPosition.transform.Find("Track/Handle")?.GetComponent<Image>());
         Assert.NotNull(deckPosition.transform.Find("Value")?.GetComponent<Text>());
 
-        GameObject cardName = Load("CardNameDecision");
+        GameObject cardName = Load("Choices/CardNameDecision");
         Assert.NotNull(cardName.GetComponent<CardNameDecisionView>());
         Assert.NotNull(cardName.transform.Find("SearchField")?.GetComponent<InputField>());
         Assert.NotNull(cardName.transform.Find("Suggestions")?.GetComponent<GridLayoutGroup>());
@@ -133,56 +133,56 @@ public sealed class PrefabUiContractTests
     [Test]
     public void PauseRevealAndEndGame_ArePrefabAuthored()
     {
-        GameObject pause = Load("GamePauseMenu");
+        GameObject pause = Load("Board/GamePauseMenu");
         Assert.NotNull(pause.GetComponent<Canvas>());
         Assert.NotNull(pause.GetComponent<GamePauseMenu>());
         Assert.NotNull(pause.transform.Find("Backdrop/Window/ResumeButton")?.GetComponent<Button>());
         Assert.NotNull(pause.transform.Find("Backdrop/Window/CloseGameButton")?.GetComponent<Button>());
 
-        GameObject lobby = Load("LobbySetupScreen");
+        GameObject lobby = Load("Lobby/LobbySetupScreen");
         GridLayoutGroup revealGrid = lobby.transform.Find("Reveal/RevealCards/Content")?.GetComponent<GridLayoutGroup>();
         Assert.NotNull(revealGrid);
         Assert.AreEqual(GridLayoutGroup.Constraint.FixedColumnCount, revealGrid.constraint);
         Assert.AreEqual(5, revealGrid.constraintCount);
         Assert.NotNull(lobby.transform.Find("HostSelection/CardsPanel/BackButton")?.GetComponent<Button>());
 
-        GameObject revealControls = Load("LobbyRevealControls");
+        GameObject revealControls = Load("Lobby/LobbyRevealControls");
         Assert.NotNull(revealControls.transform.Find("Players/Content")?.GetComponent<VerticalLayoutGroup>());
         Assert.NotNull(revealControls.transform.Find("ReadyButton")?.GetComponent<Button>());
         Assert.NotNull(revealControls.transform.Find("ResetButton")?.GetComponent<Button>());
         Assert.NotNull(revealControls.transform.Find("StartButton")?.GetComponent<Button>());
-        GameObject readyRow = Load("LobbyReadyPlayerRow");
+        GameObject readyRow = Load("Lobby/LobbyReadyPlayerRow");
         Assert.NotNull(readyRow.GetComponent<LayoutElement>());
         Assert.NotNull(readyRow.transform.Find("Name")?.GetComponent<Text>());
         Assert.NotNull(readyRow.transform.Find("Status")?.GetComponent<Text>());
 
-        GameObject zoom = Load("CardZoomOverlay");
+        GameObject zoom = Load("Cards/CardZoomOverlay");
         AdaptiveCardZoomView adaptiveZoom = zoom.transform.Find("ZoomedCard")?.GetComponent<AdaptiveCardZoomView>();
         Assert.NotNull(adaptiveZoom);
         Assert.GreaterOrEqual(adaptiveZoom.MaximumSize.x / adaptiveZoom.MaximumSize.y, 1f);
 
-        GameObject flow = Load("EndGameFlow");
+        GameObject flow = Load("EndGame/EndGameFlow");
         Assert.NotNull(flow.GetComponent<Canvas>());
         Assert.NotNull(flow.transform.Find("EndGameSurface"));
-        GameObject scoringStage = Load("EndGameScoringStage");
+        GameObject scoringStage = Load("EndGame/EndGameScoringStage");
         VerticalLayoutGroup scoreRows = scoringStage.transform.Find("Breakdown/ScoreRows")?.GetComponent<VerticalLayoutGroup>();
         Assert.NotNull(scoreRows);
         Assert.IsTrue(scoreRows.childControlHeight);
 
-        GameObject rankingStage = Load("EndGameRankingStage");
+        GameObject rankingStage = Load("EndGame/EndGameRankingStage");
         VerticalLayoutGroup rankingRows = rankingStage.transform.Find("Ranking/RankingRows")?.GetComponent<VerticalLayoutGroup>();
         VerticalLayoutGroup detailRows = rankingStage.transform.Find("Detail/DetailRows")?.GetComponent<VerticalLayoutGroup>();
         Assert.NotNull(rankingRows);
         Assert.NotNull(detailRows);
         Assert.IsTrue(rankingRows.childControlHeight);
         Assert.IsTrue(detailRows.childControlHeight);
-        GameObject scoreRow = Load("EndGameScoreRow");
+        GameObject scoreRow = Load("EndGame/EndGameScoreRow");
         LayoutElement scoreRowLayout = scoreRow.GetComponent<LayoutElement>();
         Assert.NotNull(scoreRowLayout);
         Assert.Greater(scoreRowLayout.preferredHeight, 0f);
         Assert.NotNull(scoreRow.transform.Find("Points/Value")?.GetComponent<Text>());
         Assert.NotNull(scoreRow.transform.Find("Points/Shield")?.GetComponent<Image>()?.sprite);
-        GameObject rankingRow = Load("EndGameRankingRow");
+        GameObject rankingRow = Load("EndGame/EndGameRankingRow");
         LayoutElement rankingRowLayout = rankingRow.GetComponent<LayoutElement>();
         Assert.NotNull(rankingRowLayout);
         Assert.Greater(rankingRowLayout.preferredHeight, 0f);
@@ -192,7 +192,7 @@ public sealed class PrefabUiContractTests
     [Test]
     public void PlayerBoardControlsAndArtifacts_ArePrefabAuthored()
     {
-        GameObject gameScreen = Load("GameScreen");
+        GameObject gameScreen = Load("Board/GameScreen");
         Transform topBarFollowToggle = gameScreen.transform.Find("TopBar/FollowActivePlayerToggle");
         Assert.NotNull(topBarFollowToggle?.GetComponent<Toggle>());
         Assert.NotNull(topBarFollowToggle?.Find("Box/Checkmark")?.GetComponent<Image>());
@@ -214,7 +214,7 @@ public sealed class PrefabUiContractTests
         Assert.AreEqual(new Vector2(0f, 1f), artifactStack.anchorMax);
         Assert.NotNull(gameScreen.transform.Find("CardZoomOverlay/Card")?.GetComponent<AdaptiveCardZoomView>());
 
-        GameObject extras = Load("ReserveExtrasUi");
+        GameObject extras = Load("Board/ReserveExtrasUi");
         GridLayoutGroup specialPiles = extras.transform.Find("SpecialPiles")?.GetComponent<GridLayoutGroup>();
         GridLayoutGroup availableArtifacts = extras.transform.Find("AvailableArtifacts")?.GetComponent<GridLayoutGroup>();
         Assert.NotNull(specialPiles);
@@ -222,13 +222,13 @@ public sealed class PrefabUiContractTests
         Assert.AreEqual(1, specialPiles.constraintCount);
         Assert.AreEqual(2, availableArtifacts.constraintCount);
 
-        GameObject specialPile = Load("SpecialPileTile");
+        GameObject specialPile = Load("Board/SpecialPileTile");
         Assert.NotNull(specialPile.GetComponent<LayoutElement>());
         Assert.NotNull(specialPile.GetComponent<CardPointerInteraction>());
         Assert.NotNull(specialPile.transform.Find("Name")?.GetComponent<Text>());
         Assert.NotNull(specialPile.transform.Find("Count")?.GetComponent<Text>());
 
-        GameObject playerTab = Load("PlayerBoardTab");
+        GameObject playerTab = Load("Board/PlayerBoardTab");
         Assert.NotNull(playerTab.GetComponent<Button>());
         Assert.NotNull(playerTab.GetComponent<LayoutElement>());
         Assert.NotNull(playerTab.transform.Find("Label")?.GetComponent<Text>());
@@ -236,12 +236,12 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(playerTab.transform.Find("ActiveIndicator")?.GetComponent<Image>());
         Assert.NotNull(playerTab.transform.Find("ViewedIndicator")?.GetComponent<Image>());
 
-        GameObject followToggle = Load("FollowActivePlayerToggle");
+        GameObject followToggle = Load("Board/FollowActivePlayerToggle");
         Assert.NotNull(followToggle.GetComponent<Toggle>());
         Assert.NotNull(followToggle.transform.Find("Box/Checkmark")?.GetComponent<Image>());
         Assert.NotNull(followToggle.transform.Find("Label")?.GetComponent<Text>());
 
-        GameObject artifact = Load("ArtifactTile");
+        GameObject artifact = Load("Board/ArtifactTile");
         Assert.NotNull(artifact.GetComponent<Button>());
         Assert.NotNull(artifact.GetComponent<LayoutElement>());
         Assert.NotNull(artifact.GetComponent<CardPointerInteraction>());

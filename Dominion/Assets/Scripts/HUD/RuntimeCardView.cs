@@ -8,8 +8,8 @@ using UnityEngine.UI;
 [RequireComponent(typeof(RectTransform), typeof(Image))]
 public sealed class RuntimeCardView : MonoBehaviour
 {
-    private const string PrefabResourcePath = "UI/RuntimeCard";
-    private const string SupplyPrefabResourcePath = "UI/SupplyCard";
+    private const string PrefabResourcePath = "UI/Cards/RuntimeCard";
+    private const string SupplyPrefabResourcePath = "UI/Cards/SupplyCard";
     private static GameObject _prefab;
     private static GameObject _supplyPrefab;
 

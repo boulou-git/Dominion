@@ -441,8 +441,8 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
             return;
         }
 
-        GameObject controlsPrefab = Resources.Load<GameObject>("UI/LobbyRevealControls");
-        _readyPlayerRowPrefab = Resources.Load<GameObject>("UI/LobbyReadyPlayerRow");
+        GameObject controlsPrefab = Resources.Load<GameObject>("UI/Lobby/LobbyRevealControls");
+        _readyPlayerRowPrefab = Resources.Load<GameObject>("UI/Lobby/LobbyReadyPlayerRow");
         if (controlsPrefab == null || _readyPlayerRowPrefab == null)
         {
             Debug.LogError("Lobby reveal prefabs are missing from Resources/UI.", this);
@@ -465,10 +465,10 @@ public sealed class EditableLobbySetupController : MonoBehaviourPunCallbacks
         _revealResetButton.onClick.AddListener(ResetKingdom);
         _revealStartButton.onClick.AddListener(StartGame);
 
-        GameObject zoomPrefab = Resources.Load<GameObject>("UI/CardZoomOverlay");
+        GameObject zoomPrefab = Resources.Load<GameObject>("UI/Cards/CardZoomOverlay");
         if (zoomPrefab == null)
         {
-            Debug.LogError("CardZoomOverlay prefab missing at Resources/UI/CardZoomOverlay.", this);
+            Debug.LogError("CardZoomOverlay prefab missing at Resources/UI/Cards/CardZoomOverlay.", this);
             return;
         }
         _revealZoomOverlay = Instantiate(zoomPrefab, _revealScreen.transform);

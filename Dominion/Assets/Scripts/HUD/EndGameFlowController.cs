@@ -15,11 +15,11 @@ using UnityEngine.SceneManagement;
 public sealed partial class EndGameFlowController : MonoBehaviour
 {
     private const string RootName = "DominionEndGameFlow";
-    private const string PrefabResourcePath = "UI/EndGameFlow";
-    private const string ScoringStagePrefabPath = "UI/EndGameScoringStage";
-    private const string RankingStagePrefabPath = "UI/EndGameRankingStage";
-    private const string ScoreRowPrefabPath = "UI/EndGameScoreRow";
-    private const string RankingRowPrefabPath = "UI/EndGameRankingRow";
+    private const string PrefabResourcePath = "UI/EndGame/EndGameFlow";
+    private const string ScoringStagePrefabPath = "UI/EndGame/EndGameScoringStage";
+    private const string RankingStagePrefabPath = "UI/EndGame/EndGameRankingStage";
+    private const string ScoreRowPrefabPath = "UI/EndGame/EndGameScoreRow";
+    private const string RankingRowPrefabPath = "UI/EndGame/EndGameRankingRow";
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Register()
@@ -36,7 +36,7 @@ public sealed partial class EndGameFlowController : MonoBehaviour
         GameObject prefab = Resources.Load<GameObject>(PrefabResourcePath);
         if (prefab == null)
         {
-            Debug.LogError("EndGameFlow prefab missing at Resources/UI/EndGameFlow.");
+            Debug.LogError("EndGameFlow prefab missing at Resources/UI/EndGame/EndGameFlow.");
             return;
         }
 

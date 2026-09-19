@@ -117,7 +117,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         if (_screenController == null)
             _screenController = GetComponent<GameScreenController>();
         if (_artifactTilePrefab == null)
-            _artifactTilePrefab = Resources.Load<GameObject>("UI/ArtifactTile");
+            _artifactTilePrefab = Resources.Load<GameObject>("UI/Board/ArtifactTile");
 
         Transform baseSupply = FindDeepChild(transform, "BaseSupply");
         if (baseSupply is RectTransform baseRect)
@@ -457,7 +457,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
             if (!_missingArtifactTileLogged)
             {
                 _missingArtifactTileLogged = true;
-                Debug.LogError("Required UI prefab Resources/UI/ArtifactTile.prefab is missing.", this);
+                Debug.LogError("Required UI prefab Resources/UI/Board/ArtifactTile.prefab is missing.", this);
             }
             return;
         }

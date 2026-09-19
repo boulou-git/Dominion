@@ -12,7 +12,7 @@ public sealed class CardBackReference : ScriptableObject
 
     public static Sprite LoadSprite()
     {
-        CardBackReference reference = Resources.Load<CardBackReference>("UI/CardBackReference");
+        CardBackReference reference = Resources.Load<CardBackReference>("UI/Cards/CardBackReference");
         return reference != null ? reference.Sprite : null;
     }
 }

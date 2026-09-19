@@ -12,9 +12,9 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class ReserveExtrasController : MonoBehaviour
 {
-    private const string ExtrasPrefabPath = "UI/ReserveExtrasUi";
-    private const string SpecialPilePrefabPath = "UI/SpecialPileTile";
-    private const string ArtifactPrefabPath = "UI/ArtifactTile";
+    private const string ExtrasPrefabPath = "UI/Board/ReserveExtrasUi";
+    private const string SpecialPilePrefabPath = "UI/Board/SpecialPileTile";
+    private const string ArtifactPrefabPath = "UI/Board/ArtifactTile";
 
     [SerializeField] private RectTransform _supplyPanel;
     [SerializeField] private GridLayoutGroup _kingdomGrid;

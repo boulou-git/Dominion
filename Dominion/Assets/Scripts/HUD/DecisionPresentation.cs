@@ -20,11 +20,11 @@ public static class DecisionPresentation
         {
             if (op.StartsWith("insert_selected_into_deck|", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(op, "name_card", StringComparison.OrdinalIgnoreCase)) return null;
-            if (decision.MaxSelections > 1) return "UI/DecisionMultipleOptions";
-            return HasOptionPreview(decision) ? "UI/DecisionCardEffectChoice" : "UI/DecisionSingleOption";
+            if (decision.MaxSelections > 1) return "UI/Choices/DecisionMultipleOptions";
+            return HasOptionPreview(decision) ? "UI/Choices/DecisionCardEffectChoice" : "UI/Choices/DecisionSingleOption";
         }
-        if (op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase)) return "UI/DecisionDeckOrder";
-        return "UI/DecisionCardSelection";
+        if (op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase)) return "UI/Choices/DecisionDeckOrder";
+        return "UI/Choices/DecisionCardSelection";
     }
 
     public static int SourceId(PendingDecisionSnapshot decision) =>

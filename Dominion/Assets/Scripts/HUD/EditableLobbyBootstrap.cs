@@ -12,10 +12,10 @@ public static class EditableLobbyBootstrap
     private const string LobbySceneName = "Lobby";
 
     private const string SetupRootName = "DominionLobbySetupUI";
-    private const string SetupPrefabResourcePath = "UI/LobbySetupScreen";
+    private const string SetupPrefabResourcePath = "UI/Lobby/LobbySetupScreen";
 
     private const string ConnectionRootName = "DominionConnectionUI";
-    private const string ConnectionPrefabResourcePath = "UI/ConnectionScreen";
+    private const string ConnectionPrefabResourcePath = "UI/Connection/ConnectionScreen";
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Register()
@@ -38,7 +38,7 @@ public static class EditableLobbyBootstrap
         GameObject prefab = Resources.Load<GameObject>(SetupPrefabResourcePath);
         if (prefab == null)
         {
-            Debug.LogError("Missing Resources/UI/LobbySetupScreen prefab. Dominion pre-game UI cannot start.");
+            Debug.LogError("Missing Resources/UI/Lobby/LobbySetupScreen prefab. Dominion pre-game UI cannot start.");
             return;
         }
 
@@ -62,7 +62,7 @@ public static class EditableLobbyBootstrap
         if (prefab == null)
         {
             Debug.LogWarning(
-                "Missing Resources/UI/ConnectionScreen prefab. Run Dominion > UI > Create Missing Connection UI once.");
+                "Missing Resources/UI/Connection/ConnectionScreen prefab. Run Dominion > UI > Create Missing Connection UI once.");
             return;
         }
 

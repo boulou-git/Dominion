@@ -4,7 +4,7 @@ Les chemins ci-dessous partent du projet Unity `Dominion/`.
 
 ## Un prefab par famille de demande
 
-Tous ces prefabs sont dans `Assets/Resources/UI/`. Les fenêtres détaillées sont indépendantes : modifier leurs ancres, tailles ou grilles ne modifie pas les autres familles. Elles utilisent le même script de comportement `DecisionWorkspaceView` et les mêmes vignettes, remplaçables via ses champs Card Prefab et Option Prefab.
+Tous ces prefabs sont dans `Assets/Resources/UI/Choices/`. Les fenêtres détaillées sont indépendantes : modifier leurs ancres, tailles ou grilles ne modifie pas les autres familles. Elles utilisent le même script de comportement `DecisionWorkspaceView` et les mêmes vignettes, remplaçables via ses champs Card Prefab et Option Prefab.
 
 | Demande | Prefab à modifier |
 |---|---|
@@ -20,9 +20,9 @@ Tous ces prefabs sont dans `Assets/Resources/UI/`. Les fenêtres détaillées so
 
 `DecisionPresentation.WorkspacePrefab()` choisit la famille à partir de l'opération et des données de décision, jamais du texte de la consigne. Le contrôleur charge chaque fenêtre à la demande et masque/vide la précédente. Les tailles ne sont pas réécrites en C#.
 
-`DecisionWorkspace.prefab` reste le modèle de référence initial ; modifier ce fichier ne change pas les fenêtres indépendantes. Dans le tableau de réglages ci-dessous, remplacer `DecisionWorkspace.prefab` par le prefab de la famille souhaitée. Le nombre de cartes sélectionnables reste une règle de jeu, pas une valeur à changer dans un prefab.
+Les cinq fenêtres détaillées sont indépendantes. Dans le tableau de réglages ci-dessous, utilisez le prefab de la famille souhaitée. Le nombre de cartes sélectionnables reste une règle de jeu, pas une valeur à changer dans un prefab.
 
-`DecisionHandSelection.prefab` et `DecisionSupplyChoice.prefab` sont conservés comme anciens modèles mais ne sont plus chargés. La main et la Réserve partagent un seul petit bandeau en haut, sans panneau latéral de source. La consigne conserve les contraintes de l’effet.
+Les anciens modèles inutilisés `DecisionWorkspace`, `DecisionHandSelection` et `DecisionSupplyChoice` ont été supprimés. La main et la Réserve partagent un seul petit bandeau en haut, sans panneau latéral de source. La consigne conserve les contraintes de l’effet.
 
 ## Comportement
 
@@ -44,8 +44,8 @@ Tous ces prefabs sont dans `Assets/Resources/UI/`. Les fenêtres détaillées so
 
 | Je veux changer… | Prefab / emplacement |
 |---|---|
-| Dimensions et position de la fenêtre | `Assets/Resources/UI/DecisionWorkspace.prefab` → `Panel` → RectTransform |
-| Assombrissement du plateau | `DecisionWorkspace` → Image → couleur / alpha |
+| Dimensions et position de la fenêtre | `Assets/Resources/UI/Choices/DecisionCardSelection.prefab` → `Panel` → RectTransform |
+| Assombrissement du plateau | `DecisionCardSelection` → Image → couleur / alpha |
 | Taille de la consigne | `Panel/Prompt` → Text |
 | Image, nom et règles de la source | `Panel/Source/Artwork`, `Name`, `Rules`, `Context` |
 | Taille des cartes disponibles | `Panel/Available/Scroll/Viewport/Content` → GridLayoutGroup → Cell Size |
@@ -58,7 +58,7 @@ Tous ces prefabs sont dans `Assets/Resources/UI/`. Les fenêtres détaillées so
 | Apparence d'une carte interactive | `DecisionWorkspaceCard.prefab` → Artwork, Label, Selected |
 | Apparence d'une option | `DecisionWorkspaceOption.prefab` → Image, Button, Label, Selected, DecisionDropZone |
 | Marque de sélection | Les enfants `Selected` des deux prefabs précédents |
-| Boutons de validation et remise à zéro | `DecisionWorkspace.prefab` → `Panel/Confirm`, `Panel/Reset` |
+| Boutons de validation et remise à zéro | `DecisionCardSelection.prefab` → `Panel/Confirm`, `Panel/Reset` |
 | Position et taille du bandeau main / Réserve | `DecisionInstructionBar.prefab` → RectTransform racine |
 | Consigne, compteur et validation du bandeau | `DecisionInstructionBar.prefab` → Prompt, Count, ConfirmDecision |
 

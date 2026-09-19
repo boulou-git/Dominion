@@ -2,12 +2,12 @@ using UnityEngine;
 
 /// <summary>
 /// Single startup cover displayed while the first scene and Photon connection initialise.
-/// Its visual hierarchy and timing are configured by Resources/UI/StartupSplash.prefab.
+/// Its visual hierarchy and timing are configured by Resources/UI/Connection/StartupSplash.prefab.
 /// </summary>
 public sealed class StartupSplashController : MonoBehaviour
 {
     private const string RootName = "DominionStartupSplash";
-    private const string PrefabPath = "UI/StartupSplash";
+    private const string PrefabPath = "UI/Connection/StartupSplash";
 
     [SerializeField] private CanvasGroup _canvasGroup;
     [SerializeField, Min(0f)] private float _displayDuration = 5.5f;
@@ -25,7 +25,7 @@ public sealed class StartupSplashController : MonoBehaviour
         GameObject prefab = Resources.Load<GameObject>(PrefabPath);
         if (prefab == null)
         {
-            Debug.LogError("Missing Resources/UI/StartupSplash prefab.");
+            Debug.LogError("Missing Resources/UI/Connection/StartupSplash prefab.");
             return;
         }
 

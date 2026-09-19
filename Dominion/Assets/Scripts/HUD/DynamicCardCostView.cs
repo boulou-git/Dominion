@@ -9,7 +9,7 @@ using UnityEngine.UI;
 public sealed class DynamicCardCostView : MonoBehaviour
 {
     private const string CostTextName = "DynamicCost";
-    private const string CostPrefabResourcePath = "UI/CardCostOverlay";
+    private const string CostPrefabResourcePath = "UI/Cards/CardCostOverlay";
 
     private ExtensionCardData _definition;
     private Text _costText;
@@ -94,7 +94,7 @@ public sealed class DynamicCardCostView : MonoBehaviour
             GameObject prefab = Resources.Load<GameObject>(CostPrefabResourcePath);
             if (prefab == null || prefab.GetComponent<Text>() == null)
             {
-                Debug.LogError("Missing Resources/UI/CardCostOverlay prefab.", this);
+                Debug.LogError("Missing Resources/UI/Cards/CardCostOverlay prefab.", this);
                 return;
             }
 

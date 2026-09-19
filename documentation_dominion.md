@@ -177,7 +177,7 @@ La colonne **Type** indique si la modification se fait dans le code, l’Inspect
 | Décalage des cartes empilées | Même méthode | Code | `i * 5` horizontal et `-i * 3` vertical, trois couches visuelles maximum. |
 | Badge de quantité d’une pile en jeu | `CreateCountBadge()` | Code | Position, fond noir `(0.03,0.03,0.03,0.9)` et texte blanc. |
 | Carte du dessus de Défausse | `BuyPhaseGameplayController.RenderDiscardTop()` | Code | Utilise la dernière instance de `Discard`; ancrage 6–94 % horizontal et 4–96 % vertical. |
-| Dos de la pioche | `HUD/DeckPileVisualController.cs` + `Resources/UI/CardBackReference.asset` | Code/Asset | Le sprite source reste `Assets/2D/Cards/back_card.PNG`. |
+| Dos de la pioche | `HUD/DeckPileVisualController.cs` + `Resources/UI/Cards/CardBackReference.asset` | Code/Asset | Le sprite source reste `Assets/2D/Cards/back_card.PNG`. |
 | Image de remplacement si artwork absent | `HUD/RuntimeCardView.cs` → `Bind()` | Code | Teinte rouge sombre `(0.55,0.12,0.12,1)`. |
 
 ### 2.4 Sélections, halos, grisage et autres couleurs d’état
@@ -204,7 +204,7 @@ La colonne **Type** indique si la modification se fait dans le code, l’Inspect
 
 | Je veux modifier… | Emplacement exact | Type | Attention |
 |---|---|---|---|
-| Déplacer/redimensionner les grandes zones du plateau | `Resources/UI/GameScreen.prefab` | Prefab | `SupplyPanel`, `LocalHand`, `InPlayPanel`, `JournalPanel`, `StatusPanel`, `TopBar`. |
+| Déplacer/redimensionner les grandes zones du plateau | `Resources/UI/Board/GameScreen.prefab` | Prefab | `SupplyPanel`, `LocalHand`, `InPlayPanel`, `JournalPanel`, `StatusPanel`, `TopBar`. |
 | Taille et espacement des cartes Royaume | `GameScreen.prefab` → `KingdomSupply` → `GridLayoutGroup` | Inspector | Le code vérifie le composant mais respecte les valeurs du prefab. |
 | Taille et espacement des piles de base | `GameScreen.prefab` → `BaseSupply` → `GridLayoutGroup` | Inspector | Même principe. |
 | Nombre de colonnes/ajustement lorsque les extras apparaissent | `HUD/ReserveExtrasController.cs` → `FitKingdomGridBeforeExtras()` | Code | Suppose 2 lignes (`rows = 2`) et réduit la cellule juste assez pour garder 10 Royaumes visibles. |
@@ -925,7 +925,7 @@ Tous ces fichiers sont dans `Assets/Scripts/HUD/`.
 | `ReserveExtrasController.cs` | Affiche seulement les piles spéciales et Artefacts réellement utilisés, dans le rail droit ; adapte la grille Royaume. | `RebuildSpecialPiles`, `RebuildArtifacts`, `FitKingdomGridBeforeExtras`. |
 | `RuntimeCardView.cs` | Fabrique une carte complète ou une carte de Réserve depuis les prefabs partagés. | `Create`, `CreateSupply`, `Bind`, `SetRemainingCount`. |
 | `SupplyPileInteractionBinding.cs` | Quantité, état achetable/choisissable, achat au clic gauche, inspection au clic droit. | `Bind`, `SetRemaining`, `SetBuyable`, `SetDecisionChoice`; animation achat 0,34 s. |
-| `DynamicCardCostView.cs` | Superpose le coût effectif sur la pièce déjà dessinée. | `Attach`, `Bind`, `RefreshCost`. Prefab `UI/CardCostOverlay`. |
+| `DynamicCardCostView.cs` | Superpose le coût effectif sur la pièce déjà dessinée. | `Attach`, `Bind`, `RefreshCost`. Prefab `UI/Cards/CardCostOverlay`. |
 | `TopTwoThirdsCardCrop.cs` | Recadre exactement les 2/3 supérieurs d’une carte portrait dans la tuile carrée de Réserve. | `_viewport`, `_artwork`, `RefreshCrop`. |
 | `CardBackReference.cs` | Rend le dos de carte global accessible depuis `Resources`. | `LoadSprite`. |
 | `DeckPileVisualController.cs` | Affiche/masque le dos de deck selon le joueur observé sans modifier les données. | `Refresh`, `ResolveVisuals`. |
@@ -976,7 +976,7 @@ Tous ces fichiers sont dans `Assets/Scripts/HUD/`.
 | `StartupSplashController.cs` | Crée l’écran de démarrage avant la première scène et suit le timing défini dans le prefab. |
 | `SingleEventSystemGuard.cs` | Garantit un seul EventSystem pendant le chevauchement additif Lobby/Game. |
 | `QuitApplicationButton.cs` | Arrête le Play Mode dans l’éditeur ou ferme l’application en build. |
-| `EditableGameBootstrap.cs` | Charge `Resources/UI/GameScreen` dans la scène `Game` et ajoute les contrôleurs nécessaires. |
+| `EditableGameBootstrap.cs` | Charge `Resources/UI/Board/GameScreen` dans la scène `Game` et ajoute les contrôleurs nécessaires. |
 
 ---
 
@@ -1071,7 +1071,7 @@ Plusieurs contrôleurs cherchent des enfants par leur nom (`FindDirectChild`, `F
 
 `Assets/2D/` contient aussi : `Game_Logo.png`, `Game_Logo_lowpoly.png`, `base_background.png`, `card_board.png`, `coin.png`, `crown.png`, `green_flag.png`, `green_flag_small.png`, `icon_actions.png`, `icons.png`, `icons_lowpoly.png`, `logo_dominion_exe.png`, `play_button.png`, `quit_button.png`, `scroll_board.png`, `simple_border.png`, `unity.png`, `validation.png`, `victory_point.png`.
 
-Le dos partagé est `Assets/2D/Cards/back_card.PNG`. Le bouclier de points de victoire du flux final est aussi disponible sous `Assets/Resources/UI/VictoryPointShield.png`.
+Le dos partagé est `Assets/2D/Cards/back_card.PNG`. Le bouclier de points de victoire du flux final est aussi disponible sous `Assets/Resources/UI/Cards/VictoryPointShield.png`.
 
 ### 11.5 Shader
 

@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 public static class DominionGamePrefabBuilder
 {
-    private const string RootFolder = "Assets/Resources/UI";
+    private const string RootFolder = "Assets/Resources/UI/Board";
     private const string GamePrefabPath = RootFolder + "/GameScreen.prefab";
 
     private static readonly Color Background = new Color(0.045f, 0.045f, 0.042f, 1f);

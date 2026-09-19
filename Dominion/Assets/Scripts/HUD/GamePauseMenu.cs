@@ -13,7 +13,7 @@ using UnityEngine.UI;
 public sealed class GamePauseMenu : MonoBehaviour
 {
     private const string RootName = "DominionPauseMenu";
-    private const string PrefabResourcePath = "UI/GamePauseMenu";
+    private const string PrefabResourcePath = "UI/Board/GamePauseMenu";
     private GameObject _panel;
     private Button _pauseButton;
     private Text _pauseButtonText;
@@ -38,7 +38,7 @@ public sealed class GamePauseMenu : MonoBehaviour
         GameObject prefab = Resources.Load<GameObject>(PrefabResourcePath);
         if (prefab == null)
         {
-            Debug.LogError("GamePauseMenu prefab missing at Resources/UI/GamePauseMenu.");
+            Debug.LogError("GamePauseMenu prefab missing at Resources/UI/Board/GamePauseMenu.");
             return;
         }
 

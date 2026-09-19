@@ -6,7 +6,7 @@ using UnityEngine.UI;
 
 public static class DominionLobbyPrefabBuilder
 {
-    private const string RootFolder = "Assets/Resources/UI";
+    private const string RootFolder = "Assets/Resources/UI/Lobby";
     private const string ExtensionPrefabPath = RootFolder + "/ExtensionTile.prefab";
     private const string CardPrefabPath = RootFolder + "/CardSelectionTile.prefab";
     private const string LobbyPrefabPath = RootFolder + "/LobbySetupScreen.prefab";
