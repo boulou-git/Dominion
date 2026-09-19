@@ -10,7 +10,7 @@ public static class DecisionPresentation
          decision.TriggerEvent.CardInstanceId > 0 && decision.TriggerEvent.CardInstanceId != SourceId(decision));
 
     // Routing chooses a prefab, never changes its layout at runtime.
-    public static string WorkspacePrefab(PendingDecisionSnapshot decision)
+    public static string WorkspacePrefab(PendingDecisionSnapshot decision, ExtensionCardData source = null)
     {
         if (decision == null) return null;
         string op = decision.Operation ?? string.Empty;
@@ -20,10 +20,10 @@ public static class DecisionPresentation
         {
             if (op.StartsWith("insert_selected_into_deck|", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(op, "name_card", StringComparison.OrdinalIgnoreCase)) return null;
-            if (decision.MaxSelections > 1) return "UI/Choices/DecisionMultipleOptions";
-            return HasOptionPreview(decision) ? "UI/Choices/DecisionCardEffectChoice" : "UI/Choices/DecisionSingleOption";
+            if (DeckChoiceRules.TryDescribe(decision, source, out _, out _, out _)) return "UI/Choices/DecisionCardDestinations";
+            return "UI/Choices/DecisionCardSelection";
         }
-        if (op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase)) return "UI/Choices/DecisionDeckOrder";
+        if (op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase)) return "UI/Choices/DecisionCardDestinations";
         return "UI/Choices/DecisionCardSelection";
     }
 

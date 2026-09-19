@@ -81,12 +81,12 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
             NetworkGameState.LocalPlayerId, decisionId, selectedDefinitionIds ?? new string[0], state.Version, state.AuthorityEpoch);
     }
 
-    public void SubmitOptionDecision(string decisionId, string[] selectedOptionIds)
+    public void SubmitOptionDecision(string decisionId, string[] selectedOptionIds, int[] orderedCards = null)
     {
         GameStateSnapshot state = NetworkGameState.State;
         if (!CanSendPendingDecision(state, decisionId)) return;
         photonView.RPC(nameof(RpcRequestSubmitOptionDecision), RpcTarget.MasterClient,
-            NetworkGameState.LocalPlayerId, decisionId, selectedOptionIds ?? new string[0], state.Version, state.AuthorityEpoch);
+            NetworkGameState.LocalPlayerId, decisionId, selectedOptionIds ?? new string[0], orderedCards ?? new int[0], state.Version, state.AuthorityEpoch);
     }
 
     public void FinishTurn() => AdvancePhase();
@@ -147,10 +147,10 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
 
     [PunRPC]
     private void RpcRequestSubmitOptionDecision(string requesterPlayerId, string decisionId, string[] selectedOptionIds,
-        int expectedVersion, int expectedAuthorityEpoch, PhotonMessageInfo info)
+        int[] orderedCards, int expectedVersion, int expectedAuthorityEpoch, PhotonMessageInfo info)
     {
         if (!ValidateSender(requesterPlayerId, info)) return;
-        if (!NetworkGameState.TrySubmitOptionDecision(requesterPlayerId, decisionId, selectedOptionIds, expectedVersion, expectedAuthorityEpoch))
+        if (!NetworkGameState.TrySubmitOptionDecision(requesterPlayerId, decisionId, selectedOptionIds, expectedVersion, expectedAuthorityEpoch, orderedCards))
             Debug.LogWarning("Rejected stale or invalid SubmitOptionDecision command.");
     }
 

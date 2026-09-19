@@ -11,11 +11,11 @@ public sealed class DecisionWorkspaceTests
     [TestCase("hand", "choose_cards", 4, false, null)]
     [TestCase("hand", "move_all_ordered|deck", 1, false, null)]
     [TestCase("discard", "choose_cards", 3, false, "UI/Choices/DecisionCardSelection")]
-    [TestCase("inspected", "move_all_ordered|deck", 1, false, "UI/Choices/DecisionDeckOrder")]
-    [TestCase("options", "choose_options", 1, true, "UI/Choices/DecisionCardEffectChoice")]
-    [TestCase("options", "choose_options", 1, false, "UI/Choices/DecisionSingleOption")]
-    [TestCase("options", "choose_options", 2, false, "UI/Choices/DecisionMultipleOptions")]
-    [TestCase("options", "choose_options", 2, true, "UI/Choices/DecisionMultipleOptions")]
+    [TestCase("inspected", "move_all_ordered|deck", 1, false, "UI/Choices/DecisionCardDestinations")]
+    [TestCase("options", "choose_options", 1, true, "UI/Choices/DecisionCardSelection")]
+    [TestCase("options", "choose_options", 1, false, "UI/Choices/DecisionCardSelection")]
+    [TestCase("options", "choose_options", 2, false, "UI/Choices/DecisionCardSelection")]
+    [TestCase("options", "choose_options", 2, true, "UI/Choices/DecisionCardSelection")]
     [TestCase("supply", "choose_supply", 1, false, null)]
     [TestCase("options", "name_card", 1, false, null)]
     [TestCase("options", "insert_selected_into_deck|hand", 1, true, null)]
@@ -33,9 +33,9 @@ public sealed class DecisionWorkspaceTests
             Zone = "options", MaxSelections = 1, PlayerId = "local", ListenerCardInstanceId = 4,
             TriggerEvent = new GameEventSnapshot { PlayerId = "local", CardInstanceId = 8 }
         };
-        Assert.AreEqual("UI/Choices/DecisionCardEffectChoice", DecisionPresentation.WorkspacePrefab(choice));
+        Assert.AreEqual("UI/Choices/DecisionCardSelection", DecisionPresentation.WorkspacePrefab(choice));
         choice.TriggerEvent.PlayerId = "other";
-        Assert.AreEqual("UI/Choices/DecisionSingleOption", DecisionPresentation.WorkspacePrefab(choice));
+        Assert.AreEqual("UI/Choices/DecisionCardSelection", DecisionPresentation.WorkspacePrefab(choice));
     }
     [Test]
     public void ArtifactListener_IsPresentedInsteadOfTheOriginalAction()
@@ -93,10 +93,7 @@ public sealed class DecisionWorkspaceTests
     }
 
     [TestCase("DecisionCardSelection")]
-    [TestCase("DecisionCardEffectChoice")]
-    [TestCase("DecisionSingleOption")]
-    [TestCase("DecisionMultipleOptions")]
-    [TestCase("DecisionDeckOrder")]
+    [TestCase("DecisionCardDestinations")]
     public void Workspace_HasPrefabAuthoredControlsAndScrollableDropZones(string prefabName)
     {
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/UI/Choices/" + prefabName + ".prefab");
@@ -125,6 +122,17 @@ public sealed class DecisionWorkspaceTests
         Assert.NotNull(prefab.transform.Find("Panel/Confirm").GetComponent<Button>());
         Assert.NotNull(prefab.transform.Find("Panel/Reset").GetComponent<Button>());
         Assert.NotNull(prefab.transform.Find("DragLayer"));
+    }
+
+    [Test]
+    public void Destinations_UsesHorizontalDeckLayoutAndASeparateDiscardZone()
+    {
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/UI/Choices/DecisionCardDestinations.prefab");
+        Assert.NotNull(prefab.transform.Find("Panel/Discard").GetComponent<DecisionDropZone>());
+        var grid = prefab.transform.Find("Panel/Chosen/Scroll/Viewport/Content").GetComponent<GridLayoutGroup>();
+        Assert.AreEqual(GridLayoutGroup.Constraint.FixedRowCount, grid.constraint);
+        Assert.AreEqual(1, grid.constraintCount);
+        Assert.IsTrue(prefab.transform.Find("Panel/Chosen/Scroll").GetComponent<ScrollRect>().horizontal);
     }
 
     [Test]

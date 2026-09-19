@@ -17,7 +17,7 @@ public sealed class DecisionDropZone : MonoBehaviour, IDropHandler, IPointerEnte
         RestoreColor();
         DecisionDragCard card = e.pointerDrag != null ? e.pointerDrag.GetComponent<DecisionDragCard>() : null;
         if (card == null || card.Owner != Owner || !Owner.CanInteract(card.DecisionId)) return;
-        Owner.Drop(card.InstanceId, Select, OptionId);
+        Owner.Drop(card.InstanceId, Select, OptionId, e.position, e.pressEventCamera);
     }
 
     public void OnPointerEnter(PointerEventData e)

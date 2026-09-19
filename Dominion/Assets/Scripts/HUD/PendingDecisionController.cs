@@ -109,7 +109,10 @@ public sealed class PendingDecisionController : MonoBehaviour
         bool optionChoice = IsOptionDecision(decision);
         bool deckPositionChoice = IsDeckPositionDecision(decision);
         bool cardNameChoice = IsCardNameDecision(decision);
-        SelectWorkspace(DecisionPresentation.WorkspacePrefab(decision));
+        CardInstance sourceCard = NetworkGameState.FindCardInstance(state, DecisionPresentation.SourceId(decision));
+        ExtensionCardData sourceDefinition = null;
+        if (sourceCard != null) RoomGameSetup.TryResolveCard(sourceCard.DefinitionId, out _, out sourceDefinition);
+        SelectWorkspace(DecisionPresentation.WorkspacePrefab(decision, sourceDefinition));
         _usingWorkspace = _workspace != null && !supplyChoice && !deckPositionChoice && !cardNameChoice;
         if (_workspace != null) _workspace.gameObject.SetActive(_usingWorkspace);
         bool directBoardChoice = supplyChoice || string.Equals(decision.Zone, "hand", StringComparison.OrdinalIgnoreCase);
@@ -446,6 +449,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             _workspace.RefreshSelection(_submitPending);
             return;
         }
+        if (_usingWorkspace && !_workspace.CanConfirm) return;
         int selectedCount = IsOptionDecision(decision) ? _selectedOptions.Count : IsSupplyDecision(decision) ? _selectedSupply.Count : _selected.Count;
         if (_countText != null)
             _countText.text = DecisionPresentation.CountLabel(decision, selectedCount);
@@ -497,6 +501,7 @@ public sealed class PendingDecisionController : MonoBehaviour
     {
         PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
         if (decision == null || _submitPending) return;
+        if (_usingWorkspace && !_workspace.CanConfirm) return;
         int selectedCount = IsOptionDecision(decision) ? _selectedOptions.Count : IsSupplyDecision(decision) ? _selectedSupply.Count : _selected.Count;
         if (!(selectedCount == 0 && decision.AllowPass) &&
             (selectedCount < decision.MinSelections || selectedCount > decision.MaxSelections)) return;
@@ -510,7 +515,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         if (IsOptionDecision(decision))
         {
             string[] selected = new string[_selectedOptions.Count]; _selectedOptions.CopyTo(selected);
-            handler.SubmitOptionDecision(decision.DecisionId, selected);
+            handler.SubmitOptionDecision(decision.DecisionId, selected, _usingWorkspace ? _workspace.DeckOrder : null);
         }
         else if (IsSupplyDecision(decision))
         {
@@ -519,7 +524,9 @@ public sealed class PendingDecisionController : MonoBehaviour
         }
         else
         {
-            int[] selected = new int[_selected.Count]; _selected.CopyTo(selected);
+            int[] selected = _usingWorkspace && _workspace.DeckOrder != null
+                ? _workspace.DeckOrder : new int[_selected.Count];
+            if (!_usingWorkspace || _workspace.DeckOrder == null) _selected.CopyTo(selected);
             handler.SubmitDecision(decision.DecisionId, selected);
         }
     }

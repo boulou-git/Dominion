@@ -201,6 +201,71 @@ public sealed class FleauxFoundationRulesTests
         Assert.That(state.Resolution.PendingDecision.Operation, Does.StartWith("move_all_ordered|"));
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public void WholeGroupChoice_AppliesTheCompleteVisualOrder(bool reverse)
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance lower = AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        CardInstance upper = AddOwned(state, player, "base:argent", CardZone.Deck);
+        CardInstance fever = AddOwned(state, player, "fleaux:fievre", CardZone.Hand);
+        GameRules.TryPlayCard(state, player.PlayerId, fever.InstanceId, Resolve, new Random(1));
+        int[] order = reverse ? new[] { upper.InstanceId, lower.InstanceId } : new[] { lower.InstanceId, upper.InstanceId };
+        Assert.AreEqual("UI/Choices/DecisionCardDestinations",
+            DecisionPresentation.WorkspacePrefab(state.Resolution.PendingDecision, Resolve("fleaux:fievre")));
+        GameRuleResult result = DeckChoiceRules.Submit(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, new[] { "replace" }, order, Resolve, new Random(1));
+        Assert.AreNotEqual(GameRuleStatus.Rejected, result.Status, result.Error);
+        CollectionAssert.AreEqual(order, player.Deck);
+        Assert.IsEmpty(player.Inspected);
+        Assert.IsFalse(state.Resolution.PendingDecision.IsPending);
+    }
+
+    [Test]
+    public void Soldier_PreservesTheTwoChoicesThenAcceptsTheCompleteDeckOrder()
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance lower = AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        CardInstance upper = AddOwned(state, player, "base:argent", CardZone.Deck);
+        AddOwned(state, player, "base:domaine", CardZone.Deck);
+        CardInstance soldier = AddOwned(state, player, "base:soldat", CardZone.Hand);
+        GameRules.TryPlayCard(state, player.PlayerId, soldier.InstanceId, Resolve, new Random(1));
+        Assert.AreEqual("choose_cards", state.Resolution.PendingDecision.Operation);
+        GameRules.TrySubmitDecision(state, player.PlayerId, state.Resolution.PendingDecision.DecisionId,
+            new int[0], Resolve, new Random(1));
+        Assert.AreEqual("choose_cards", state.Resolution.PendingDecision.Operation);
+        GameRules.TrySubmitDecision(state, player.PlayerId, state.Resolution.PendingDecision.DecisionId,
+            new int[0], Resolve, new Random(1));
+        Assert.AreEqual("move_all_ordered|deck", state.Resolution.PendingDecision.Operation);
+        int[] order = new[] { upper.InstanceId, lower.InstanceId };
+        GameRuleResult result = GameRules.TrySubmitDecision(state, player.PlayerId,
+            state.Resolution.PendingDecision.DecisionId, order, Resolve, new Random(1));
+        Assert.AreNotEqual(GameRuleStatus.Rejected, result.Status, result.Error);
+        CollectionAssert.AreEqual(order, player.Deck);
+        Assert.IsEmpty(player.Inspected);
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    public void WholeGroupChoice_RejectsIncompleteDuplicateOrForeignOrders(int invalidKind)
+    {
+        GameStateSnapshot state = NewState(out PlayerStateSnapshot player);
+        CardInstance lower = AddOwned(state, player, "base:cuivre", CardZone.Deck);
+        CardInstance upper = AddOwned(state, player, "base:argent", CardZone.Deck);
+        CardInstance fever = AddOwned(state, player, "fleaux:fievre", CardZone.Hand);
+        GameRules.TryPlayCard(state, player.PlayerId, fever.InstanceId, Resolve, new Random(1));
+        string decisionId = state.Resolution.PendingDecision.DecisionId;
+        int[] invalid = invalidKind == 0 ? new[] { lower.InstanceId }
+            : invalidKind == 1 ? new[] { lower.InstanceId, lower.InstanceId }
+            : new[] { lower.InstanceId, fever.InstanceId };
+        GameRuleResult result = DeckChoiceRules.Submit(state, player.PlayerId, decisionId,
+            new[] { "replace" }, invalid, Resolve, new Random(1));
+        Assert.AreEqual(GameRuleStatus.Rejected, result.Status);
+        Assert.AreEqual(decisionId, state.Resolution.PendingDecision.DecisionId);
+        CollectionAssert.AreEquivalent(new[] { lower.InstanceId, upper.InstanceId }, player.Inspected);
+    }
+
     [Test]
     public void Cemetery_SnapshotsTrashedThisTurnAsItsPermanentVictoryBonusWhenGained()
     {

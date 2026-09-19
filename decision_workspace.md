@@ -2,7 +2,7 @@
 
 Les chemins ci-dessous partent du projet Unity `Dominion/`.
 
-## Un prefab par famille de demande
+## Un prefab par structure, pas par libellé
 
 Tous ces prefabs sont dans `Assets/Resources/UI/Choices/`. Les fenêtres détaillées sont indépendantes : modifier leurs ancres, tailles ou grilles ne modifie pas les autres familles. Elles utilisent le même script de comportement `DecisionWorkspaceView` et les mêmes vignettes, remplaçables via ses champs Card Prefab et Option Prefab.
 
@@ -10,17 +10,18 @@ Tous ces prefabs sont dans `Assets/Resources/UI/Choices/`. Les fenêtres détail
 |---|---|
 | Sélectionner une ou plusieurs cartes de la main | `DecisionInstructionBar.prefab` + cartes de la main existantes |
 | Sélectionner des cartes de la défausse, des cartes regardées, de l'Écart… | `DecisionCardSelection.prefab` |
-| Choisir un effet sur les cartes montrées, par exemple défausser ou replacer | `DecisionCardEffectChoice.prefab` |
-| Choisir une seule option sans cartes concernées | `DecisionSingleOption.prefab` |
-| Choisir plusieurs options, avec ou sans cartes concernées | `DecisionMultipleOptions.prefab` |
-| Choisir l'ordre des cartes à replacer sur le deck | `DecisionDeckOrder.prefab` |
+| Tout défausser ou ordonner sur le deck (Alchimiste, Fièvre) | `DecisionCardDestinations.prefab` |
+| Autres options sur les cartes montrées | `DecisionCardSelection.prefab` |
+| Choisir une seule option sans cartes concernées | `DecisionCardSelection.prefab` |
+| Choisir plusieurs options, avec ou sans cartes concernées | `DecisionCardSelection.prefab` |
+| Choisir l'ordre des cartes à replacer sur le deck | `DecisionCardDestinations.prefab` |
 | Choisir une pile dans la Réserve | `DecisionInstructionBar.prefab` + piles existantes |
 | Choisir une position dans le deck | `DeckPositionDecision.prefab` dans `PendingDecisionPanel.prefab` |
 | Nommer une carte | `CardNameDecision.prefab` dans `PendingDecisionPanel.prefab` |
 
 `DecisionPresentation.WorkspacePrefab()` choisit la famille à partir de l'opération et des données de décision, jamais du texte de la consigne. Le contrôleur charge chaque fenêtre à la demande et masque/vide la précédente. Les tailles ne sont pas réécrites en C#.
 
-Les cinq fenêtres détaillées sont indépendantes. Dans le tableau de réglages ci-dessous, utilisez le prefab de la famille souhaitée. Le nombre de cartes sélectionnables reste une règle de jeu, pas une valeur à changer dans un prefab.
+Deux structures sont conservées : le panneau générique et le panneau de destinations. Les titres, options, compteurs et consignes viennent du contexte ; les choix simples et multiples partagent le même prefab. Dans le tableau de réglages ci-dessous, utilisez le prefab de la famille souhaitée. Le nombre de cartes sélectionnables reste une règle de jeu, pas une valeur à changer dans un prefab.
 
 Les anciens modèles inutilisés `DecisionWorkspace`, `DecisionHandSelection` et `DecisionSupplyChoice` ont été supprimés. La main et la Réserve partagent un seul petit bandeau en haut, sans panneau latéral de source. La consigne conserve les contraintes de l’effet.
 
@@ -79,11 +80,15 @@ Tous les scripts ci-dessous sont dans `Assets/Scripts/HUD/`.
 
 Une destination n'est nommée Écart, Défausse ou Deck que si l'opération est reconnue. Sinon elle reste « Sélection », sans promettre un déplacement que le moteur ne permet pas.
 
-## Important : Soldat et effets en plusieurs étapes
+## Destinations et ordre du deck
 
-Le moteur conserve l'ordre **écarter → résoudre les réactions → défausser → résoudre les réactions → réordonner**. Le même espace visuel présente chaque décision successivement. Il ne s'agit pas encore d'un tri simultané dans trois piles avec une seule confirmation.
+Alchimiste / Fièvre : le panneau présente les cartes concernées, une zone Défausse et une zone Deck. Glisser une carte dans Défausse déplace visuellement tout le groupe. Glisser les cartes dans Deck permet de les ordonner ; toutes doivent y figurer avant validation. Glisser une carte vers la gauche ou la droite de ses voisines change sa place. Le bouton Réinitialiser annule le brouillon.
 
-Pour remettre plusieurs cartes sur le deck, le moteur demande la prochaine carte à déplacer. Les cartes suivantes se placent au-dessus : choisir d'abord celle qui doit finir plus bas. La dernière restante est déplacée automatiquement selon les règles existantes. La consigne du Soldat précise cet ordre.
+**Gauche = plus bas dans le deck ; droite = dessus du deck, donc prochaine carte piochée.** La rangée du deck reste horizontale et défilable. Dimensions, ancres et grille se règlent dans `DecisionCardDestinations.prefab` ; le code ne recrée pas sa mise en page.
+
+La reconnaissance des deux destinations repose sur deux effets déclaratifs consécutifs `move_all_ordered` depuis `inspected`, conditionnés par les deux options, et non sur le nom de la carte ou son texte. Le client envoie l’option et l’ordre complet au Master en une commande. Le Master valide les cartes, la décision et la continuation, puis publie un seul état. Une commande invalide n’est pas publiée.
+
+Pour le Soldat, les étapes **écarter → réactions → défausser → réactions → ordonner le deck** restent distinctes. Les deux premières utilisent le panneau générique avec la destination correspondante. La dernière utilise la rangée ordonnable et une seule validation pour l’ordre complet. Cela préserve les réactions qui peuvent modifier les cartes entre deux étapes.
 
 Une reconnexion ou une pause autoritaire peut effacer le brouillon local ; elle ne valide pas les déplacements. La décision durable reste dans l'état réseau. Seules les cartes candidates et, pour certaines options, la carte de l'événement du joueur local sont montrées ; pas de dévoilement automatique de la main adverse.
 
@@ -95,7 +100,8 @@ Tests EditMode ajoutés : `Assets/Editor/Tests/DecisionWorkspaceTests.cs` (prés
 
 1. Soldat : écarter zéro, une ou deux cartes ; déplacer une carte puis la ramener ; poursuivre vers Défausse et Deck.
 2. Chapelle / Cave : sélectionner directement dans la main, dépasser la limite, désélectionner et passer quand autorisé.
-3. Mine : remplacer une sélection unique puis choisir la pile sur le plateau.
+3. Alchimiste / Fièvre : déposer une carte dans Défausse déplace tout le groupe ; Deck exige toutes les cartes ; inverser l’ordre puis confirmer ; vérifier la prochaine pioche.
+4. Mine : remplacer une sélection unique puis choisir la pile sur le plateau.
 4. Sac d'ossements / Phylactère : vérifier l'Artefact source, la carte concernée et le dépôt sur l'option.
 5. Pion / Intendant : vérifier les boutons larges sans carte de prévisualisation.
 6. Main volumineuse : sélection sur les cartes réelles ; défausse volumineuse : molette et glisser-déposer dans la fenêtre.

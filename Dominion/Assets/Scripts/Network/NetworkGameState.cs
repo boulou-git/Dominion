@@ -271,13 +271,15 @@ public static class NetworkGameState
     }
 
     public static bool TrySubmitOptionDecision(string requesterPlayerId, string decisionId, string[] selectedOptionIds,
-        int expectedVersion, int expectedAuthorityEpoch)
+        int expectedVersion, int expectedAuthorityEpoch, int[] orderedCards = null)
     {
         if (!ValidateDecisionCommand(requesterPlayerId, decisionId, expectedVersion, expectedAuthorityEpoch)) return false;
         GameStateSnapshot next = Clone(_state);
         PendingDecisionSnapshot decision = CloneDecision(next.Resolution.PendingDecision);
         JournalRules.RecordOptionChoice(next, decision, selectedOptionIds);
-        GameRuleResult result = GameRules.TrySubmitOptionDecision(next, requesterPlayerId, decisionId, selectedOptionIds, ResolveCardDefinition, NewRandom());
+        GameRuleResult result = orderedCards == null || orderedCards.Length == 0
+            ? GameRules.TrySubmitOptionDecision(next, requesterPlayerId, decisionId, selectedOptionIds, ResolveCardDefinition, NewRandom())
+            : DeckChoiceRules.Submit(next, requesterPlayerId, decisionId, selectedOptionIds, orderedCards, ResolveCardDefinition, NewRandom());
         if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning("Rejected SubmitOptionDecision command: " + result.Error); return false; }
         JournalRules.RecordEvents(next, result.Events);
         return CompleteCleanupAfterDecision(next, result) && CommitState(next);

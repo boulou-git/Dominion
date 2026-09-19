@@ -744,8 +744,11 @@ public static class AdvancedActionRules
             return GameRuleResult.Rejected("Ordered move destination zone is invalid.", resolution.Events.SnapshotHistory());
 
         List<int> selected = resolution.TakeSelectedInstanceIds();
-        if (selected.Count != 1 || !CardZoneRules.MoveCard(player, sourceZone, destinationZone, selected[0]))
-            return GameRuleResult.Rejected("Ordered move selection could not be moved.", resolution.Events.SnapshotHistory());
+        if (selected.Count == 0)
+            return GameRuleResult.Rejected("Ordered move selection is empty.", resolution.Events.SnapshotHistory());
+        foreach (int id in selected)
+            if (!CardZoneRules.MoveCard(player, sourceZone, destinationZone, id))
+                return GameRuleResult.Rejected("Ordered move selection could not be moved.", resolution.Events.SnapshotHistory());
 
         return ContinueMoveAllOrdered(player, resolution, sourceZone, destinationZone, continuation.Prompt,
             continuation.SourceCardInstanceId, RestoreEvent(continuation), continuation.Timing,
@@ -780,7 +783,7 @@ public static class AdvancedActionRules
         string operation = MoveAllOrderedPrefix + destinationZone.ToString().ToLowerInvariant();
         if (!resolution.TrySuspendForDecision(player.PlayerId, operation, sourceZone.ToString().ToLowerInvariant(),
             string.IsNullOrWhiteSpace(prompt) ? "Choisissez la prochaine carte à déplacer." : prompt,
-            sourceCardInstanceId, 1, 1, source, triggerEvent, timing, listenerCardInstanceId,
+            sourceCardInstanceId, 1, source.Count, source, triggerEvent, timing, listenerCardInstanceId,
             abilityIndex, effectIndex, out string error))
             return GameRuleResult.Rejected(error, resolution.Events.SnapshotHistory());
 
