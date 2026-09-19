@@ -10,7 +10,7 @@ using UnityEngine.UI;
 public sealed class PendingDecisionController : MonoBehaviour
 {
     private const string PanelPrefabResourcePath = "UI/PendingDecisionPanel";
-    private const string InstructionBarPrefabResourcePath = "UI/DecisionSupplyChoice";
+    private const string InstructionBarPrefabResourcePath = "UI/DecisionInstructionBar";
     private const string CardDrawerPrefabResourcePath = "UI/DecisionCardDrawer";
     private const string OptionPrefabResourcePath = "UI/DecisionOption";
     private const string DeckPositionPrefabResourcePath = "UI/DeckPositionDecision";
@@ -112,10 +112,12 @@ public sealed class PendingDecisionController : MonoBehaviour
         SelectWorkspace(DecisionPresentation.WorkspacePrefab(decision));
         _usingWorkspace = _workspace != null && !supplyChoice && !deckPositionChoice && !cardNameChoice;
         if (_workspace != null) _workspace.gameObject.SetActive(_usingWorkspace);
+        bool directBoardChoice = supplyChoice || string.Equals(decision.Zone, "hand", StringComparison.OrdinalIgnoreCase);
         if (_sourceContext != null)
         {
-            _sourceContext.gameObject.SetActive(!_usingWorkspace);
-            if (!_usingWorkspace)
+            bool showSourceContext = !_usingWorkspace && !directBoardChoice;
+            _sourceContext.gameObject.SetActive(showSourceContext);
+            if (showSourceContext)
             {
                 _sourceContext.Bind(state, decision);
                 _sourceContext.transform.SetAsLastSibling();
@@ -138,7 +140,10 @@ public sealed class PendingDecisionController : MonoBehaviour
         CardZone choiceZone = ResolveDecisionZone(decision);
         ConfigurePanel(choiceZone, supplyChoice, optionChoice, deckPositionChoice, cardNameChoice, hasCardPreview, newDecision);
         if (_promptText != null)
-            _promptText.text = string.IsNullOrWhiteSpace(decision.Prompt) ? "Faites un choix." : decision.Prompt;
+            _promptText.text = !string.IsNullOrWhiteSpace(decision.Prompt) ? decision.Prompt
+                : supplyChoice ? "Sélectionnez une carte de la Réserve."
+                : choiceZone == CardZone.Hand ? "Sélectionnez une carte de votre main."
+                : "Faites un choix.";
 
         if (optionChoice)
         {

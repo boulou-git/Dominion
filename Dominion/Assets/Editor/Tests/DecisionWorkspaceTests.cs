@@ -7,7 +7,9 @@ using UnityEngine.UI;
 
 public sealed class DecisionWorkspaceTests
 {
-    [TestCase("hand", "choose_cards", 1, false, "UI/DecisionHandSelection")]
+    [TestCase("hand", "choose_cards", 1, false, null)]
+    [TestCase("hand", "choose_cards", 4, false, null)]
+    [TestCase("hand", "move_all_ordered|deck", 1, false, null)]
     [TestCase("discard", "choose_cards", 3, false, "UI/DecisionCardSelection")]
     [TestCase("inspected", "move_all_ordered|deck", 1, false, "UI/DecisionDeckOrder")]
     [TestCase("options", "choose_options", 1, true, "UI/DecisionCardEffectChoice")]

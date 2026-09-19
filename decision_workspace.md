@@ -4,28 +4,30 @@ Les chemins ci-dessous partent du projet Unity `Dominion/`.
 
 ## Un prefab par famille de demande
 
-Tous ces prefabs sont dans `Assets/Resources/UI/`. Les six fenêtres sont indépendantes : modifier leurs ancres, tailles ou grilles ne modifie pas les autres familles. Elles utilisent le même script de comportement `DecisionWorkspaceView` et les mêmes vignettes, remplaçables via ses champs Card Prefab et Option Prefab.
+Tous ces prefabs sont dans `Assets/Resources/UI/`. Les fenêtres détaillées sont indépendantes : modifier leurs ancres, tailles ou grilles ne modifie pas les autres familles. Elles utilisent le même script de comportement `DecisionWorkspaceView` et les mêmes vignettes, remplaçables via ses champs Card Prefab et Option Prefab.
 
 | Demande | Prefab à modifier |
 |---|---|
-| Sélectionner une ou plusieurs cartes de la main | `DecisionHandSelection.prefab` |
+| Sélectionner une ou plusieurs cartes de la main | `DecisionInstructionBar.prefab` + cartes de la main existantes |
 | Sélectionner des cartes de la défausse, des cartes regardées, de l'Écart… | `DecisionCardSelection.prefab` |
 | Choisir un effet sur les cartes montrées, par exemple défausser ou replacer | `DecisionCardEffectChoice.prefab` |
 | Choisir une seule option sans cartes concernées | `DecisionSingleOption.prefab` |
 | Choisir plusieurs options, avec ou sans cartes concernées | `DecisionMultipleOptions.prefab` |
 | Choisir l'ordre des cartes à replacer sur le deck | `DecisionDeckOrder.prefab` |
-| Choisir une pile dans la Réserve | `DecisionSupplyChoice.prefab` + piles existantes + `DecisionSourceContext.prefab` |
+| Choisir une pile dans la Réserve | `DecisionInstructionBar.prefab` + piles existantes |
 | Choisir une position dans le deck | `DeckPositionDecision.prefab` dans `PendingDecisionPanel.prefab` |
 | Nommer une carte | `CardNameDecision.prefab` dans `PendingDecisionPanel.prefab` |
 
 `DecisionPresentation.WorkspacePrefab()` choisit la famille à partir de l'opération et des données de décision, jamais du texte de la consigne. Le contrôleur charge chaque fenêtre à la demande et masque/vide la précédente. Les tailles ne sont pas réécrites en C#.
 
-`DecisionWorkspace.prefab` reste le modèle de référence initial ; modifier ce fichier ne change pas les six fenêtres indépendantes. Dans le tableau de réglages ci-dessous, remplacer `DecisionWorkspace.prefab` par le prefab de la famille souhaitée. Le nombre de cartes sélectionnables reste une règle de jeu, pas une valeur à changer dans un prefab.
+`DecisionWorkspace.prefab` reste le modèle de référence initial ; modifier ce fichier ne change pas les fenêtres indépendantes. Dans le tableau de réglages ci-dessous, remplacer `DecisionWorkspace.prefab` par le prefab de la famille souhaitée. Le nombre de cartes sélectionnables reste une règle de jeu, pas une valeur à changer dans un prefab.
+
+`DecisionHandSelection.prefab` et `DecisionSupplyChoice.prefab` sont conservés comme anciens modèles mais ne sont plus chargés. La main et la Réserve partagent un seul petit bandeau en haut, sans panneau latéral de source. La consigne conserve les contraintes de l’effet.
 
 ## Comportement
 
-- Les choix de cartes et d'options génériques s'affichent dans le prefab de leur famille.
-- L'origine de l'effet reste visible : priorité à l'Artefact ou la Réaction qui écoute l'événement, sinon à la carte source.
+- Main / Réserve : cliquez directement sur les cartes candidates du plateau, puis validez dans le bandeau. Les autres choix utilisent leur fenêtre dédiée.
+- Dans les fenêtres détaillées, l'origine de l'effet reste visible : priorité à l'Artefact ou la Réaction qui écoute l'événement, sinon à la carte source.
 - Clic sur une carte : ajout/retrait de la sélection. À une seule sélection, une nouvelle carte remplace l'ancienne.
 - Glisser une carte vers la destination : sélection. La ramener dans les cartes disponibles : désélection.
 - Le survol d'une destination valide la met en évidence ; un dépôt invalide ramène la carte à son emplacement.
@@ -34,7 +36,7 @@ Tous ces prefabs sont dans `Assets/Resources/UI/`. Les six fenêtres sont indép
 - Confirmer devient Passer quand zéro sélection est autorisé ; un choix obligatoire ne peut pas être ignoré.
 - Avec une seule carte concernée et une seule option autorisée, on peut glisser la carte sur un bouton d'option.
 - Sans carte concernée, les options occupent toute la largeur disponible.
-- Les piles de la Réserve restent sélectionnables sur le plateau ; un panneau latéral rappelle la source.
+- La main et les piles de la Réserve restent visibles et sélectionnables sur le plateau, avec les surbrillances existantes.
 - La recherche d'un nom de carte et le curseur de position dans le deck conservent leurs contrôles spécialisés.
 - Le menu Échap reste indépendant. Les anciennes interactions du plateau restent bloquées.
 
@@ -57,7 +59,8 @@ Tous ces prefabs sont dans `Assets/Resources/UI/`. Les six fenêtres sont indép
 | Apparence d'une option | `DecisionWorkspaceOption.prefab` → Image, Button, Label, Selected, DecisionDropZone |
 | Marque de sélection | Les enfants `Selected` des deux prefabs précédents |
 | Boutons de validation et remise à zéro | `DecisionWorkspace.prefab` → `Panel/Confirm`, `Panel/Reset` |
-| Source affichée pendant un choix dans la Réserve | `DecisionSourceContext.prefab` |
+| Position et taille du bandeau main / Réserve | `DecisionInstructionBar.prefab` → RectTransform racine |
+| Consigne, compteur et validation du bandeau | `DecisionInstructionBar.prefab` → Prompt, Count, ConfirmDecision |
 
 Les grilles, ScrollRect, masques, textes et boutons sont enregistrés dans les prefabs ; le C# ne reconstruit pas leur mise en page et ne réécrit pas leur Cell Size.
 
@@ -91,11 +94,11 @@ Tests EditMode ajoutés : `Assets/Editor/Tests/DecisionWorkspaceTests.cs` (prés
 À tester en Play Mode, idéalement à 1280×720 et 1920×1080 :
 
 1. Soldat : écarter zéro, une ou deux cartes ; déplacer une carte puis la ramener ; poursuivre vers Défausse et Deck.
-2. Chapelle / Cave : dépasser la limite, réinitialiser et passer quand autorisé.
+2. Chapelle / Cave : sélectionner directement dans la main, dépasser la limite, désélectionner et passer quand autorisé.
 3. Mine : remplacer une sélection unique puis choisir la pile sur le plateau.
 4. Sac d'ossements / Phylactère : vérifier l'Artefact source, la carte concernée et le dépôt sur l'option.
 5. Pion / Intendant : vérifier les boutons larges sans carte de prévisualisation.
-6. Main ou défausse volumineuse : molette dans chaque zone, dépôt sur un espace vide et sur une autre carte.
+6. Main volumineuse : sélection sur les cartes réelles ; défausse volumineuse : molette et glisser-déposer dans la fenêtre.
 7. Déposer hors zone : la carte doit revenir, sans changer la sélection.
 8. Échap pendant un choix ; pause/reprise ; reconnexion ; décision d'un autre joueur.
 9. Cliquer deux fois sur Confirmer : aucun second envoi ni interaction pendant l'attente.

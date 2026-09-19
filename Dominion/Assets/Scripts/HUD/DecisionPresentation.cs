@@ -14,7 +14,8 @@ public static class DecisionPresentation
     {
         if (decision == null) return null;
         string op = decision.Operation ?? string.Empty;
-        if (string.Equals(decision.Zone, "supply", StringComparison.OrdinalIgnoreCase)) return null;
+        if (string.Equals(decision.Zone, "supply", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(decision.Zone, "hand", StringComparison.OrdinalIgnoreCase)) return null;
         if (string.Equals(decision.Zone, "options", StringComparison.OrdinalIgnoreCase))
         {
             if (op.StartsWith("insert_selected_into_deck|", StringComparison.OrdinalIgnoreCase) ||
@@ -23,8 +24,7 @@ public static class DecisionPresentation
             return HasOptionPreview(decision) ? "UI/DecisionCardEffectChoice" : "UI/DecisionSingleOption";
         }
         if (op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase)) return "UI/DecisionDeckOrder";
-        return string.Equals(decision.Zone, "hand", StringComparison.OrdinalIgnoreCase)
-            ? "UI/DecisionHandSelection" : "UI/DecisionCardSelection";
+        return "UI/DecisionCardSelection";
     }
 
     public static int SourceId(PendingDecisionSnapshot decision) =>
