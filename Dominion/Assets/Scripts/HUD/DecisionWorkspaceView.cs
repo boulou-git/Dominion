@@ -79,6 +79,9 @@ public sealed class DecisionWorkspaceView : MonoBehaviour
             tile.transform.Find("Label").GetComponent<Text>().text = def.name;
             var drag = tile.GetComponent<DecisionDragCard>();
             drag.Bind(this, decision.DecisionId, id, () => { });
+            var halo = tile.GetComponent<CardSelectionHalo>();
+            if (halo == null) halo = tile.AddComponent<CardSelectionHalo>();
+            halo.SetState(CardSelectionHalo.HighlightState.Candidate);
             _cards.Add(id, drag);
         }
         ResetDraft();
@@ -154,6 +157,11 @@ public sealed class DecisionWorkspaceView : MonoBehaviour
             if (pair.Value.transform.parent != DragLayer)
                 pair.Value.transform.SetParent(_trash.Contains(pair.Key) ? _trashRoot : _discarded.Contains(pair.Key) ? _discardRoot : _deckRoot, false);
             pair.Value.transform.Find("Selected").gameObject.SetActive(false);
+            CardSelectionHalo halo = pair.Value.GetComponent<CardSelectionHalo>();
+            if (halo == null) halo = pair.Value.gameObject.AddComponent<CardSelectionHalo>();
+            bool destructive = _trash.Contains(pair.Key) || _discarded.Contains(pair.Key);
+            halo.SetState(destructive ? CardSelectionHalo.HighlightState.Destructive
+                : CardSelectionHalo.HighlightState.Candidate);
         }
         for (int i = 0; i < _deck.Count; i++)
             if (_cards.TryGetValue(_deck[i], out DecisionDragCard card) && card.transform.parent == _deckRoot) card.transform.SetSiblingIndex(i);

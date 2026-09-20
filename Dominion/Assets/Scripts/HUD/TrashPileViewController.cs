@@ -34,6 +34,7 @@ public sealed class TrashPileViewController : MonoBehaviour
     private Action<int> _decisionCardAction;
     private Color _normalButtonColor;
     private bool _hasNormalButtonColor;
+    private CardSelectionHalo _decisionButtonHalo;
 
     public Transform DecisionRoot => transform.Find("TrashPileUi");
 
@@ -104,6 +105,9 @@ public sealed class TrashPileViewController : MonoBehaviour
         }
 
         _openButton.onClick.AddListener(Open);
+        _decisionButtonHalo = _openButton.GetComponent<CardSelectionHalo>();
+        if (_decisionButtonHalo == null) _decisionButtonHalo = _openButton.gameObject.AddComponent<CardSelectionHalo>();
+        _decisionButtonHalo.SetState(CardSelectionHalo.HighlightState.None);
         if (_openButton.targetGraphic != null)
         {
             _normalButtonColor = _openButton.targetGraphic.color;
@@ -215,6 +219,9 @@ public sealed class TrashPileViewController : MonoBehaviour
                 pointer.SetDecisionCandidate(candidate);
                 if (candidate)
                 {
+                    CardSelectionHalo halo = cardObject.GetComponent<CardSelectionHalo>();
+                    if (halo == null) halo = cardObject.AddComponent<CardSelectionHalo>();
+                    halo.SetState(CardSelectionHalo.HighlightState.Candidate);
                     int capturedId = instanceId;
                     pointer.PrimaryActionRequested += () => _decisionCardAction?.Invoke(capturedId);
                 }
@@ -344,7 +351,9 @@ public sealed class TrashPileViewController : MonoBehaviour
         bool active = _decisionButtonAction != null || _decisionCardAction != null;
         _openButton.interactable = active || !PendingDecisionInputLock.IsActive(NetworkGameState.State);
         if (_openButton.targetGraphic != null && _hasNormalButtonColor)
-            _openButton.targetGraphic.color = active ? new Color(0.34f, 0.62f, 0.20f, 1f) : _normalButtonColor;
+            _openButton.targetGraphic.color = _normalButtonColor;
+        _decisionButtonHalo?.SetState(active ? CardSelectionHalo.HighlightState.Candidate
+            : CardSelectionHalo.HighlightState.None);
     }
 
 }

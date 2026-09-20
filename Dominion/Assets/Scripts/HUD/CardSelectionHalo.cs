@@ -9,16 +9,27 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class CardSelectionHalo : MonoBehaviour
 {
-    private static readonly Color DefaultColor = new Color(0.32f, 0.76f, 1f, 1f);
+    public enum HighlightState { None, Candidate, Selected, Destructive }
+    private static readonly Color CandidateColor = Color.white;
+    private static readonly Color SelectedColor = new Color(0.22f, 1f, 0.36f, 1f);
+    private static readonly Color DestructiveColor = new Color(1f, 0.16f, 0.12f, 1f);
     private readonly List<Image> _segments = new List<Image>();
     private bool _built;
 
     public void SetVisible(bool visible)
     {
+        SetState(visible ? HighlightState.Selected : HighlightState.None);
+    }
+
+    public void SetState(HighlightState state)
+    {
         EnsureBuilt();
+        Color color = state == HighlightState.Candidate ? CandidateColor
+            : state == HighlightState.Destructive ? DestructiveColor : SelectedColor;
+        SetColor(color);
+        bool visible = state != HighlightState.None;
         for (int i = 0; i < _segments.Count; i++)
-            if (_segments[i] != null)
-                _segments[i].gameObject.SetActive(visible);
+            if (_segments[i] != null) _segments[i].gameObject.SetActive(visible);
     }
 
     public void SetColor(Color color)
@@ -46,7 +57,7 @@ public sealed class CardSelectionHalo : MonoBehaviour
 
     private void CreateLayer(int layer, float distance, float thickness, float alpha)
     {
-        Color color = new Color(DefaultColor.r, DefaultColor.g, DefaultColor.b, alpha);
+        Color color = new Color(CandidateColor.r, CandidateColor.g, CandidateColor.b, alpha);
         CreateSegment("HaloTop_" + layer, new Vector2(0f, 1f), new Vector2(1f, 1f),
             new Vector2(-distance - thickness, distance), new Vector2(distance + thickness, distance + thickness), color);
         CreateSegment("HaloBottom_" + layer, new Vector2(0f, 0f), new Vector2(1f, 0f),

@@ -144,6 +144,9 @@ public sealed class FleauxRemainingCardsRulesTests
 
         Assert.That(waiting.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), waiting.Error);
         Assert.That(player.Artifacts.Contains(artifact.InstanceId), Is.True);
+        Assert.That(state.Resolution.PendingDecision.AllowPass, Is.True);
+        Assert.That(DirectBoardBranchChoiceRules.TryDescribe(state.Resolution.PendingDecision,
+            Resolve("fleaux:necromancien"), out _), Is.True);
         GameRuleResult cardChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
             state.Resolution.PendingDecision.DecisionId, new[] { "hand" }, Resolve, new Random(1));
         Assert.That(cardChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), cardChoice.Error);

@@ -125,6 +125,11 @@ public sealed class CardNameDecisionView : MonoBehaviour
                 continue;
             }
             label.text = _optionLabels[index];
+            CardSelectionHalo halo = suggestion.GetComponent<CardSelectionHalo>();
+            if (halo == null) halo = suggestion.AddComponent<CardSelectionHalo>();
+            halo.SetState(string.Equals(_selectedId, _optionIds[index], StringComparison.OrdinalIgnoreCase)
+                ? CardSelectionHalo.HighlightState.Selected
+                : CardSelectionHalo.HighlightState.Candidate);
             int capturedIndex = index;
             button.onClick.AddListener(() => Select(capturedIndex));
             _suggestions.Add(suggestion);

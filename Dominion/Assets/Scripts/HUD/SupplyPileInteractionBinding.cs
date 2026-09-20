@@ -31,6 +31,7 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
     private bool _decisionActive;
     private bool _decisionCandidate;
     private bool _decisionSelected;
+    private bool _decisionDestructive;
     private Action<string> _decisionRequested;
 
     public string DefinitionId => _definitionId;
@@ -111,11 +112,13 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         RefreshAvailabilityVisual();
     }
 
-    public void SetDecisionChoice(bool active, bool candidate, bool selected, Action<string> decisionRequested)
+    public void SetDecisionChoice(bool active, bool candidate, bool selected, Action<string> decisionRequested,
+        bool destructiveSelection = false)
     {
         _decisionActive = active;
         _decisionCandidate = candidate;
         _decisionSelected = selected;
+        _decisionDestructive = destructiveSelection;
         _decisionRequested = active ? decisionRequested : null;
         if (_pointer != null) _pointer.SetDecisionCandidate(active && candidate);
         RefreshAvailabilityVisual();
@@ -150,7 +153,14 @@ public sealed class SupplyPileInteractionBinding : MonoBehaviour
         }
 
         if (_selectionHalo != null)
-            _selectionHalo.SetVisible(_decisionActive && _hasCards && _decisionCandidate && _decisionSelected);
+        {
+            CardSelectionHalo.HighlightState state = !_decisionActive || !_hasCards || !_decisionCandidate
+                ? CardSelectionHalo.HighlightState.None
+                : !_decisionSelected ? CardSelectionHalo.HighlightState.Candidate
+                : _decisionDestructive ? CardSelectionHalo.HighlightState.Destructive
+                : CardSelectionHalo.HighlightState.Selected;
+            _selectionHalo.SetState(state);
+        }
 
         if (_outline != null)
         {

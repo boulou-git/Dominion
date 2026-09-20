@@ -23,7 +23,7 @@ public static class DirectBoardBranchChoiceRules
         if (decision == null || source?.abilities == null ||
             !string.Equals(decision.Zone, "options", StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(decision.Operation, "choose_options", StringComparison.OrdinalIgnoreCase) ||
-            decision.MinSelections != 0 || decision.MaxSelections != 1 || !decision.AllowPass ||
+            decision.MinSelections != 0 || decision.MaxSelections != 1 ||
             decision.AbilityIndex < 0 || decision.AbilityIndex >= source.abilities.Count) return false;
         List<CardEffectData> effects = source.abilities[decision.AbilityIndex]?.effects;
         if (effects == null || decision.EffectIndex < 0 || decision.EffectIndex >= effects.Count) return false;

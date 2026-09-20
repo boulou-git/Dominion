@@ -306,13 +306,15 @@ public sealed class PendingDecisionController : MonoBehaviour
     {
         IEnumerable<string> candidateIds = candidateOverride ?? decision.CandidateDefinitionIds ?? new List<string>();
         HashSet<string> candidates = new HashSet<string>(candidateIds, StringComparer.OrdinalIgnoreCase);
+        ExtensionCardData source = ResolveSourceDefinition(decision);
+        bool destructive = DecisionPresentation.IsDestructiveSelection(decision, source);
         SupplyPileInteractionBinding[] bindings = GetComponentsInChildren<SupplyPileInteractionBinding>(true);
         foreach (SupplyPileInteractionBinding binding in bindings)
         {
             if (binding == null || string.IsNullOrEmpty(binding.DefinitionId)) continue;
             bool candidate = candidates.Contains(binding.DefinitionId);
             bool selected = _selectedSupply.Contains(binding.DefinitionId);
-            binding.SetDecisionChoice(true, candidate, selected, choose ?? ToggleSupplySelection);
+            binding.SetDecisionChoice(true, candidate, selected, choose ?? ToggleSupplySelection, destructive);
         }
     }
 
@@ -464,6 +466,8 @@ public sealed class PendingDecisionController : MonoBehaviour
 
             CardPointerInteraction pointer = child.GetComponent<CardPointerInteraction>();
             if (pointer != null) pointer.SetDecisionCandidate(candidate);
+            SetSelectionHalo(child.gameObject, candidate ? CardSelectionHalo.HighlightState.Candidate
+                : CardSelectionHalo.HighlightState.None);
             if (!candidate || pointer == null || _selectionHandlers.ContainsKey(pointer)) continue;
             int capturedId = instanceId;
             Action handler = () => select(capturedId);
@@ -509,6 +513,8 @@ public sealed class PendingDecisionController : MonoBehaviour
             CardPointerInteraction pointer = cardView.Pointer;
             pointer.InspectOnLongPress = false;
             pointer.SetDecisionCandidate(selectable);
+            SetSelectionHalo(card, selectable ? CardSelectionHalo.HighlightState.Candidate
+                : CardSelectionHalo.HighlightState.None);
             if (selectable)
             {
                 int capturedId = instanceId;
@@ -560,6 +566,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             text.text = label;
 
             _optionButtons[optionId] = image;
+            SetSelectionHalo(optionObject, CardSelectionHalo.HighlightState.Candidate);
             _externalCards.Add(optionObject);
         }
         RefreshOptionButtons();
@@ -632,9 +639,14 @@ public sealed class PendingDecisionController : MonoBehaviour
     private void RefreshOptionButtons()
     {
         foreach (KeyValuePair<string, Image> pair in _optionButtons)
-            if (pair.Value != null) pair.Value.color = _selectedOptions.Contains(pair.Key)
-                ? new Color(0.51f, 0.40f, 0.18f, 1f)
-                : new Color(0.25f, 0.22f, 0.15f, 1f);
+            if (pair.Value != null)
+            {
+                bool selected = _selectedOptions.Contains(pair.Key);
+                pair.Value.color = selected ? new Color(0.51f, 0.40f, 0.18f, 1f)
+                    : new Color(0.25f, 0.22f, 0.15f, 1f);
+                SetSelectionHalo(pair.Value.gameObject, selected ? CardSelectionHalo.HighlightState.Selected
+                    : CardSelectionHalo.HighlightState.Candidate);
+            }
     }
 
     private void ToggleSelection(int instanceId)
@@ -670,28 +682,40 @@ public sealed class PendingDecisionController : MonoBehaviour
             if (halo != null) halo.SetVisible(false);
         _selectionHalos.Clear();
 
+        PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
+        ExtensionCardData source = ResolveSourceDefinition(decision);
+        bool destructive = DecisionPresentation.IsDestructiveSelection(decision, source);
+        HashSet<int> candidates = new HashSet<int>(decision?.CandidateInstanceIds ?? new List<int>());
         Transform handRoot = FindHandCardsRoot();
         if (handRoot != null)
             for (int i = 0; i < handRoot.childCount; i++)
             {
                 Transform child = handRoot.GetChild(i);
                 HandCardMotion motion = child.GetComponent<HandCardMotion>();
-                if (motion != null && _selected.Contains(motion.InstanceId)) AddSelectionHalo(child.gameObject);
+                if (motion == null || !candidates.Contains(motion.InstanceId)) continue;
+                bool selected = _selected.Contains(motion.InstanceId);
+                SetSelectionHalo(child.gameObject, selected
+                    ? destructive ? CardSelectionHalo.HighlightState.Destructive : CardSelectionHalo.HighlightState.Selected
+                    : CardSelectionHalo.HighlightState.Candidate);
             }
 
         foreach (GameObject card in _externalCards)
         {
             if (card == null) continue;
             int id = ResolveExternalInstanceId(card.name);
-            if (_selected.Contains(id)) AddSelectionHalo(card);
+            if (!candidates.Contains(id)) continue;
+            bool selected = _selected.Contains(id);
+            SetSelectionHalo(card, selected
+                ? destructive ? CardSelectionHalo.HighlightState.Destructive : CardSelectionHalo.HighlightState.Selected
+                : CardSelectionHalo.HighlightState.Candidate);
         }
     }
 
-    private void AddSelectionHalo(GameObject target)
+    private void SetSelectionHalo(GameObject target, CardSelectionHalo.HighlightState state)
     {
         CardSelectionHalo halo = target.GetComponent<CardSelectionHalo>();
         if (halo == null) halo = target.AddComponent<CardSelectionHalo>();
-        halo.SetVisible(true);
+        halo.SetState(state);
         if (!_selectionHalos.Contains(halo)) _selectionHalos.Add(halo);
     }
 
@@ -1017,6 +1041,13 @@ public sealed class PendingDecisionController : MonoBehaviour
     {
         return RoomGameSetup.TryResolveCard(definitionId, out ExtensionPackageData _, out ExtensionCardData definition)
             ? definition : null;
+    }
+    private static ExtensionCardData ResolveSourceDefinition(PendingDecisionSnapshot decision)
+    {
+        if (decision == null) return null;
+        CardInstance source = NetworkGameState.FindCardInstance(NetworkGameState.State,
+            DecisionPresentation.SourceId(decision));
+        return source != null ? ResolveDefinition(source.DefinitionId) : null;
     }
     private static Transform FindDirectChild(Transform parent, string name)
     { if (parent == null) return null; for (int i = 0; i < parent.childCount; i++) { Transform child = parent.GetChild(i); if (string.Equals(child.name, name, StringComparison.Ordinal)) return child; } return null; }

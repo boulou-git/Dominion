@@ -89,6 +89,25 @@ public static class DecisionPresentation
         return "SÉLECTION";
     }
 
+    public static bool IsDestructiveSelection(PendingDecisionSnapshot decision, ExtensionCardData source)
+    {
+        if (decision == null) return false;
+        string destination = Destination(decision, source);
+        if (destination == "ÉCART" || destination == "DÉFAUSSE") return true;
+        if (source?.abilities == null || decision.AbilityIndex < 0 ||
+            decision.AbilityIndex >= source.abilities.Count) return false;
+        List<CardEffectData> effects = source.abilities[decision.AbilityIndex]?.effects;
+        if (effects == null || decision.EffectIndex < 0) return false;
+        for (int i = decision.EffectIndex + 1; i < effects.Count; i++)
+        {
+            string op = effects[i]?.op ?? string.Empty;
+            if (op == "trash_selected" || op == "trash_selected_supply" ||
+                op == "discard_selected") return true;
+            if (op.StartsWith("choose_", StringComparison.OrdinalIgnoreCase)) return false;
+        }
+        return false;
+    }
+
     public static string ZoneLabel(string zone)
     {
         switch ((zone ?? string.Empty).ToLowerInvariant())

@@ -96,13 +96,34 @@ public sealed class DecisionWorkspaceTests
             } }
         } };
         var decision = new PendingDecisionSnapshot { Zone = "options", Operation = "choose_options",
-            MinSelections = 0, MaxSelections = 1, AllowPass = true, AbilityIndex = 0, EffectIndex = 0 };
+            MinSelections = 0, MaxSelections = 1, AllowPass = false, AbilityIndex = 0, EffectIndex = 0 };
         decision.CandidateDefinitionIds.AddRange(new[] { "hand", "supply" });
 
         Assert.IsTrue(DirectBoardBranchChoiceRules.TryDescribe(decision, source, out DirectBoardBranchChoiceRules.Description branch));
         Assert.AreEqual("hand", branch.HandOptionId);
         Assert.AreEqual("supply", branch.SupplyOptionId);
         Assert.IsFalse(DecisionPresentation.IsQuickChoice(decision, source));
+    }
+
+    [Test]
+    public void DecisionHalo_UsesWhiteGreenAndRedSemanticStates()
+    {
+        var target = new GameObject("HaloTarget", typeof(RectTransform));
+        try
+        {
+            CardSelectionHalo halo = target.AddComponent<CardSelectionHalo>();
+            halo.SetState(CardSelectionHalo.HighlightState.Candidate);
+            Image segment = target.transform.Find("HaloTop_0").GetComponent<Image>();
+            Assert.IsTrue(segment.gameObject.activeSelf);
+            Assert.That(segment.color.r, Is.EqualTo(1f).Within(0.01f));
+            Assert.That(segment.color.g, Is.EqualTo(1f).Within(0.01f));
+
+            halo.SetState(CardSelectionHalo.HighlightState.Selected);
+            Assert.Greater(segment.color.g, segment.color.r);
+            halo.SetState(CardSelectionHalo.HighlightState.Destructive);
+            Assert.Greater(segment.color.r, segment.color.g);
+        }
+        finally { Object.DestroyImmediate(target); }
     }
 
     [Test]

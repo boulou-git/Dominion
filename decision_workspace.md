@@ -28,6 +28,17 @@ Pour le Vassal, les boutons sont **Jouer** et **Laisser en défausse** : la cart
 
 Les réponses immédiates bloquent les boutons dès l’envoi. Pour plusieurs cartes/options, le compteur et le bouton Valider suivent les limites imposées par le moteur. Le bouton affiche Passer si zéro sélection est autorisé. Les options sélectionnées ont une coche, un libellé gras et un fond vert visibles. Les listes sont défilables, à la molette ou en faisant glisser leur contenu.
 
+### Code couleur des interactions
+
+| État | Présentation |
+|---|---|
+| Carte non achetable | Artwork légèrement assombri, comme auparavant |
+| Carte, pile ou bouton admissible pendant un choix | Halo lumineux blanc |
+| Carte ou option actuellement sélectionnée | Halo vert |
+| Carte sélectionnée pour être écartée ou défaussée | Halo rouge |
+
+Ces couleurs sont centralisées dans `CardSelectionHalo.HighlightState`. Elles s’appliquent aux cartes de la main, piles de la Réserve, cartes affichées dans les panneaux, options, suggestions de nom de carte, Écart et espaces de glisser-déposer. Le halo indique l’interaction sans recolorer l’illustration de la carte.
+
 ## Soldat : une seule validation
 
 Les trois zones sont dans cet ordre : **Défausse à gauche · Deck au centre · Écart à droite**. Toutes les cartes commencent sur le deck. Leur ordre initial conserve l’ordre de pioche : **gauche = plus bas ; droite = dessus, donc prochaine carte piochée**.
@@ -79,6 +90,7 @@ Les ancres, grilles et mises en page sont enregistrées dans les prefabs. Le cod
 |---|---|
 | `HUD/DecisionPresentation.cs` | Choix de la présentation selon l’opération |
 | `HUD/DecisionQuickChoiceView.cs` | Boutons immédiats et sélections multiples compactes |
+| `HUD/CardSelectionHalo.cs` | Palette blanche / verte / rouge commune à tous les choix |
 | `HUD/DecisionWorkspaceView.cs` | Brouillon des destinations et ordre visuel |
 | `HUD/DecisionDragCard.cs`, `DecisionDropZone.cs` | Clic, glisser-déposer, survol |
 | `HUD/PendingDecisionController.cs` | Liaison des vues, blocage des autres interactions et soumission |

@@ -21,6 +21,7 @@ public sealed class DecisionQuickChoiceView : MonoBehaviour
     private readonly Dictionary<int, GameObject> _cardTiles = new Dictionary<int, GameObject>();
     private readonly Dictionary<string, GameObject> _optionTiles = new Dictionary<string, GameObject>();
     private readonly Dictionary<string, string> _optionLabels = new Dictionary<string, string>();
+    private bool _destructive;
 
     private bool CanAnswer()
     {
@@ -36,6 +37,7 @@ public sealed class DecisionQuickChoiceView : MonoBehaviour
         Action<int[], string[]> answer)
     {
         Clear(); _decision = decision; _busy = false;
+        _destructive = DecisionPresentation.IsDestructiveSelection(decision, source);
         bool optionChoice = decision.Zone == "options";
         string action = DecisionPresentation.QuickCardAction(decision, source);
         _draft = decision.MaxSelections > 1;
@@ -66,6 +68,7 @@ public sealed class DecisionQuickChoiceView : MonoBehaviour
             art.sprite = ExtensionVisualLoader.LoadCardArtwork(extension, definition); art.enabled = art.sprite != null;
             tile.transform.Find("Label").GetComponent<Text>().text = definition.name;
             tile.transform.Find("Selected").gameObject.SetActive(false);
+            SetHalo(tile, CardSelectionHalo.HighlightState.Candidate);
             _items.Add(tile);
         }
         transform.Find("Panel/Available/Title").GetComponent<Text>().text = previews.Count > 1 ? "CARTES CONCERNÉES" : "CARTE CONCERNÉE";
@@ -118,6 +121,7 @@ public sealed class DecisionQuickChoiceView : MonoBehaviour
         GameObject option = Instantiate(_optionPrefab, _optionRoot, false);
         option.transform.Find("Label").GetComponent<Text>().text = label;
         option.transform.Find("Selected").gameObject.SetActive(false);
+        SetHalo(option, CardSelectionHalo.HighlightState.Candidate);
         option.GetComponent<DecisionDropZone>().enabled = false;
         Button button = option.GetComponent<Button>();
         button.onClick.AddListener(() =>
@@ -134,7 +138,14 @@ public sealed class DecisionQuickChoiceView : MonoBehaviour
     {
         if (!_draft || _decision == null) return;
         int count = _decision.Zone == "options" ? _selectedOptions.Count : _selectedCards.Count;
-        foreach (var pair in _cardTiles) pair.Value.transform.Find("Selected").gameObject.SetActive(_selectedCards.Contains(pair.Key));
+        foreach (var pair in _cardTiles)
+        {
+            bool selected = _selectedCards.Contains(pair.Key);
+            pair.Value.transform.Find("Selected").gameObject.SetActive(selected);
+            SetHalo(pair.Value, selected
+                ? _destructive ? CardSelectionHalo.HighlightState.Destructive : CardSelectionHalo.HighlightState.Selected
+                : CardSelectionHalo.HighlightState.Candidate);
+        }
         foreach (var pair in _optionTiles)
         {
             bool selected = _selectedOptions.Contains(pair.Key);
@@ -146,6 +157,8 @@ public sealed class DecisionQuickChoiceView : MonoBehaviour
             Text label = pair.Value.transform.Find("Label").GetComponent<Text>();
             label.text = (selected ? "✓  " : string.Empty) + _optionLabels[pair.Key];
             label.fontStyle = selected ? FontStyle.Bold : FontStyle.Normal;
+            SetHalo(pair.Value, selected ? CardSelectionHalo.HighlightState.Selected
+                : CardSelectionHalo.HighlightState.Candidate);
         }
         if (_confirm != null)
         {
@@ -168,5 +181,12 @@ public sealed class DecisionQuickChoiceView : MonoBehaviour
         foreach (GameObject item in _items) if (item != null) { item.SetActive(false); Destroy(item); }
         _items.Clear(); _buttons.Clear(); _cardTiles.Clear(); _optionTiles.Clear(); _optionLabels.Clear();
         _selectedCards.Clear(); _selectedOptions.Clear(); _confirm = null; _decision = null;
+    }
+
+    private static void SetHalo(GameObject target, CardSelectionHalo.HighlightState state)
+    {
+        CardSelectionHalo halo = target.GetComponent<CardSelectionHalo>();
+        if (halo == null) halo = target.AddComponent<CardSelectionHalo>();
+        halo.SetState(state);
     }
 }

@@ -314,6 +314,7 @@ public static class EffectResolver
         if (!c.Resolution.TrySuspendForOptionDecision(c.Actor.PlayerId, "choose_options", e.prompt, c.SourceCardInstanceId,
                 min, max, ids, labels, c.TriggerEvent, c.Timing, c.ListenerCardInstanceId, c.AbilityIndex, c.EffectIndex, out string err))
             return EffectResolutionResult.Rejected(err);
+        c.Resolution.PendingDecision.AllowPass = e.allowPass || min == 0;
 
         // An option immediately following inspect_top_cards must show the privately
         // inspected cards before the player chooses what to do with them.
