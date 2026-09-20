@@ -25,8 +25,6 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
     private RectTransform _artifactStackRoot;
     private RectTransform _discardPanel;
     private GameObject _discardTopObject;
-    private GameObject _zoomOverlay;
-    private Image _zoomImage;
     private Button _nextPhaseButton;
     private GameScreenController _screenController;
     private GameObject _artifactTilePrefab;
@@ -150,14 +148,6 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
         Transform discard = FindDeepChild(transform, "Discard");
         if (discard is RectTransform discardRect)
             _discardPanel = discardRect;
-
-        Transform zoom = FindDeepChild(transform, "CardZoomOverlay");
-        if (zoom != null)
-        {
-            _zoomOverlay = zoom.gameObject;
-            Transform card = FindDirectChild(zoom, "Card");
-            _zoomImage = card != null ? card.GetComponent<Image>() : null;
-        }
 
         Transform nextPhase = FindDeepChild(transform, "NextPhaseButton");
         if (nextPhase != null)
@@ -721,18 +711,7 @@ public sealed class BuyPhaseGameplayController : MonoBehaviour
 
     private void ShowZoom(Sprite sprite, ExtensionCardData definition, bool showCost = true)
     {
-        if (PendingDecisionInputLock.IsActive(NetworkGameState.State) ||
-            _zoomOverlay == null || _zoomImage == null || sprite == null)
-            return;
-
-        _zoomImage.sprite = sprite;
-        _zoomImage.preserveAspect = true;
-        DynamicCardCostView costView = DynamicCardCostView.Attach(_zoomImage.gameObject,
-            showCost ? definition : null);
-        if (costView != null)
-            costView.Bind(showCost ? definition : null);
-        _zoomOverlay.SetActive(true);
-        _zoomOverlay.transform.SetAsLastSibling();
+        _screenController?.ShowCardZoom(sprite, definition, showCost);
     }
 
     private void HandleBoardPlayerChanged()

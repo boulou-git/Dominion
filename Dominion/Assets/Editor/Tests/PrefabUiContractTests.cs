@@ -236,11 +236,6 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(playerTab.transform.Find("ActiveIndicator")?.GetComponent<Image>());
         Assert.NotNull(playerTab.transform.Find("ViewedIndicator")?.GetComponent<Image>());
 
-        GameObject followToggle = Load("Board/FollowActivePlayerToggle");
-        Assert.NotNull(followToggle.GetComponent<Toggle>());
-        Assert.NotNull(followToggle.transform.Find("Box/Checkmark")?.GetComponent<Image>());
-        Assert.NotNull(followToggle.transform.Find("Label")?.GetComponent<Text>());
-
         GameObject artifact = Load("Board/ArtifactTile");
         Assert.NotNull(artifact.GetComponent<Button>());
         Assert.NotNull(artifact.GetComponent<LayoutElement>());
@@ -249,6 +244,41 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(artifact.transform.Find("Label")?.GetComponent<Text>());
         RectTransform artifactRect = artifact.GetComponent<RectTransform>();
         Assert.AreEqual(3f, artifactRect.sizeDelta.x / artifactRect.sizeDelta.y, 0.01f);
+    }
+
+    [Test]
+    public void GameScreen_OwnsOneCardZoomAndNoDetachedInlineDuplicatesRemain()
+    {
+        GameObject gameScreen = Load("Board/GameScreen");
+        Assert.AreEqual(1, gameScreen.GetComponents<GameScreenController>().Length);
+        Assert.AreEqual(1, gameScreen.GetComponents<ReserveExtrasController>().Length);
+        Assert.AreEqual(1, gameScreen.GetComponents<PublicJournalView>().Length);
+        Assert.AreEqual(1, gameScreen.GetComponentsInChildren<AdaptiveCardZoomView>(true).Length);
+
+        SerializedObject screen = new SerializedObject(gameScreen.GetComponent<GameScreenController>());
+        Assert.NotNull(screen.FindProperty("_zoomOverlay"));
+        Assert.NotNull(screen.FindProperty("_zoomImage"));
+
+        SerializedObject extras = new SerializedObject(gameScreen.GetComponent<ReserveExtrasController>());
+        Assert.IsNull(extras.FindProperty("_zoomOverlay"));
+        Assert.IsNull(extras.FindProperty("_zoomImage"));
+
+        Assert.IsNull(AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Resources/UI/Board/FollowActivePlayerToggle.prefab"));
+        Assert.IsNull(AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Resources/UI/Board/JournalEntry.prefab"));
+        Assert.IsNull(AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Resources/UI/Lobby/KingdomRevealScreen.prefab"));
+    }
+
+    [Test]
+    public void LobbyScrollSensitivity_IsAuthoredInThePrefab()
+    {
+        GameObject lobby = Load("Lobby/LobbySetupScreen");
+        ScrollRect[] scrollRects = lobby.GetComponentsInChildren<ScrollRect>(true);
+        Assert.Greater(scrollRects.Length, 0);
+        foreach (ScrollRect scrollRect in scrollRects)
+            Assert.AreEqual(45f, scrollRect.scrollSensitivity, 0.01f, scrollRect.name);
     }
 
     private static GameObject Load(string name)

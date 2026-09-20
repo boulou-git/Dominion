@@ -1734,8 +1734,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ReserveExtrasController
   _supplyPanel: {fileID: 3524281935965480367}
   _kingdomGrid: {fileID: 6462228523253410388}
-  _zoomOverlay: {fileID: 9046615813456756668}
-  _zoomImage: {fileID: 5367388085205101272}
 --- !u!114 &6936765835813527678
 MonoBehaviour:
   m_ObjectHideFlags: 0

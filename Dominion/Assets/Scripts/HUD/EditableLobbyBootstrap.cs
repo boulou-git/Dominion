@@ -29,6 +29,9 @@ public static class EditableLobbyBootstrap
         if (!string.Equals(scene.name, LobbySceneName, StringComparison.Ordinal))
             return;
 
+        // The prefab-backed connection/setup flow fully replaces the old scene Canvas.
+        SceneUiInstanceGuard.RemoveAll<LobbyUIHandler>(scene);
+
         EnsureSetupUi(scene);
         EnsureConnectionUi(scene);
     }
@@ -42,14 +45,11 @@ public static class EditableLobbyBootstrap
             return;
         }
 
-        GameObject existing = GameObject.Find(SetupRootName);
-        if (existing != null)
-        {
-            if (existing.GetComponent<EditableLobbySetupController>() != null)
-                return;
+        EditableLobbySetupController existing =
+            SceneUiInstanceGuard.KeepSingle<EditableLobbySetupController>(scene, SetupRootName);
+        if (existing != null) return;
 
-            UnityEngine.Object.Destroy(existing);
-        }
+        SceneUiInstanceGuard.RemoveRootNamed(scene, SetupRootName);
 
         GameObject instance = UnityEngine.Object.Instantiate(prefab);
         instance.name = SetupRootName;
@@ -66,17 +66,15 @@ public static class EditableLobbyBootstrap
             return;
         }
 
-        GameObject existing = GameObject.Find(ConnectionRootName);
+        ConnectionScreenController existing =
+            SceneUiInstanceGuard.KeepSingle<ConnectionScreenController>(scene, ConnectionRootName);
         if (existing != null)
         {
-            if (existing.GetComponent<ConnectionScreenController>() != null)
-            {
-                EnsureQuitButton(existing.transform);
-                return;
-            }
-
-            UnityEngine.Object.Destroy(existing);
+            EnsureQuitButton(existing.transform);
+            return;
         }
+
+        SceneUiInstanceGuard.RemoveRootNamed(scene, ConnectionRootName);
 
         GameObject instance = UnityEngine.Object.Instantiate(prefab);
         instance.name = ConnectionRootName;

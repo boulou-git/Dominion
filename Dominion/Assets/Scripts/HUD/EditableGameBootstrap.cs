@@ -1,7 +1,6 @@
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 /// <summary>
 /// Single bootstrap for the in-game UI. Loads the editable Resources/UI/Board/GameScreen prefab.
@@ -24,6 +23,10 @@ public static class EditableGameBootstrap
         if (!string.Equals(scene.name, GameSceneName, StringComparison.Ordinal))
             return;
 
+        // The original scene-authored HUD is obsolete. Disable it before creating the
+        // prefab-backed screen so it cannot keep a second phase button or callbacks alive.
+        SceneUiInstanceGuard.RemoveAll<GameHUDHandler>(scene);
+
         GameObject prefab = Resources.Load<GameObject>(PrefabResourcePath);
         if (prefab == null)
         {
@@ -31,17 +34,14 @@ public static class EditableGameBootstrap
             return;
         }
 
-        GameObject existing = GameObject.Find(RootName);
-        if (existing != null)
+        GameScreenController existingController = SceneUiInstanceGuard.KeepSingle<GameScreenController>(scene, RootName);
+        if (existingController != null)
         {
-            if (existing.GetComponent<GameScreenController>() != null)
-            {
-                EnsureGameUiControllers(existing);
-                return;
-            }
-
-            UnityEngine.Object.Destroy(existing);
+            EnsureGameUiControllers(existingController.gameObject);
+            return;
         }
+
+        SceneUiInstanceGuard.RemoveRootNamed(scene, RootName);
 
         GameObject instance = UnityEngine.Object.Instantiate(prefab);
         instance.name = RootName;
@@ -72,24 +72,5 @@ public static class EditableGameBootstrap
         if (root.GetComponent<PendingDecisionController>() == null)
             root.AddComponent<PendingDecisionController>();
 
-    }
-
-    private static Transform FindDeepChild(Transform parent, string childName)
-    {
-        if (parent == null)
-            return null;
-
-        for (int i = 0; i < parent.childCount; i++)
-        {
-            Transform child = parent.GetChild(i);
-            if (string.Equals(child.name, childName, StringComparison.Ordinal))
-                return child;
-
-            Transform nested = FindDeepChild(child, childName);
-            if (nested != null)
-                return nested;
-        }
-
-        return null;
     }
 }

@@ -18,9 +18,8 @@ public sealed class ReserveExtrasController : MonoBehaviour
 
     [SerializeField] private RectTransform _supplyPanel;
     [SerializeField] private GridLayoutGroup _kingdomGrid;
-    [SerializeField] private GameObject _zoomOverlay;
-    [SerializeField] private Image _zoomImage;
 
+    private GameScreenController _screen;
     private GameObject _extrasUi;
     private RectTransform _extrasRect;
     private RectTransform _specialPilesRoot;
@@ -37,6 +36,7 @@ public sealed class ReserveExtrasController : MonoBehaviour
 
     private void Awake()
     {
+        _screen = GetComponent<GameScreenController>();
         if (_kingdomGrid != null)
             _prefabKingdomCellSize = _kingdomGrid.cellSize;
 
@@ -237,18 +237,7 @@ public sealed class ReserveExtrasController : MonoBehaviour
 
     private void ShowDetail(Sprite sprite, ExtensionCardData definition, bool showCost)
     {
-        if (PendingDecisionInputLock.IsActive(NetworkGameState.State) ||
-            sprite == null || _zoomOverlay == null || _zoomImage == null)
-            return;
-
-        _zoomImage.sprite = sprite;
-        _zoomImage.preserveAspect = true;
-        DynamicCardCostView costView = DynamicCardCostView.Attach(_zoomImage.gameObject,
-            showCost ? definition : null);
-        if (costView != null)
-            costView.Bind(showCost ? definition : null);
-        _zoomOverlay.SetActive(true);
-        _zoomOverlay.transform.SetAsLastSibling();
+        _screen?.ShowCardZoom(sprite, definition, showCost);
     }
 
     private void ScheduleLayoutRefresh()

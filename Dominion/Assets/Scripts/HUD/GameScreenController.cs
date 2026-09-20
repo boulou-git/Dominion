@@ -112,7 +112,7 @@ public sealed class GameScreenController : MonoBehaviour
         if (_nextPhaseButton != null)
             _nextPhaseButton.onClick.AddListener(RequestNextPhase);
         if (_zoomCloseButton != null)
-            _zoomCloseButton.onClick.AddListener(HideZoom);
+            _zoomCloseButton.onClick.AddListener(HideCardZoom);
 
         if (_zoomOverlay != null)
             _zoomOverlay.SetActive(false);
@@ -594,7 +594,7 @@ public sealed class GameScreenController : MonoBehaviour
             Sprite capturedSprite = sprite;
             ExtensionCardData capturedDefinition = definition;
             if (capturedSprite != null)
-                pointer.InspectRequested += () => ShowZoom(capturedSprite, capturedDefinition);
+                pointer.InspectRequested += () => ShowCardZoom(capturedSprite, capturedDefinition);
 
             HandCardMotion motion = cardObject.AddComponent<HandCardMotion>();
             motion.BindInstance(instanceId, HandleHandOrderChanged);
@@ -695,7 +695,7 @@ public sealed class GameScreenController : MonoBehaviour
             ExtensionCardData capturedDefinition = card;
             CardPointerInteraction pointer = cardView.Pointer;
             if (captured != null)
-                pointer.InspectRequested += () => ShowZoom(captured, capturedDefinition);
+                pointer.InspectRequested += () => ShowCardZoom(captured, capturedDefinition);
 
             _kingdomCards.Add(cardObject);
         }
@@ -706,20 +706,25 @@ public sealed class GameScreenController : MonoBehaviour
         Debug.Log("Kingdom supply rendered: " + _kingdomCards.Count + " card(s), rootSize=" + _kingdomSupplyRoot.rect.size + ".");
     }
 
-    private void ShowZoom(Sprite sprite, ExtensionCardData definition)
+    /// <summary>
+    /// Single in-game card inspection entry point. Every board controller reuses this
+    /// overlay so cost decoration, input locking and sibling order stay consistent.
+    /// </summary>
+    public bool ShowCardZoom(Sprite sprite, ExtensionCardData definition, bool showCost = true)
     {
         if (PendingDecisionInputLock.IsActive(NetworkGameState.State) ||
             _zoomOverlay == null || _zoomImage == null || sprite == null)
-            return;
+            return false;
 
         _zoomImage.sprite = sprite;
         _zoomImage.preserveAspect = true;
-        DynamicCardCostView.Attach(_zoomImage.gameObject, definition);
+        DynamicCardCostView.Attach(_zoomImage.gameObject, showCost ? definition : null);
         _zoomOverlay.SetActive(true);
         _zoomOverlay.transform.SetAsLastSibling();
+        return true;
     }
 
-    private void HideZoom()
+    public void HideCardZoom()
     {
         if (_zoomOverlay != null)
             _zoomOverlay.SetActive(false);

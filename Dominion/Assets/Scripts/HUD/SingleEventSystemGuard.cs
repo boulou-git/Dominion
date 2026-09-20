@@ -51,3 +51,69 @@ public static class SingleEventSystemGuard
         }
     }
 }
+
+/// <summary>
+/// Shared scene-level ownership helper for runtime UI roots. It also deactivates a
+/// duplicate before deferred destruction, so it cannot receive clicks for one frame.
+/// </summary>
+public static class SceneUiInstanceGuard
+{
+    public static T KeepSingle<T>(Scene scene, string canonicalRootName) where T : Component
+    {
+        T keeper = null;
+        T[] instances = Object.FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        // Prefer the canonical root when a malformed duplicate is also present. The
+        // FindObjectsSortMode.None order is intentionally unspecified by Unity.
+        foreach (T instance in instances)
+            if (instance != null && instance.gameObject.scene == scene &&
+                string.Equals(instance.gameObject.name, canonicalRootName, System.StringComparison.Ordinal))
+            {
+                keeper = instance;
+                break;
+            }
+
+        foreach (T instance in instances)
+        {
+            if (instance == null || instance.gameObject.scene != scene)
+                continue;
+            if (keeper == null)
+            {
+                keeper = instance;
+                continue;
+            }
+            if (instance == keeper) continue;
+            DeactivateAndDestroy(instance.gameObject);
+        }
+        if (keeper != null && !string.IsNullOrEmpty(canonicalRootName))
+        {
+            keeper.gameObject.name = canonicalRootName;
+            if (!keeper.gameObject.activeSelf)
+                keeper.gameObject.SetActive(true);
+        }
+        return keeper;
+    }
+
+    public static void RemoveAll<T>(Scene scene) where T : Component
+    {
+        T[] instances = Object.FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (T instance in instances)
+            if (instance != null && instance.gameObject.scene == scene)
+                DeactivateAndDestroy(instance.gameObject);
+    }
+
+    public static void RemoveRootNamed(Scene scene, string rootName)
+    {
+        if (string.IsNullOrEmpty(rootName)) return;
+        foreach (GameObject root in scene.GetRootGameObjects())
+            if (root != null && string.Equals(root.name, rootName, System.StringComparison.Ordinal))
+                DeactivateAndDestroy(root);
+    }
+
+    private static void DeactivateAndDestroy(GameObject target)
+    {
+        if (target == null) return;
+        target.SetActive(false);
+        Object.Destroy(target);
+    }
+}

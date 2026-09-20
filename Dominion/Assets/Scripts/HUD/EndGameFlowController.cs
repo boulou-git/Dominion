@@ -30,8 +30,13 @@ public sealed partial class EndGameFlowController : MonoBehaviour
 
     private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        if (!string.Equals(scene.name, "Game", StringComparison.Ordinal) || GameObject.Find(RootName) != null)
+        if (!string.Equals(scene.name, "Game", StringComparison.Ordinal))
             return;
+
+        if (SceneUiInstanceGuard.KeepSingle<EndGameFlowController>(scene, RootName) != null)
+            return;
+
+        SceneUiInstanceGuard.RemoveRootNamed(scene, RootName);
 
         GameObject prefab = Resources.Load<GameObject>(PrefabResourcePath);
         if (prefab == null)

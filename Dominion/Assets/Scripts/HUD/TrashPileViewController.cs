@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -11,8 +10,6 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class TrashPileViewController : MonoBehaviour
 {
-    private static readonly BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
-
     private GameScreenController _screen;
     private Button _openButton;
     private Text _openButtonText;
@@ -23,8 +20,6 @@ public sealed class TrashPileViewController : MonoBehaviour
     private ScrollRect _cardsScroll;
     private Text _title;
     private Text _emptyMessage;
-    private GameObject _zoomOverlay;
-    private Image _zoomImage;
     private readonly List<GameObject> _renderedCards = new List<GameObject>();
     private int _lastRenderedVersion = -1;
     private bool _uiBindingFailed;
@@ -46,7 +41,6 @@ public sealed class TrashPileViewController : MonoBehaviour
     {
         _screen = GetComponent<GameScreenController>();
         BuildUi();
-        BindZoomUi();
         NetworkGameState.StateChanged += Refresh;
         Refresh(NetworkGameState.State);
     }
@@ -287,25 +281,9 @@ public sealed class TrashPileViewController : MonoBehaviour
             LayoutRebuilder.ForceRebuildLayoutImmediate(_cardsRoot);
     }
 
-    private void BindZoomUi()
-    {
-        if (_screen == null) return;
-        FieldInfo overlayField = typeof(GameScreenController).GetField("_zoomOverlay", PrivateInstance);
-        FieldInfo imageField = typeof(GameScreenController).GetField("_zoomImage", PrivateInstance);
-        _zoomOverlay = overlayField != null ? overlayField.GetValue(_screen) as GameObject : null;
-        _zoomImage = imageField != null ? imageField.GetValue(_screen) as Image : null;
-    }
-
     private void ShowZoom(Sprite sprite, ExtensionCardData definition)
     {
-        if (sprite == null) return;
-        if (_zoomOverlay == null || _zoomImage == null) BindZoomUi();
-        if (_zoomOverlay == null || _zoomImage == null) return;
-        _zoomImage.sprite = sprite;
-        _zoomImage.preserveAspect = true;
-        DynamicCardCostView.Attach(_zoomImage.gameObject, definition);
-        _zoomOverlay.SetActive(true);
-        _zoomOverlay.transform.SetAsLastSibling();
+        _screen?.ShowCardZoom(sprite, definition);
     }
 
     private void ClearCards()

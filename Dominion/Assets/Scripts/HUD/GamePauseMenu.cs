@@ -32,8 +32,10 @@ public sealed class GamePauseMenu : MonoBehaviour
         if (!string.Equals(scene.name, "Game", StringComparison.Ordinal))
             return;
 
-        if (GameObject.Find(RootName) != null)
+        if (SceneUiInstanceGuard.KeepSingle<GamePauseMenu>(scene, RootName) != null)
             return;
+
+        SceneUiInstanceGuard.RemoveRootNamed(scene, RootName);
 
         GameObject prefab = Resources.Load<GameObject>(PrefabResourcePath);
         if (prefab == null)

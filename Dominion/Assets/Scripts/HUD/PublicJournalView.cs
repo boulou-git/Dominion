@@ -27,8 +27,6 @@ public sealed class PublicJournalView : MonoBehaviour, IPointerClickHandler
 
     private GameScreenController _screen;
     private Text _journalText;
-    private GameObject _zoomOverlay;
-    private Image _zoomImage;
 
     private void Awake()
     {
@@ -37,11 +35,6 @@ public sealed class PublicJournalView : MonoBehaviour, IPointerClickHandler
         Transform journalPanel = transform.Find("JournalPanel");
         Transform journalTextTransform = journalPanel != null ? journalPanel.Find("JournalText") : null;
         _journalText = journalTextTransform != null ? journalTextTransform.GetComponent<Text>() : null;
-
-        Transform zoomOverlayTransform = transform.Find("CardZoomOverlay");
-        _zoomOverlay = zoomOverlayTransform != null ? zoomOverlayTransform.gameObject : null;
-        Transform zoomCardTransform = zoomOverlayTransform != null ? zoomOverlayTransform.Find("Card") : null;
-        _zoomImage = zoomCardTransform != null ? zoomCardTransform.GetComponent<Image>() : null;
 
         if (_journalText == null)
         {
@@ -327,7 +320,7 @@ public sealed class PublicJournalView : MonoBehaviour, IPointerClickHandler
 
     private void ShowZoom(string definitionId)
     {
-        if (_zoomOverlay == null || _zoomImage == null || string.IsNullOrWhiteSpace(definitionId))
+        if (_screen == null || string.IsNullOrWhiteSpace(definitionId))
             return;
 
         ExtensionPackageData extension;
@@ -339,11 +332,7 @@ public sealed class PublicJournalView : MonoBehaviour, IPointerClickHandler
         if (sprite == null)
             return;
 
-        _zoomImage.sprite = sprite;
-        _zoomImage.preserveAspect = true;
-        DynamicCardCostView.Attach(_zoomImage.gameObject, definition);
-        _zoomOverlay.SetActive(true);
-        _zoomOverlay.transform.SetAsLastSibling();
+        _screen.ShowCardZoom(sprite, definition);
     }
 
     private static string PhaseLabel(string phase)
