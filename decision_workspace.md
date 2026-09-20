@@ -34,6 +34,7 @@ Les réponses immédiates bloquent les boutons dès l’envoi. Pour plusieurs ca
 |---|---|
 | Carte non achetable | Artwork légèrement assombri, comme auparavant |
 | Carte, pile ou bouton admissible pendant un choix | Halo lumineux blanc |
+| Carte Réaction actuellement jouable | Halo lumineux bleu |
 | Carte ou option actuellement sélectionnée | Halo vert |
 | Carte sélectionnée pour être écartée ou défaussée | Halo rouge |
 

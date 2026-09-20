@@ -9,8 +9,9 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class CardSelectionHalo : MonoBehaviour
 {
-    public enum HighlightState { None, Candidate, Selected, Destructive }
+    public enum HighlightState { None, Candidate, Reaction, Selected, Destructive }
     private static readonly Color CandidateColor = Color.white;
+    private static readonly Color ReactionColor = new Color(0.20f, 0.62f, 1f, 1f);
     private static readonly Color SelectedColor = new Color(0.22f, 1f, 0.36f, 1f);
     private static readonly Color DestructiveColor = new Color(1f, 0.16f, 0.12f, 1f);
     private readonly List<Image> _segments = new List<Image>();
@@ -25,6 +26,7 @@ public sealed class CardSelectionHalo : MonoBehaviour
     {
         EnsureBuilt();
         Color color = state == HighlightState.Candidate ? CandidateColor
+            : state == HighlightState.Reaction ? ReactionColor
             : state == HighlightState.Destructive ? DestructiveColor : SelectedColor;
         SetColor(color);
         bool visible = state != HighlightState.None;

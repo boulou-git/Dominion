@@ -449,6 +449,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         IEnumerable<int> candidateIds = candidateOverride ?? decision.CandidateInstanceIds ?? new List<int>();
         HashSet<int> candidates = new HashSet<int>(candidateIds);
         Action<int> select = choose ?? ToggleSelection;
+        CardSelectionHalo.HighlightState candidateState = CandidateHighlight(decision);
 
         for (int i = 0; i < handRoot.childCount; i++)
         {
@@ -466,7 +467,7 @@ public sealed class PendingDecisionController : MonoBehaviour
 
             CardPointerInteraction pointer = child.GetComponent<CardPointerInteraction>();
             if (pointer != null) pointer.SetDecisionCandidate(candidate);
-            SetSelectionHalo(child.gameObject, candidate ? CardSelectionHalo.HighlightState.Candidate
+            SetSelectionHalo(child.gameObject, candidate ? candidateState
                 : CardSelectionHalo.HighlightState.None);
             if (!candidate || pointer == null || _selectionHandlers.ContainsKey(pointer)) continue;
             int capturedId = instanceId;
@@ -685,6 +686,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
         ExtensionCardData source = ResolveSourceDefinition(decision);
         bool destructive = DecisionPresentation.IsDestructiveSelection(decision, source);
+        CardSelectionHalo.HighlightState candidateState = CandidateHighlight(decision);
         HashSet<int> candidates = new HashSet<int>(decision?.CandidateInstanceIds ?? new List<int>());
         Transform handRoot = FindHandCardsRoot();
         if (handRoot != null)
@@ -696,7 +698,7 @@ public sealed class PendingDecisionController : MonoBehaviour
                 bool selected = _selected.Contains(motion.InstanceId);
                 SetSelectionHalo(child.gameObject, selected
                     ? destructive ? CardSelectionHalo.HighlightState.Destructive : CardSelectionHalo.HighlightState.Selected
-                    : CardSelectionHalo.HighlightState.Candidate);
+                    : candidateState);
             }
 
         foreach (GameObject card in _externalCards)
@@ -707,7 +709,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             bool selected = _selected.Contains(id);
             SetSelectionHalo(card, selected
                 ? destructive ? CardSelectionHalo.HighlightState.Destructive : CardSelectionHalo.HighlightState.Selected
-                : CardSelectionHalo.HighlightState.Candidate);
+                : candidateState);
         }
     }
 
@@ -1037,6 +1039,10 @@ public sealed class PendingDecisionController : MonoBehaviour
     }
 
     private static Color MultiplyRgb(Color color, float multiplier) => new Color(color.r * multiplier, color.g * multiplier, color.b * multiplier, color.a);
+    private static CardSelectionHalo.HighlightState CandidateHighlight(PendingDecisionSnapshot decision) =>
+        DecisionPresentation.IsReactionDecision(decision)
+            ? CardSelectionHalo.HighlightState.Reaction
+            : CardSelectionHalo.HighlightState.Candidate;
     private static ExtensionCardData ResolveDefinition(string definitionId)
     {
         return RoomGameSetup.TryResolveCard(definitionId, out ExtensionPackageData _, out ExtensionCardData definition)

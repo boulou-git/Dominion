@@ -4,6 +4,10 @@ using System.Collections.Generic;
 /// <summary>Presentation hints only: never infer actions from translated prompt text.</summary>
 public static class DecisionPresentation
 {
+    public static bool IsReactionDecision(PendingDecisionSnapshot decision) =>
+        decision != null && string.Equals(decision.Operation, "block_attack_reaction",
+            StringComparison.OrdinalIgnoreCase);
+
     public static bool HasOptionPreview(PendingDecisionSnapshot decision) =>
         (decision.CandidateInstanceIds != null && decision.CandidateInstanceIds.Count > 0) ||
         (decision.TriggerEvent != null && decision.TriggerEvent.PlayerId == decision.PlayerId &&
@@ -130,5 +134,33 @@ public static class DecisionPresentation
             : decision.MinSelections + " à " + decision.MaxSelections;
         return count + " sélectionné(s) · " + required +
             (decision.AllowPass || decision.MinSelections == 0 ? " · facultatif" : "");
+    }
+}
+
+/// <summary>Text and visibility rules for the active player's passive waiting banner.</summary>
+public static class DecisionWaitingPresentation
+{
+    public static bool ShouldShow(GameStateSnapshot state, string localPlayerId)
+    {
+        PendingDecisionSnapshot pending = state?.Resolution?.PendingDecision;
+        return !string.IsNullOrEmpty(localPlayerId) && pending != null && pending.IsPending &&
+               string.Equals(state.ActivePlayerId, localPlayerId, StringComparison.Ordinal) &&
+               !string.Equals(pending.PlayerId, localPlayerId, StringComparison.Ordinal);
+    }
+
+    public static string Message(GameStateSnapshot state)
+    {
+        PendingDecisionSnapshot pending = state?.Resolution?.PendingDecision;
+        if (pending == null) return string.Empty;
+        PlayerStateSnapshot responder = state.Players?.Find(player => player != null &&
+            string.Equals(player.PlayerId, pending.PlayerId, StringComparison.Ordinal));
+        string responderName = responder != null && !string.IsNullOrWhiteSpace(responder.NickName)
+            ? responder.NickName
+            : "un autre joueur";
+        int followingPlayers = pending.RemainingPlayerIds?.Count ?? 0;
+        return "En attente de " + responderName + "…" +
+               (followingPlayers > 0
+                   ? "\nPuis " + followingPlayers + " autre" + (followingPlayers > 1 ? "s joueurs" : " joueur") + "."
+                   : "\nUne décision est en cours.");
     }
 }

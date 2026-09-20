@@ -258,6 +258,11 @@ public sealed class PrefabUiContractTests
         SerializedObject screen = new SerializedObject(gameScreen.GetComponent<GameScreenController>());
         Assert.NotNull(screen.FindProperty("_zoomOverlay"));
         Assert.NotNull(screen.FindProperty("_zoomImage"));
+        Assert.NotNull(screen.FindProperty("_otherPlayerDecisionPanel"));
+        Assert.NotNull(screen.FindProperty("_otherPlayerDecisionText"));
+        Transform waitingPanel = gameScreen.transform.Find("OtherPlayerDecisionPanel");
+        Assert.NotNull(waitingPanel?.GetComponent<Image>());
+        Assert.NotNull(waitingPanel?.Find("Message")?.GetComponent<Text>());
 
         SerializedObject extras = new SerializedObject(gameScreen.GetComponent<ReserveExtrasController>());
         Assert.IsNull(extras.FindProperty("_zoomOverlay"));

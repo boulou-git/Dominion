@@ -79,6 +79,10 @@ public sealed class GameScreenController : MonoBehaviour
     [SerializeField] private Button _nextPhaseButton;
     [SerializeField] private Text _nextPhaseButtonText;
 
+    [Header("Other player decision")]
+    [SerializeField] private GameObject _otherPlayerDecisionPanel;
+    [SerializeField] private Text _otherPlayerDecisionText;
+
     [Header("Hand / journal")]
     [SerializeField] private RectTransform _handRoot;
     [SerializeField] private Text _journalText;
@@ -116,6 +120,8 @@ public sealed class GameScreenController : MonoBehaviour
 
         if (_zoomOverlay != null)
             _zoomOverlay.SetActive(false);
+        if (_otherPlayerDecisionPanel != null)
+            _otherPlayerDecisionPanel.SetActive(false);
 
         ExtensionCatalog.Reload();
         NetworkGameState.StateChanged += Refresh;
@@ -174,6 +180,7 @@ public sealed class GameScreenController : MonoBehaviour
             if (_statusText != null) _statusText.text = "Synchronisation du GameState…";
             if (_journalText != null) _journalText.text = "En attente de la partie…";
             if (_nextPhaseButton != null) _nextPhaseButton.interactable = false;
+            if (_otherPlayerDecisionPanel != null) _otherPlayerDecisionPanel.SetActive(false);
             return;
         }
 
@@ -208,6 +215,7 @@ public sealed class GameScreenController : MonoBehaviour
 
         bool localTurn = state.ActivePlayerId == NetworkGameState.LocalPlayerId ||
                          (localPlayer != null && activePlayer == localPlayer);
+        RefreshOtherPlayerDecisionPanel(state, localPlayer);
         if (_nextPhaseButton != null)
             _nextPhaseButton.interactable = localTurn && state.IsStarted && !state.IsPaused && !decisionLocked;
         if (_nextPhaseButtonText != null)
@@ -233,6 +241,16 @@ public sealed class GameScreenController : MonoBehaviour
         }
 
         RefreshJournal(state, activePlayer);
+    }
+
+    private void RefreshOtherPlayerDecisionPanel(GameStateSnapshot state, PlayerStateSnapshot localPlayer)
+    {
+        if (_otherPlayerDecisionPanel == null) return;
+        string localPlayerId = localPlayer?.PlayerId ?? NetworkGameState.LocalPlayerId;
+        bool visible = DecisionWaitingPresentation.ShouldShow(state, localPlayerId);
+        _otherPlayerDecisionPanel.SetActive(visible);
+        if (!visible || _otherPlayerDecisionText == null) return;
+        _otherPlayerDecisionText.text = DecisionWaitingPresentation.Message(state);
     }
 
     private void RefreshJournal(GameStateSnapshot state, PlayerStateSnapshot activePlayer)

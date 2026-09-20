@@ -106,7 +106,7 @@ public sealed class DecisionWorkspaceTests
     }
 
     [Test]
-    public void DecisionHalo_UsesWhiteGreenAndRedSemanticStates()
+    public void DecisionHalo_UsesWhiteBlueGreenAndRedSemanticStates()
     {
         var target = new GameObject("HaloTarget", typeof(RectTransform));
         try
@@ -118,12 +118,39 @@ public sealed class DecisionWorkspaceTests
             Assert.That(segment.color.r, Is.EqualTo(1f).Within(0.01f));
             Assert.That(segment.color.g, Is.EqualTo(1f).Within(0.01f));
 
+            halo.SetState(CardSelectionHalo.HighlightState.Reaction);
+            Assert.Greater(segment.color.b, segment.color.r);
+            Assert.Greater(segment.color.b, segment.color.g);
             halo.SetState(CardSelectionHalo.HighlightState.Selected);
             Assert.Greater(segment.color.g, segment.color.r);
             halo.SetState(CardSelectionHalo.HighlightState.Destructive);
             Assert.Greater(segment.color.r, segment.color.g);
         }
         finally { Object.DestroyImmediate(target); }
+    }
+
+    [Test]
+    public void AttackReactionDecision_UsesTheReactionPresentation()
+    {
+        var reaction = new PendingDecisionSnapshot { Operation = "block_attack_reaction", Zone = "hand" };
+        var ordinary = new PendingDecisionSnapshot { Operation = "choose_cards", Zone = "hand" };
+
+        Assert.IsTrue(DecisionPresentation.IsReactionDecision(reaction));
+        Assert.IsFalse(DecisionPresentation.IsReactionDecision(ordinary));
+    }
+
+    [Test]
+    public void ActivePlayer_WaitsWhenAnotherPlayerOwnsTheDecision()
+    {
+        var state = new GameStateSnapshot { ActivePlayerId = "attacker" };
+        state.Players.Add(new PlayerStateSnapshot { PlayerId = "attacker", NickName = "Alice" });
+        state.Players.Add(new PlayerStateSnapshot { PlayerId = "defender", NickName = "Bruno" });
+        state.Resolution.PendingDecision.IsPending = true;
+        state.Resolution.PendingDecision.PlayerId = "defender";
+
+        Assert.IsTrue(DecisionWaitingPresentation.ShouldShow(state, "attacker"));
+        Assert.IsFalse(DecisionWaitingPresentation.ShouldShow(state, "defender"));
+        StringAssert.Contains("Bruno", DecisionWaitingPresentation.Message(state));
     }
 
     [Test]
