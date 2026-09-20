@@ -10,12 +10,12 @@ public sealed class DecisionWorkspaceTests
     [TestCase("hand", "choose_cards", 1, false, null)]
     [TestCase("hand", "choose_cards", 4, false, null)]
     [TestCase("hand", "move_all_ordered|deck", 1, false, null)]
-    [TestCase("discard", "choose_cards", 3, false, "UI/Choices/DecisionCardSelection")]
+    [TestCase("discard", "choose_cards", 3, false, null)]
     [TestCase("inspected", "move_all_ordered|deck", 1, false, "UI/Choices/DecisionCardDestinations")]
-    [TestCase("options", "choose_options", 1, true, "UI/Choices/DecisionCardSelection")]
-    [TestCase("options", "choose_options", 1, false, "UI/Choices/DecisionCardSelection")]
-    [TestCase("options", "choose_options", 2, false, "UI/Choices/DecisionCardSelection")]
-    [TestCase("options", "choose_options", 2, true, "UI/Choices/DecisionCardSelection")]
+    [TestCase("options", "choose_options", 1, true, null)]
+    [TestCase("options", "choose_options", 1, false, null)]
+    [TestCase("options", "choose_options", 2, false, null)]
+    [TestCase("options", "choose_options", 2, true, null)]
     [TestCase("supply", "choose_supply", 1, false, null)]
     [TestCase("options", "name_card", 1, false, null)]
     [TestCase("options", "insert_selected_into_deck|hand", 1, true, null)]
@@ -40,22 +40,22 @@ public sealed class DecisionWorkspaceTests
         Assert.IsTrue(DecisionPresentation.IsQuickChoice(decision, source));
         Assert.AreEqual("Jouer", DecisionPresentation.QuickCardAction(decision, source));
         decision.CandidateInstanceIds.Add(13);
-        Assert.IsFalse(DecisionPresentation.IsQuickChoice(decision, source));
+        Assert.IsTrue(DecisionPresentation.IsQuickChoice(decision, source));
         decision.CandidateInstanceIds.Remove(13); decision.Zone = "hand";
         Assert.IsFalse(DecisionPresentation.IsQuickChoice(decision, source));
     }
 
     [Test]
-    public void QuickChoice_LeavesMultipleSelectionsAndCardGroupsInTheWorkspace()
+    public void QuickChoice_AlsoHandlesMultipleSelectionsAndCardGroups()
     {
         var decision = new PendingDecisionSnapshot { Zone = "options", Operation = "choose_options",
             MinSelections = 1, MaxSelections = 1 };
         decision.CandidateDefinitionIds.AddRange(new[] { "yes", "no" });
         Assert.IsTrue(DecisionPresentation.IsQuickChoice(decision, null));
         decision.MaxSelections = 2;
-        Assert.IsFalse(DecisionPresentation.IsQuickChoice(decision, null));
+        Assert.IsTrue(DecisionPresentation.IsQuickChoice(decision, null));
         decision.MaxSelections = 1; decision.CandidateInstanceIds.AddRange(new[] { 1, 2 });
-        Assert.IsFalse(DecisionPresentation.IsQuickChoice(decision, null));
+        Assert.IsTrue(DecisionPresentation.IsQuickChoice(decision, null));
     }
 
     [Test]
@@ -77,9 +77,9 @@ public sealed class DecisionWorkspaceTests
             Zone = "options", MaxSelections = 1, PlayerId = "local", ListenerCardInstanceId = 4,
             TriggerEvent = new GameEventSnapshot { PlayerId = "local", CardInstanceId = 8 }
         };
-        Assert.AreEqual("UI/Choices/DecisionCardSelection", DecisionPresentation.WorkspacePrefab(choice));
+        Assert.AreEqual(null, DecisionPresentation.WorkspacePrefab(choice));
         choice.TriggerEvent.PlayerId = "other";
-        Assert.AreEqual("UI/Choices/DecisionCardSelection", DecisionPresentation.WorkspacePrefab(choice));
+        Assert.AreEqual(null, DecisionPresentation.WorkspacePrefab(choice));
     }
     [Test]
     public void ArtifactListener_IsPresentedInsteadOfTheOriginalAction()
@@ -136,7 +136,6 @@ public sealed class DecisionWorkspaceTests
         CollectionAssert.AreEquivalent(new[] { 1, 2 }, selected);
     }
 
-    [TestCase("DecisionCardSelection")]
     [TestCase("DecisionCardDestinations")]
     public void Workspace_HasPrefabAuthoredControlsAndScrollableDropZones(string prefabName)
     {
@@ -145,11 +144,10 @@ public sealed class DecisionWorkspaceTests
         Assert.NotNull(prefab.GetComponent<DecisionWorkspaceView>());
         var serialized = new SerializedObject(prefab.GetComponent<DecisionWorkspaceView>());
         Assert.NotNull(serialized.FindProperty("_cardPrefab").objectReferenceValue);
-        Assert.NotNull(serialized.FindProperty("_optionPrefab").objectReferenceValue);
         Assert.NotNull(prefab.transform.Find("Panel/Source").GetComponent<DecisionSourceView>());
-        foreach (string zone in new[] { "Available", "Chosen", "Options", "OptionsOnly" })
+        foreach (string zone in new[] { "Available", "Chosen", "Discard" })
         {
-            Transform scroll = prefab.transform.Find("Panel/" + zone + "/Scroll");
+            Transform scroll = prefab.transform.Find("Panel/Zones/" + zone + "/Scroll");
             Assert.NotNull(scroll.GetComponent<ScrollRect>());
             Mask mask = scroll.Find("Viewport").GetComponent<Mask>();
             Assert.NotNull(mask);
@@ -161,8 +159,8 @@ public sealed class DecisionWorkspaceTests
                 "A near-zero alpha becomes zero in UI vertex colors and prevents the stencil from exposing its children.");
             Assert.NotNull(scroll.Find("Viewport/Content").GetComponent<GridLayoutGroup>());
         }
-        Assert.NotNull(prefab.transform.Find("Panel/Available").GetComponent<DecisionDropZone>());
-        Assert.NotNull(prefab.transform.Find("Panel/Chosen").GetComponent<DecisionDropZone>());
+        Assert.NotNull(prefab.transform.Find("Panel/Zones/Available").GetComponent<DecisionDropZone>());
+        Assert.NotNull(prefab.transform.Find("Panel/Zones/Chosen").GetComponent<DecisionDropZone>());
         Assert.NotNull(prefab.transform.Find("Panel/Confirm").GetComponent<Button>());
         Assert.NotNull(prefab.transform.Find("Panel/Reset").GetComponent<Button>());
         Assert.NotNull(prefab.transform.Find("DragLayer"));
@@ -172,11 +170,16 @@ public sealed class DecisionWorkspaceTests
     public void Destinations_UsesHorizontalDeckLayoutAndASeparateDiscardZone()
     {
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/UI/Choices/DecisionCardDestinations.prefab");
-        Assert.NotNull(prefab.transform.Find("Panel/Discard").GetComponent<DecisionDropZone>());
-        var grid = prefab.transform.Find("Panel/Chosen/Scroll/Viewport/Content").GetComponent<GridLayoutGroup>();
+        Transform zones = prefab.transform.Find("Panel/Zones");
+        Assert.NotNull(zones.GetComponent<HorizontalLayoutGroup>());
+        Assert.AreEqual("Discard", zones.GetChild(0).name);
+        Assert.AreEqual("Chosen", zones.GetChild(1).name);
+        Assert.AreEqual("Available", zones.GetChild(2).name);
+        Assert.NotNull(prefab.transform.Find("Panel/Zones/Discard").GetComponent<DecisionDropZone>());
+        var grid = prefab.transform.Find("Panel/Zones/Chosen/Scroll/Viewport/Content").GetComponent<GridLayoutGroup>();
         Assert.AreEqual(GridLayoutGroup.Constraint.FixedRowCount, grid.constraint);
         Assert.AreEqual(1, grid.constraintCount);
-        Assert.IsTrue(prefab.transform.Find("Panel/Chosen/Scroll").GetComponent<ScrollRect>().horizontal);
+        Assert.IsTrue(prefab.transform.Find("Panel/Zones/Chosen/Scroll").GetComponent<ScrollRect>().horizontal);
     }
 
     [Test]

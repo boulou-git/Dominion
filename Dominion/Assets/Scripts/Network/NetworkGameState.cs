@@ -257,6 +257,18 @@ public static class NetworkGameState
         return CompleteCleanupAfterDecision(next, result) && CommitState(next);
     }
 
+    public static bool TrySubmitSortDecision(string requesterPlayerId, string decisionId,
+        int[] trash, int[] discard, int[] deck, int expectedVersion, int expectedAuthorityEpoch)
+    {
+        if (!ValidateDecisionCommand(requesterPlayerId, decisionId, expectedVersion, expectedAuthorityEpoch)) return false;
+        GameStateSnapshot next = Clone(_state);
+        GameRuleResult result = InspectedSortRules.Submit(next, requesterPlayerId, decisionId,
+            trash, discard, deck, ResolveCardDefinition, NewRandom());
+        if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning(result.Error); return false; }
+        JournalRules.RecordEvents(next, result.Events);
+        return CompleteCleanupAfterDecision(next, result) && CommitState(next);
+    }
+
     public static bool TrySubmitSupplyDecision(string requesterPlayerId, string decisionId, string[] selectedDefinitionIds,
         int expectedVersion, int expectedAuthorityEpoch)
     {
@@ -457,6 +469,8 @@ public static class NetworkGameState
     private static bool CompleteCleanupAfterDecision(GameStateSnapshot state, GameRuleResult result)
     {
         if (state == null || result == null) return false;
+        result = InspectedSortRules.Continue(state, result, ResolveCardDefinition, NewRandom());
+        if (result.Status == GameRuleStatus.Rejected) { Debug.LogWarning(result.Error); return false; }
         if (result.Status != GameRuleStatus.Applied || !string.Equals(state.Phase, CleanupPhase, StringComparison.Ordinal) ||
             (state.Resolution != null && state.Resolution.IsActive)) return true;
         return PerformCleanupAndAdvance(state);

@@ -14,6 +14,7 @@ public static class DecisionPresentation
     {
         if (decision == null) return null;
         string op = decision.Operation ?? string.Empty;
+        if (InspectedSortRules.CanSort(decision, source)) return "UI/Choices/DecisionCardDestinations";
         if (string.Equals(decision.Zone, "supply", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(decision.Zone, "hand", StringComparison.OrdinalIgnoreCase)) return null;
         if (string.Equals(decision.Zone, "options", StringComparison.OrdinalIgnoreCase))
@@ -21,26 +22,20 @@ public static class DecisionPresentation
             if (op.StartsWith("insert_selected_into_deck|", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(op, "name_card", StringComparison.OrdinalIgnoreCase)) return null;
             if (DeckChoiceRules.TryDescribe(decision, source, out _, out _, out _)) return "UI/Choices/DecisionCardDestinations";
-            return "UI/Choices/DecisionCardSelection";
+            return null;
         }
         if (op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase)) return "UI/Choices/DecisionCardDestinations";
-        return "UI/Choices/DecisionCardSelection";
+        return null;
     }
 
     // Compact decisions answer immediately; multi-card drafts keep their confirmation.
     public static bool IsQuickChoice(PendingDecisionSnapshot decision, ExtensionCardData source)
     {
-        if (decision == null || decision.MaxSelections != 1 ||
-            string.Equals(decision.Zone, "hand", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(decision.Zone, "supply", StringComparison.OrdinalIgnoreCase)) return false;
-        if (decision.Zone == "options")
-            return decision.Operation != "name_card" &&
-                !(decision.Operation ?? "").StartsWith("insert_selected_into_deck|", StringComparison.OrdinalIgnoreCase) &&
-                !DeckChoiceRules.TryDescribe(decision, source, out _, out _, out _) &&
-                (decision.CandidateInstanceIds == null || decision.CandidateInstanceIds.Count <= 1) &&
-                decision.CandidateDefinitionIds != null && decision.CandidateDefinitionIds.Count > 0 &&
-                decision.CandidateDefinitionIds.Count + (decision.AllowPass || decision.MinSelections == 0 ? 1 : 0) <= 4;
-        return QuickCardAction(decision, source) != null;
+        if (decision == null || decision.Zone == "hand" || decision.Zone == "supply") return false;
+        string op = decision.Operation ?? "";
+        return op != "name_card" && !op.StartsWith("insert_selected_into_deck|", StringComparison.OrdinalIgnoreCase) &&
+            !op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase) &&
+            !DeckChoiceRules.TryDescribe(decision, source, out _, out _, out _) && !InspectedSortRules.CanSort(decision, source);
     }
 
     public static string QuickCardAction(PendingDecisionSnapshot decision, ExtensionCardData source)

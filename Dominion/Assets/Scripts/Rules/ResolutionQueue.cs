@@ -6,6 +6,7 @@ public sealed class ResolutionQueueSnapshot
 {
     public bool IsActive;
     public string OwnerPlayerId;
+    public List<InspectedSortPlan> SortPlans = new List<InspectedSortPlan>();
     public List<GameEventSnapshot> PendingEvents = new List<GameEventSnapshot>();
     public PendingDecisionSnapshot PendingDecision = new PendingDecisionSnapshot();
     public List<int> SelectedInstanceIds = new List<int>();
@@ -110,6 +111,7 @@ public sealed class ResolutionQueue
         if (string.IsNullOrEmpty(ownerPlayerId)) { error = "Resolution owner is missing."; return false; }
         EnsureSnapshot(state);
         if (state.Resolution.IsActive) { error = "Another rules resolution is already active."; return false; }
+        state.Resolution.SortPlans.Clear();
         state.Resolution.IsActive = true; state.Resolution.OwnerPlayerId = ownerPlayerId;
         state.Resolution.PendingEvents.Clear(); state.Resolution.PendingDecision.Clear();
         state.Resolution.SelectedInstanceIds.Clear(); state.Resolution.SelectedDefinitionIds.Clear(); state.Resolution.SelectedOptionIds.Clear();
@@ -289,6 +291,7 @@ public sealed class ResolutionQueue
     public void CompleteIfIdle()
     {
         if (Events.PendingCount > 0 || IsWaitingForDecision) return;
+        _snapshot.SortPlans.Clear();
         _snapshot.IsActive = false; _snapshot.OwnerPlayerId = string.Empty; _snapshot.PendingEvents.Clear(); _snapshot.PendingDecision.Clear();
         _snapshot.SelectedInstanceIds.Clear(); _snapshot.SelectedDefinitionIds.Clear(); _snapshot.SelectedOptionIds.Clear();
         _snapshot.StagedSelectionPlayerIds.Clear(); _snapshot.StagedSelectedInstanceIds.Clear(); _snapshot.AttackProtectedPlayerIds.Clear();
@@ -322,6 +325,7 @@ public sealed class ResolutionQueue
         if (state.Resolution.PendingDecision.RemainingPlayerIds == null) state.Resolution.PendingDecision.RemainingPlayerIds = new List<string>();
         if (state.Resolution.PendingDecision.RemainingListenerInstanceIds == null) state.Resolution.PendingDecision.RemainingListenerInstanceIds = new List<int>();
         if (state.Resolution.PendingDecision.RemainingListenerScopes == null) state.Resolution.PendingDecision.RemainingListenerScopes = new List<string>();
+        if (state.Resolution.SortPlans == null) state.Resolution.SortPlans = new List<InspectedSortPlan>();
         if (state.Resolution.SelectedInstanceIds == null) state.Resolution.SelectedInstanceIds = new List<int>();
         if (state.Resolution.SelectedDefinitionIds == null) state.Resolution.SelectedDefinitionIds = new List<string>();
         if (state.Resolution.SelectedOptionIds == null) state.Resolution.SelectedOptionIds = new List<string>();

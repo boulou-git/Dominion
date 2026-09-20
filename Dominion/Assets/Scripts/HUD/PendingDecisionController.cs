@@ -537,7 +537,11 @@ public sealed class PendingDecisionController : MonoBehaviour
         if (_quickChoice != null && _quickChoice.gameObject.activeSelf) _quickChoice.SetBusy(true);
         if (_confirmButton != null) _confirmButton.interactable = false;
 
-        if (IsOptionDecision(decision))
+        if (_usingWorkspace && _workspace.IsSort)
+        {
+            handler.SubmitSortDecision(decision.DecisionId, _workspace.TrashCards, _workspace.DiscardCards, _workspace.DeckOrder);
+        }
+        else if (IsOptionDecision(decision))
         {
             string[] selected = new string[_selectedOptions.Count]; _selectedOptions.CopyTo(selected);
             handler.SubmitOptionDecision(decision.DecisionId, selected, _usingWorkspace ? _workspace.DeckOrder : null);

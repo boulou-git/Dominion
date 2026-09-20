@@ -1,125 +1,95 @@
-# Choix interactifs — guide de réglage et de test
+# Choix interactifs — réglages et vérification
 
-Les chemins ci-dessous partent du projet Unity `Dominion/`.
+Tous les chemins de prefab ci-dessous sont dans `Dominion/Assets/Resources/UI/Choices/`.
 
-## Un prefab par structure, pas par libellé
+## Quel prefab modifier ?
 
-Tous ces prefabs sont dans `Assets/Resources/UI/Choices/`. Les fenêtres détaillées sont indépendantes : modifier leurs ancres, tailles ou grilles ne modifie pas les autres familles. Elles utilisent le même script de comportement `DecisionWorkspaceView` et les mêmes vignettes, remplaçables via ses champs Card Prefab et Option Prefab.
+| Demande | Prefab | Interaction |
+|---|---|---|
+| Carte(s) de la main ou pile de la Réserve | `DecisionInstructionBar` | Sélection sur le plateau et bandeau de validation |
+| Option unique, Vassal et autres décisions immédiates | `DecisionQuickChoice` | Un clic sur le bouton de réponse |
+| Une carte parmi plusieurs, hors plateau | `DecisionQuickChoice` | Clic direct sur la carte ; Passer si facultatif |
+| Plusieurs cartes ou options | `DecisionQuickChoice` | Sélection / désélection puis un seul bouton Valider |
+| Soldat : répartir entre Défausse / Deck / Écart | `DecisionCardDestinations` | Glisser-déposer, ordre du deck, une validation |
+| Alchimiste / Fièvre : tout défausser ou tout replacer | `DecisionCardDestinations` | Déplacer une carte change la destination du groupe |
+| Réordonner le deck | `DecisionCardDestinations` | Glisser les cartes dans la rangée puis valider |
+| Nommer une carte | `CardNameDecision` dans `PendingDecisionPanel` | Recherche dédiée |
+| Choisir une position d’insertion | `DeckPositionDecision` dans `PendingDecisionPanel` | Contrôle dédié |
 
-| Demande | Prefab à modifier |
-|---|---|
-| Choix immédiat : une option, ou une action explicite sur une seule carte hors plateau | `DecisionQuickChoice.prefab` |
-| Sélectionner une ou plusieurs cartes de la main | `DecisionInstructionBar.prefab` + cartes de la main existantes |
-| Sélectionner des cartes de la défausse, des cartes regardées, de l'Écart… | `DecisionCardSelection.prefab` |
-| Tout défausser ou ordonner sur le deck (Alchimiste, Fièvre) | `DecisionCardDestinations.prefab` |
-| Autres options sur les cartes montrées | `DecisionCardSelection.prefab` |
-| Choisir une seule option sans cartes concernées | `DecisionCardSelection.prefab` |
-| Choisir plusieurs options, avec ou sans cartes concernées | `DecisionCardSelection.prefab` |
-| Choisir l'ordre des cartes à replacer sur le deck | `DecisionCardDestinations.prefab` |
-| Choisir une pile dans la Réserve | `DecisionInstructionBar.prefab` + piles existantes |
-| Choisir une position dans le deck | `DeckPositionDecision.prefab` dans `PendingDecisionPanel.prefab` |
-| Nommer une carte | `CardNameDecision.prefab` dans `PendingDecisionPanel.prefab` |
+L’ancien grand panneau `DecisionCardSelection.prefab` est supprimé. `PendingDecisionPanel` reste l’hôte des contrôles spécialisés ; ce n’est plus le panneau utilisé pour les choix génériques. Le même prefab compact gère toutes les cartes : les libellés viennent de la décision, sans créer de copie par nom de carte.
 
-`DecisionPresentation.WorkspacePrefab()` choisit la famille à partir de l'opération et des données de décision, jamais du texte de la consigne. Le contrôleur charge chaque fenêtre à la demande et masque/vide la précédente. Les tailles ne sont pas réécrites en C#.
+## Choix compacts
 
-Trois structures sont conservées : le petit panneau de réponse immédiate, le panneau générique et le panneau de destinations. Les titres, options, compteurs et consignes viennent du contexte ; les choix simples et multiples partagent le même prefab. Dans le tableau de réglages ci-dessous, utilisez le prefab de la famille souhaitée. Le nombre de cartes sélectionnables reste une règle de jeu, pas une valeur à changer dans un prefab.
+La source (carte ou Artefact) reste visible à droite. Les cartes concernées apparaissent à gauche. Sans carte concernée, la liste d’options utilise toute la hauteur disponible.
 
-Les anciens modèles inutilisés `DecisionWorkspace`, `DecisionHandSelection` et `DecisionSupplyChoice` ont été supprimés. La main et la Réserve partagent un seul petit bandeau en haut, sans panneau latéral de source. La consigne conserve les contraintes de l’effet.
+Pour le Vassal, les boutons sont **Jouer** et **Laisser en défausse** : la carte a déjà été défaussée avant cette décision. Les autres actions explicites sur une unique carte utilisent leur verbe : Jouer, Écarter ou Défausser.
 
-## Comportement
+Les réponses immédiates bloquent les boutons dès l’envoi. Pour plusieurs cartes/options, le compteur et le bouton Valider suivent les limites imposées par le moteur. Le bouton affiche Passer si zéro sélection est autorisé. Les cartes et options sélectionnées portent une marque visible. Les listes sont défilables, à la molette ou en faisant glisser leur contenu.
 
-- Main / Réserve : cliquez directement sur les cartes candidates du plateau, puis validez dans le bandeau. Les autres choix utilisent leur fenêtre dédiée.
-- Dans les fenêtres détaillées, l'origine de l'effet reste visible : priorité à l'Artefact ou la Réaction qui écoute l'événement, sinon à la carte source.
-- Clic sur une carte : ajout/retrait de la sélection. À une seule sélection, une nouvelle carte remplace l'ancienne.
-- Glisser une carte vers la destination : sélection. La ramener dans les cartes disponibles : désélection.
-- Le survol d'une destination valide la met en évidence ; un dépôt invalide ramène la carte à son emplacement.
-- Les déplacements sont une prévisualisation locale : rien n'est déplacé dans l'état du jeu avant Confirmer.
-- Réinitialiser vide le brouillon de la décision actuelle, pas les décisions déjà validées.
-- Confirmer devient Passer quand zéro sélection est autorisé ; un choix obligatoire ne peut pas être ignoré.
-- Avec une seule carte concernée et une seule option autorisée, on peut glisser la carte sur un bouton d'option.
-- Sans carte concernée, les options occupent toute la largeur disponible.
-- La main et les piles de la Réserve restent visibles et sélectionnables sur le plateau, avec les surbrillances existantes.
-- La recherche d'un nom de carte et le curseur de position dans le deck conservent leurs contrôles spécialisés.
-- Le menu Échap reste indépendant. Les anciennes interactions du plateau restent bloquées.
+## Soldat : une seule validation
+
+Les trois zones sont dans cet ordre : **Défausse à gauche · Deck au centre · Écart à droite**. Toutes les cartes commencent sur le deck. Leur ordre initial conserve l’ordre de pioche : **gauche = plus bas ; droite = dessus, donc prochaine carte piochée**.
+
+Déplacez les cartes entre les trois zones et réordonnez celles du deck. Valider envoie la répartition entière au Master. Réinitialiser remet toutes les cartes au centre dans leur ordre initial. Aucun déplacement de règle n’est effectué pendant le brouillon.
+
+Le moteur exécute le plan confirmé dans l’ordre normal : écarter, résoudre les réactions, défausser, résoudre les réactions, replacer sur le deck. Le joueur ne revalide pas les étapes de tri. Une réaction indépendante garde son propre choix : le plan est conservé dans l’état réseau puis reprend après la réponse. Il survit à la sérialisation / reconnexion. Si un effet change les candidats de manière incompatible avec le plan, le moteur demande un nouveau choix au lieu d’appliquer une instruction devenue invalide.
+
+La reconnaissance utilise la suite déclarative `choose_cards` → `trash_selected` → `choose_cards` → `discard_selected` → `move_all_ordered`, dans la zone `inspected`. Elle ne dépend pas du nom Soldat ou du texte français. Chaque carte doit apparaître exactement une fois dans la répartition ; doublons et cartes étrangères sont refusés côté Master.
+
+## Alchimiste, Fièvre et ordre du deck
+
+Les cartes commencent aussi sur le deck. Déposer une carte dans Défausse y déplace tout le groupe. Revenir sur Deck y replace le groupe, que l’on peut ensuite réordonner. Une validation transmet l’option et l’ordre complet. Pour un simple réordonnancement, seule la zone Deck reste visible et occupe la largeur des destinations.
 
 ## Où modifier quoi ?
 
-| Je veux changer… | Prefab / emplacement |
+| Réglage | Emplacement |
 |---|---|
-| Dimensions et position de la fenêtre | `Assets/Resources/UI/Choices/DecisionCardSelection.prefab` → `Panel` → RectTransform |
-| Assombrissement du plateau | `DecisionCardSelection` → Image → couleur / alpha |
-| Taille de la consigne | `Panel/Prompt` → Text |
-| Image, nom et règles de la source | `Panel/Source/Artwork`, `Name`, `Rules`, `Context` |
-| Taille des cartes disponibles | `Panel/Available/Scroll/Viewport/Content` → GridLayoutGroup → Cell Size |
-| Taille des cartes sélectionnées | `Panel/Chosen/Scroll/Viewport/Content` → GridLayoutGroup → Cell Size |
-| Espacement des cartes | Ces mêmes GridLayoutGroup → Spacing / Padding |
-| Largeur des deux zones | `Panel/Available` et `Panel/Chosen` → RectTransform |
-| Couleur d'une destination survolée | `Panel/Available` / `Panel/Chosen` → DecisionDropZone → Hover Color |
-| Options accompagnées de cartes | `Panel/Options/Scroll/Viewport/Content` → GridLayoutGroup |
-| Options sans cartes | `Panel/OptionsOnly/Scroll/Viewport/Content` → GridLayoutGroup |
-| Apparence d'une carte interactive | `DecisionWorkspaceCard.prefab` → Artwork, Label, Selected |
-| Apparence d'une option | `DecisionWorkspaceOption.prefab` → Image, Button, Label, Selected, DecisionDropZone |
-| Marque de sélection | Les enfants `Selected` des deux prefabs précédents |
-| Boutons de validation et remise à zéro | `DecisionCardSelection.prefab` → `Panel/Confirm`, `Panel/Reset` |
-| Position et taille du bandeau main / Réserve | `DecisionInstructionBar.prefab` → RectTransform racine |
-| Consigne, compteur et validation du bandeau | `DecisionInstructionBar.prefab` → Prompt, Count, ConfirmDecision |
+| Taille / position du panneau compact | `DecisionQuickChoice` → `Panel` → RectTransform |
+| Taille des cartes compactes | `Panel/Available/Scroll/Viewport/Content` → GridLayoutGroup → Cell Size |
+| Boutons avec cartes concernées | `Panel/Options/Scroll/Viewport/Content` → GridLayoutGroup |
+| Boutons sans aperçu | `Panel/OptionsOnly/Scroll/Viewport/Content` → GridLayoutGroup |
+| Carte source et texte | `Panel/Source/Artwork`, `Name`, `Rules`, `Context` |
+| Consigne | `Panel/Prompt` → Text |
+| Taille / position du tri | `DecisionCardDestinations` → `Panel` → RectTransform |
+| Espacement entre destinations | `Panel/Zones` → HorizontalLayoutGroup |
+| Défausse / Deck / Écart | `Panel/Zones/Discard`, `Chosen`, `Available` |
+| Taille des cartes du tri | Chaque zone → `Scroll/Viewport/Content` → GridLayoutGroup |
+| Couleur d’une destination survolée | Chaque zone → DecisionDropZone → Hover Color |
+| Validation / remise à zéro du tri | `Panel/Confirm`, `Panel/Reset` |
+| Apparence d’une carte / de sa sélection | `DecisionWorkspaceCard` → Artwork, Label, Selected |
+| Apparence d’un bouton / de sa sélection | `DecisionWorkspaceOption` → Image, Label, Selected |
+| Bandeau main / Réserve | `DecisionInstructionBar` → RectTransform, Prompt, Count, ConfirmDecision |
 
-Les grilles, ScrollRect, masques, textes et boutons sont enregistrés dans les prefabs ; le C# ne reconstruit pas leur mise en page et ne réécrit pas leur Cell Size.
+Les ancres, grilles et mises en page sont enregistrées dans les prefabs. Le code ne redéfinit pas leurs dimensions. Le groupe horizontal partage la largeur entre les destinations actives. Les masques des ScrollRect doivent conserver une Image opaque avec Show Mask Graphic désactivé.
 
-## Responsabilités du code
+## Fichiers responsables
 
-Tous les scripts ci-dessous sont dans `Assets/Scripts/HUD/`.
-
-| Fichier | Fonction |
+| Fichier | Rôle |
 |---|---|
-| `PendingDecisionController.cs` | Oriente vers le bon affichage et soumet par les commandes réseau existantes. |
-| `DecisionWorkspaceView.cs` | Lie les données aux prefabs, affiche les candidats et les options, gère le brouillon et les validations d'interaction. |
-| `DecisionDragCard.cs` | Déplacement temporaire d'une vignette ; restauration en cas de dépôt invalide ou interruption. |
-| `DecisionDropZone.cs` | Vérifie le dépôt et met en évidence une destination valide. |
-| `DecisionSourceView.cs` | Affiche la carte ou l'Artefact à l'origine de l'effet. |
-| `DecisionPresentation.cs` | Libellés de destination et compteur ; ne déduit jamais une règle depuis le texte français. |
+| `HUD/DecisionPresentation.cs` | Choix de la présentation selon l’opération |
+| `HUD/DecisionQuickChoiceView.cs` | Boutons immédiats et sélections multiples compactes |
+| `HUD/DecisionWorkspaceView.cs` | Brouillon des destinations et ordre visuel |
+| `HUD/DecisionDragCard.cs`, `DecisionDropZone.cs` | Clic, glisser-déposer, survol |
+| `HUD/PendingDecisionController.cs` | Liaison des vues, blocage des autres interactions et soumission |
+| `Rules/InspectedSortRules.cs` | Validation de la répartition et reprise du plan après les réactions |
+| `Rules/DeckChoiceRules.cs` | Validation de l’option Défausse / Deck et de l’ordre complet |
+| `Rules/ResolutionQueue.cs` | Conservation du plan de tri dans l’état réseau |
+| `PlayersTurnsHandler.cs`, `Network/NetworkGameState.cs` | Commande au Master, validation de version et publication atomique |
 
-Une destination n'est nommée Écart, Défausse ou Deck que si l'opération est reconnue. Sinon elle reste « Sélection », sans promettre un déplacement que le moteur ne permet pas.
-
-## Destinations et ordre du deck
-
-Alchimiste / Fièvre : le panneau présente les cartes concernées, une zone Défausse et une zone Deck. Glisser une carte dans Défausse déplace visuellement tout le groupe. Glisser les cartes dans Deck permet de les ordonner ; toutes doivent y figurer avant validation. Glisser une carte vers la gauche ou la droite de ses voisines change sa place. Le bouton Réinitialiser annule le brouillon.
-
-**Gauche = plus bas dans le deck ; droite = dessus du deck, donc prochaine carte piochée.** La rangée du deck reste horizontale et défilable. Dimensions, ancres et grille se règlent dans `DecisionCardDestinations.prefab` ; le code ne recrée pas sa mise en page.
-
-La reconnaissance des deux destinations repose sur deux effets déclaratifs consécutifs `move_all_ordered` depuis `inspected`, conditionnés par les deux options, et non sur le nom de la carte ou son texte. Le client envoie l’option et l’ordre complet au Master en une commande. Le Master valide les cartes, la décision et la continuation, puis publie un seul état. Une commande invalide n’est pas publiée.
-
-Pour le Soldat, les étapes **écarter → réactions → défausser → réactions → ordonner le deck** restent distinctes. Les deux premières utilisent le panneau générique avec la destination correspondante. La dernière utilise la rangée ordonnable et une seule validation pour l’ordre complet. Cela préserve les réactions qui peuvent modifier les cartes entre deux étapes.
-
-Une reconnexion ou une pause autoritaire peut effacer le brouillon local ; elle ne valide pas les déplacements. La décision durable reste dans l'état réseau. Seules les cartes candidates et, pour certaines options, la carte de l'événement du joueur local sont montrées ; pas de dévoilement automatique de la main adverse.
+Les chemins de scripts partent de `Dominion/Assets/Scripts/`.
 
 ## Vérification dans Unity
 
-Tests EditMode ajoutés : `Assets/Editor/Tests/DecisionWorkspaceTests.cs` (présentation, limites, origine de l'effet et contrats des prefabs).
+Tests EditMode : `DecisionWorkspaceTests`, `InspectedSortRulesTests`, `FleauxFoundationRulesTests`.
 
-À tester en Play Mode, idéalement à 1280×720 et 1920×1080 :
+1. Vassal : jouer ou laisser en défausse en un clic.
+2. Choix unique avec plusieurs candidats : clic sur une carte sans confirmation supplémentaire.
+3. Choix multiple : limites, désélection, Passer facultatif, compteur et validation.
+4. Soldat : tout conserver, tout défausser, tout écarter, répartir, inverser le deck, revenir à l’état initial.
+5. Soldat avec Fossoyeur en main : répondre à la réaction puis vérifier la fin automatique du tri ; tester également après sérialisation.
+6. Alchimiste / Fièvre : déplacement de tout le groupe, inversion de l’ordre, prochaine pioche.
+7. Main / Réserve, recherche par nom et insertion dans le deck : contrôles spécialisés toujours utilisables.
+8. Échap, pause/reprise, changement de décision, double clic et reconnexion.
+9. Résolutions 1280×720 et 1920×1080 : lisibilité, défilement des listes et du deck.
 
-1. Soldat : écarter zéro, une ou deux cartes ; déplacer une carte puis la ramener ; poursuivre vers Défausse et Deck.
-2. Chapelle / Cave : sélectionner directement dans la main, dépasser la limite, désélectionner et passer quand autorisé.
-3. Alchimiste / Fièvre : déposer une carte dans Défausse déplace tout le groupe ; Deck exige toutes les cartes ; inverser l’ordre puis confirmer ; vérifier la prochaine pioche.
-4. Mine : remplacer une sélection unique puis choisir la pile sur le plateau.
-4. Sac d'ossements / Phylactère : vérifier l'Artefact source, la carte concernée et le dépôt sur l'option.
-5. Pion / Intendant : vérifier les boutons larges sans carte de prévisualisation.
-6. Main volumineuse : sélection sur les cartes réelles ; défausse volumineuse : molette et glisser-déposer dans la fenêtre.
-7. Déposer hors zone : la carte doit revenir, sans changer la sélection.
-8. Échap pendant un choix ; pause/reprise ; reconnexion ; décision d'un autre joueur.
-9. Cliquer deux fois sur Confirmer : aucun second envoi ni interaction pendant l'attente.
-
-Les validations YAML / références des prefabs peuvent être réalisées hors Unity. La compilation, les tests EditMode et le rendu Play Mode nécessitent l'éditeur Unity.
-
-## Choix rapides
-
-`DecisionQuickChoice.prefab` présente la source à droite, la carte concernée à gauche et les boutons de réponse. Aucune zone Sélection, aucun bouton Réinitialiser ou Confirmer. Un clic envoie directement la réponse ; les boutons sont désactivés pendant l’envoi. Échap et la pause restent disponibles.
-
-- Vassal et cas déclaratifs équivalents : **Jouer / Laisser en défausse**. La carte a déjà été défaussée avant la décision : le second bouton la laisse à sa place.
-- Une seule carte candidate hors main/Réserve, suivie de `play_selected`, `trash_selected` ou `discard_selected` : bouton portant l’action, avec Passer quand autorisé.
-- Choix d’une option unique, jusqu’à quatre réponses et au plus une carte concernée : boutons directs avec leurs libellés déclaratifs.
-- Plusieurs cartes, plusieurs options à sélectionner, recherche de nom, position dans le deck et ordre du deck : conserver les contrôles spécialisés.
-- Main / Réserve : conserver le bandeau et la sélection sur le plateau.
-
-Routage : `DecisionPresentation.IsQuickChoice`. Comportement : `DecisionQuickChoiceView`. Dimensions et disposition : prefab uniquement. Pour tester : Vassal jouer/refuser, choix d’option obligatoire/facultatif, double clic, pause/reprise et passage à un choix multiple.
+Les références et le YAML peuvent être vérifiés hors Unity. La compilation, les tests EditMode et le rendu nécessitent l’éditeur Unity.

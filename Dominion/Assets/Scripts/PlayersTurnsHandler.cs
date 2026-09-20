@@ -73,6 +73,23 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
             NetworkGameState.LocalPlayerId, decisionId, selectedInstanceIds ?? new int[0], state.Version, state.AuthorityEpoch);
     }
 
+    public void SubmitSortDecision(string decisionId, int[] trash, int[] discard, int[] deck)
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (!CanSendPendingDecision(state, decisionId)) return;
+        photonView.RPC(nameof(RpcRequestSubmitSortDecision), RpcTarget.MasterClient,
+            NetworkGameState.LocalPlayerId, decisionId, trash, discard, deck, state.Version, state.AuthorityEpoch);
+    }
+
+    [PunRPC]
+    private void RpcRequestSubmitSortDecision(string requesterPlayerId, string decisionId, int[] trash, int[] discard,
+        int[] deck, int expectedVersion, int expectedAuthorityEpoch, PhotonMessageInfo info)
+    {
+        if (!ValidateSender(requesterPlayerId, info)) return;
+        if (!NetworkGameState.TrySubmitSortDecision(requesterPlayerId, decisionId, trash, discard, deck, expectedVersion, expectedAuthorityEpoch))
+            Debug.LogWarning("Rejected stale or invalid sorting command.");
+    }
+
     public void SubmitSupplyDecision(string decisionId, string[] selectedDefinitionIds)
     {
         GameStateSnapshot state = NetworkGameState.State;
