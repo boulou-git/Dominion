@@ -256,6 +256,8 @@ public sealed class PrefabUiContractTests
         Assert.AreEqual(1, gameScreen.GetComponentsInChildren<AdaptiveCardZoomView>(true).Length);
 
         SerializedObject screen = new SerializedObject(gameScreen.GetComponent<GameScreenController>());
+        Assert.IsNull(screen.FindProperty("_journalText"),
+            "PublicJournalView must be the only component that owns journal rendering.");
         Assert.NotNull(screen.FindProperty("_zoomOverlay"));
         Assert.NotNull(screen.FindProperty("_zoomImage"));
         Assert.NotNull(screen.FindProperty("_otherPlayerDecisionPanel"));
@@ -263,6 +265,14 @@ public sealed class PrefabUiContractTests
         Transform waitingPanel = gameScreen.transform.Find("OtherPlayerDecisionPanel");
         Assert.NotNull(waitingPanel?.GetComponent<Image>());
         Assert.NotNull(waitingPanel?.Find("Message")?.GetComponent<Text>());
+
+        Text journalText = gameScreen.transform.Find("JournalPanel/JournalText")?.GetComponent<Text>();
+        Assert.NotNull(journalText);
+        Assert.IsTrue(journalText.raycastTarget,
+            "JournalText must receive pointer events for clickable card names.");
+        SerializedObject journal = new SerializedObject(gameScreen.GetComponent<PublicJournalView>());
+        Assert.AreEqual(journalText,
+            journal.FindProperty("_journalText")?.objectReferenceValue);
 
         SerializedObject extras = new SerializedObject(gameScreen.GetComponent<ReserveExtrasController>());
         Assert.IsNull(extras.FindProperty("_zoomOverlay"));

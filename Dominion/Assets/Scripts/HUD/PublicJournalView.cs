@@ -25,28 +25,27 @@ public sealed class PublicJournalView : MonoBehaviour, IPointerClickHandler
 
     private readonly List<CardLink> _cardLinks = new List<CardLink>();
 
+    [SerializeField] private Text _journalText;
+
     private GameScreenController _screen;
-    private Text _journalText;
 
     private void Awake()
     {
         _screen = GetComponent<GameScreenController>();
 
-        Transform journalPanel = transform.Find("JournalPanel");
-        Transform journalTextTransform = journalPanel != null ? journalPanel.Find("JournalText") : null;
-        _journalText = journalTextTransform != null ? journalTextTransform.GetComponent<Text>() : null;
-
         if (_journalText == null)
         {
-            Debug.LogError("GameScreen.prefab contract is incomplete: JournalPanel/JournalText is missing.", this);
+            Debug.LogError("GameScreen.prefab contract is incomplete: PublicJournalView has no JournalText reference.", this);
             enabled = false;
             return;
         }
 
-        // The Text itself is the raycast target. Pointer events then bubble to this
-        // component on the GameScreen root; no invisible buttons or runtime UI needed.
-        _journalText.raycastTarget = true;
-        _journalText.supportRichText = true;
+        if (!_journalText.raycastTarget || !_journalText.supportRichText)
+        {
+            Debug.LogError("GameScreen.prefab contract is incomplete: JournalText must support rich text and raycasts.", this);
+            enabled = false;
+            return;
+        }
 
         NetworkGameState.StateChanged += Refresh;
         if (_screen != null)
@@ -78,10 +77,10 @@ public sealed class PublicJournalView : MonoBehaviour, IPointerClickHandler
     {
         if (_journalText == null || eventData == null)
             return;
-        if (eventData.button != PointerEventData.InputButton.Left &&
-            eventData.button != PointerEventData.InputButton.Right)
+        if (!JournalPointerRules.IsInspectionClick(eventData.button))
             return;
-        if (eventData.pointerCurrentRaycast.gameObject != _journalText.gameObject)
+        if (!RectTransformUtility.RectangleContainsScreenPoint(
+                _journalText.rectTransform, eventData.position, eventData.pressEventCamera))
             return;
 
         CardLink link = FindLinkAtPointer(eventData.position, eventData.pressEventCamera);
@@ -345,4 +344,14 @@ public sealed class PublicJournalView : MonoBehaviour, IPointerClickHandler
             default: return string.IsNullOrEmpty(phase) ? "—" : phase.ToUpperInvariant();
         }
     }
+}
+
+/// <summary>
+/// Shared pointer policy for journal card inspection.
+/// </summary>
+public static class JournalPointerRules
+{
+    public static bool IsInspectionClick(PointerEventData.InputButton button) =>
+        button == PointerEventData.InputButton.Left ||
+        button == PointerEventData.InputButton.Right;
 }

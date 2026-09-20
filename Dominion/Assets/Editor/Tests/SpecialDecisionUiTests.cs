@@ -1,5 +1,6 @@
 #if UNITY_INCLUDE_TESTS
 using NUnit.Framework;
+using UnityEngine.EventSystems;
 
 public sealed class SpecialDecisionUiTests
 {
@@ -22,6 +23,15 @@ public sealed class SpecialDecisionUiTests
         Assert.AreEqual(4, matches.Count);
         //Assert.That(matches, Does.Contain(0));
         //Assert.That(matches, Does.Not.Contain(5));
+    }
+
+    [TestCase(PointerEventData.InputButton.Left, true)]
+    [TestCase(PointerEventData.InputButton.Right, true)]
+    [TestCase(PointerEventData.InputButton.Middle, false)]
+    public void JournalCardInspection_AcceptsLeftAndRightClicks(
+        PointerEventData.InputButton button, bool expected)
+    {
+        Assert.AreEqual(expected, JournalPointerRules.IsInspectionClick(button));
     }
 }
 #endif

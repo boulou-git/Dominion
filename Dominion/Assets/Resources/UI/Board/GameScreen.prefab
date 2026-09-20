@@ -1719,7 +1719,6 @@ MonoBehaviour:
   _otherPlayerDecisionPanel: {fileID: 881100000000000001}
   _otherPlayerDecisionText: {fileID: 881100000000000008}
   _handRoot: {fileID: 4606441781264146842}
-  _journalText: {fileID: 6440469634501943924}
   _zoomOverlay: {fileID: 9046615813456756668}
   _zoomImage: {fileID: 5367388085205101272}
   _zoomCloseButton: {fileID: 124631557397848838}
@@ -1749,6 +1748,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5da708e489ba4b32895a4d16cff2c246, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PublicJournalView
+  _journalText: {fileID: 6440469634501943924}
 --- !u!1 &3101219689622283924
 GameObject:
   m_ObjectHideFlags: 0
@@ -2932,7 +2932,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
   m_Color: {r: 0.72, g: 0.69, b: 0.61, a: 1}
-  m_RaycastTarget: 0
+  m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
