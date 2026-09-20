@@ -11,7 +11,7 @@ public sealed class DecisionWorkspaceTests
     [TestCase("hand", "choose_cards", 4, false, null)]
     [TestCase("hand", "move_all_ordered|deck", 1, false, null)]
     [TestCase("discard", "choose_cards", 3, false, null)]
-    [TestCase("inspected", "move_all_ordered|deck", 1, false, "UI/Choices/DecisionCardDestinations")]
+    [TestCase("inspected", "move_all_ordered|deck", 1, false, "UI/Choices/DecisionDeckOrderCompact")]
     [TestCase("options", "choose_options", 1, true, null)]
     [TestCase("options", "choose_options", 1, false, null)]
     [TestCase("options", "choose_options", 2, false, null)]
@@ -56,6 +56,25 @@ public sealed class DecisionWorkspaceTests
         Assert.IsTrue(DecisionPresentation.IsQuickChoice(decision, null));
         decision.MaxSelections = 1; decision.CandidateInstanceIds.AddRange(new[] { 1, 2 });
         Assert.IsTrue(DecisionPresentation.IsQuickChoice(decision, null));
+    }
+
+    [Test]
+    public void SupplyOrTrashBranch_IsDetectedFromEffects_NotFromCardName()
+    {
+        var source = new ExtensionCardData { abilities = new List<CardAbilityData> {
+            new CardAbilityData { effects = new List<CardEffectData> {
+                new CardEffectData { op = "choose_supply", min = 0, max = 1 },
+                new CardEffectData { op = "trash_selected_supply", requiresLastSelection = true },
+                new CardEffectData { op = "choose_cards", zone = "trash", min = 1, max = 1, requiresNoLastSelection = true },
+                new CardEffectData { op = "gain_selected_trash" }
+            } }
+        } };
+        var supply = new PendingDecisionSnapshot { Zone = "supply", Operation = "choose_supply", AbilityIndex = 0, EffectIndex = 0 };
+        var trash = new PendingDecisionSnapshot { Zone = "trash", Operation = "choose_cards", AbilityIndex = 0, EffectIndex = 2 };
+
+        Assert.IsTrue(AlternativeTrashChoiceRules.IsSupplyStep(supply, source));
+        Assert.IsTrue(AlternativeTrashChoiceRules.IsTrashStep(trash, source));
+        Assert.IsFalse(DecisionPresentation.IsQuickChoice(trash, source));
     }
 
     [Test]
@@ -137,6 +156,7 @@ public sealed class DecisionWorkspaceTests
     }
 
     [TestCase("DecisionCardDestinations")]
+    [TestCase("DecisionDeckOrderCompact")]
     public void Workspace_HasPrefabAuthoredControlsAndScrollableDropZones(string prefabName)
     {
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/UI/Choices/" + prefabName + ".prefab");

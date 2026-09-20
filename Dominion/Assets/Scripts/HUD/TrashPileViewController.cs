@@ -29,6 +29,13 @@ public sealed class TrashPileViewController : MonoBehaviour
     private int _lastRenderedVersion = -1;
     private bool _uiBindingFailed;
     private Coroutine _openRefreshRoutine;
+    private readonly HashSet<int> _decisionCandidates = new HashSet<int>();
+    private Action _decisionButtonAction;
+    private Action<int> _decisionCardAction;
+    private Color _normalButtonColor;
+    private bool _hasNormalButtonColor;
+
+    public Transform DecisionRoot => transform.Find("TrashPileUi");
 
     private const float CardWidth = 130f;
     private const float CardHeight = 200f;
@@ -97,6 +104,11 @@ public sealed class TrashPileViewController : MonoBehaviour
         }
 
         _openButton.onClick.AddListener(Open);
+        if (_openButton.targetGraphic != null)
+        {
+            _normalButtonColor = _openButton.targetGraphic.color;
+            _hasNormalButtonColor = true;
+        }
         backgroundClose.onClick.AddListener(Close);
         closeButton.onClick.AddListener(Close);
         _overlay.SetActive(false);
@@ -108,8 +120,9 @@ public sealed class TrashPileViewController : MonoBehaviour
         int count = state != null && state.TrashedCards != null ? state.TrashedCards.Count : 0;
         if (_openButtonText != null) _openButtonText.text = "ÉCART (" + count + ")";
         bool decisionLocked = PendingDecisionInputLock.IsActive(state);
-        if (_openButton != null) _openButton.interactable = !decisionLocked;
-        if (decisionLocked && _overlay != null && _overlay.activeSelf)
+        bool decisionEnabled = _decisionButtonAction != null || _decisionCardAction != null;
+        if (_openButton != null) _openButton.interactable = !decisionLocked || decisionEnabled;
+        if (decisionLocked && !decisionEnabled && _overlay != null && _overlay.activeSelf)
             Close();
 
         if (_overlay == null || !_overlay.activeSelf) return;
@@ -120,7 +133,14 @@ public sealed class TrashPileViewController : MonoBehaviour
 
     private void Open()
     {
-        if (PendingDecisionInputLock.IsActive(NetworkGameState.State)) return;
+        if (_decisionButtonAction != null)
+        {
+            Action action = _decisionButtonAction;
+            _decisionButtonAction = null;
+            action();
+            return;
+        }
+        if (PendingDecisionInputLock.IsActive(NetworkGameState.State) && _decisionCardAction == null) return;
         if (_overlay == null) BuildUi();
         if (_overlay == null) return;
         _overlay.SetActive(true);
@@ -191,10 +211,25 @@ public sealed class TrashPileViewController : MonoBehaviour
             {
                 CardPointerInteraction pointer = cardView.Pointer;
                 pointer.InspectOnLongPress = false;
-                Sprite capturedSprite = sprite;
-                ExtensionCardData capturedDefinition = definition;
-                pointer.PrimaryActionRequested += () => ShowZoom(capturedSprite, capturedDefinition);
-                pointer.InspectRequested += () => ShowZoom(capturedSprite, capturedDefinition);
+                bool candidate = _decisionCardAction != null && _decisionCandidates.Contains(instanceId);
+                pointer.SetDecisionCandidate(candidate);
+                if (candidate)
+                {
+                    int capturedId = instanceId;
+                    pointer.PrimaryActionRequested += () => _decisionCardAction?.Invoke(capturedId);
+                }
+                else if (_decisionCardAction == null)
+                {
+                    Sprite capturedSprite = sprite;
+                    ExtensionCardData capturedDefinition = definition;
+                    pointer.PrimaryActionRequested += () => ShowZoom(capturedSprite, capturedDefinition);
+                    pointer.InspectRequested += () => ShowZoom(capturedSprite, capturedDefinition);
+                }
+                else
+                {
+                    CanvasGroup dim = cardObject.AddComponent<CanvasGroup>();
+                    dim.alpha = 0.42f;
+                }
             }
 
             _renderedCards.Add(cardObject);
@@ -271,6 +306,45 @@ public sealed class TrashPileViewController : MonoBehaviour
         foreach (GameObject card in _renderedCards)
             if (card != null) Destroy(card);
         _renderedCards.Clear();
+    }
+
+    public void SetAlternativeButton(Action chooseTrash)
+    {
+        _decisionButtonAction = chooseTrash;
+        _decisionCardAction = null;
+        _decisionCandidates.Clear();
+        RefreshDecisionButton();
+    }
+
+    public void SetDecisionCards(IEnumerable<int> candidates, Action<int> chooseCard, bool openImmediately)
+    {
+        _decisionButtonAction = null;
+        _decisionCardAction = chooseCard;
+        _decisionCandidates.Clear();
+        if (candidates != null) foreach (int id in candidates) _decisionCandidates.Add(id);
+        RefreshDecisionButton();
+        _lastRenderedVersion = -1;
+        if (openImmediately) Open();
+        else if (_overlay != null && _overlay.activeSelf) RebuildCards(NetworkGameState.State);
+    }
+
+    public void ClearDecisionChoice()
+    {
+        bool wasDecision = _decisionButtonAction != null || _decisionCardAction != null;
+        _decisionButtonAction = null;
+        _decisionCardAction = null;
+        _decisionCandidates.Clear();
+        RefreshDecisionButton();
+        if (wasDecision) Close();
+    }
+
+    private void RefreshDecisionButton()
+    {
+        if (_openButton == null) return;
+        bool active = _decisionButtonAction != null || _decisionCardAction != null;
+        _openButton.interactable = active || !PendingDecisionInputLock.IsActive(NetworkGameState.State);
+        if (_openButton.targetGraphic != null && _hasNormalButtonColor)
+            _openButton.targetGraphic.color = active ? new Color(0.34f, 0.62f, 0.20f, 1f) : _normalButtonColor;
     }
 
 }

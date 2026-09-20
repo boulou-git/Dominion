@@ -20,6 +20,7 @@ public sealed class DecisionQuickChoiceView : MonoBehaviour
     private readonly HashSet<string> _selectedOptions = new HashSet<string>();
     private readonly Dictionary<int, GameObject> _cardTiles = new Dictionary<int, GameObject>();
     private readonly Dictionary<string, GameObject> _optionTiles = new Dictionary<string, GameObject>();
+    private readonly Dictionary<string, string> _optionLabels = new Dictionary<string, string>();
 
     private bool CanAnswer()
     {
@@ -90,6 +91,7 @@ public sealed class DecisionQuickChoiceView : MonoBehaviour
                         PendingDecisionSelectionRules.Toggle(_selectedOptions, id, decision.MaxSelections); RefreshDraft();
                     }, false);
                     _optionTiles[id] = button.gameObject;
+                    _optionLabels[id] = label;
                 }
                 else AddButton(label, () => answer(new int[0], new[] { id }));
             }
@@ -133,7 +135,18 @@ public sealed class DecisionQuickChoiceView : MonoBehaviour
         if (!_draft || _decision == null) return;
         int count = _decision.Zone == "options" ? _selectedOptions.Count : _selectedCards.Count;
         foreach (var pair in _cardTiles) pair.Value.transform.Find("Selected").gameObject.SetActive(_selectedCards.Contains(pair.Key));
-        foreach (var pair in _optionTiles) pair.Value.transform.Find("Selected").gameObject.SetActive(_selectedOptions.Contains(pair.Key));
+        foreach (var pair in _optionTiles)
+        {
+            bool selected = _selectedOptions.Contains(pair.Key);
+            pair.Value.transform.Find("Selected").gameObject.SetActive(selected);
+            Image background = pair.Value.GetComponent<Image>();
+            if (background != null) background.color = selected
+                ? new Color(0.25f, 0.48f, 0.18f, 1f)
+                : new Color(0.27f, 0.24f, 0.16f, 1f);
+            Text label = pair.Value.transform.Find("Label").GetComponent<Text>();
+            label.text = (selected ? "✓  " : string.Empty) + _optionLabels[pair.Key];
+            label.fontStyle = selected ? FontStyle.Bold : FontStyle.Normal;
+        }
         if (_confirm != null)
         {
             _confirm.interactable = !_busy && DecisionPresentation.IsValid(_decision, count);
@@ -153,7 +166,7 @@ public sealed class DecisionQuickChoiceView : MonoBehaviour
     public void Clear()
     {
         foreach (GameObject item in _items) if (item != null) { item.SetActive(false); Destroy(item); }
-        _items.Clear(); _buttons.Clear(); _cardTiles.Clear(); _optionTiles.Clear();
+        _items.Clear(); _buttons.Clear(); _cardTiles.Clear(); _optionTiles.Clear(); _optionLabels.Clear();
         _selectedCards.Clear(); _selectedOptions.Clear(); _confirm = null; _decision = null;
     }
 }

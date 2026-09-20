@@ -24,7 +24,7 @@ public static class DecisionPresentation
             if (DeckChoiceRules.TryDescribe(decision, source, out _, out _, out _)) return "UI/Choices/DecisionCardDestinations";
             return null;
         }
-        if (op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase)) return "UI/Choices/DecisionCardDestinations";
+        if (op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase)) return "UI/Choices/DecisionDeckOrderCompact";
         return null;
     }
 
@@ -32,6 +32,7 @@ public static class DecisionPresentation
     public static bool IsQuickChoice(PendingDecisionSnapshot decision, ExtensionCardData source)
     {
         if (decision == null || decision.Zone == "hand" || decision.Zone == "supply") return false;
+        if (AlternativeTrashChoiceRules.IsTrashStep(decision, source)) return false;
         string op = decision.Operation ?? "";
         return op != "name_card" && !op.StartsWith("insert_selected_into_deck|", StringComparison.OrdinalIgnoreCase) &&
             !op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase) &&

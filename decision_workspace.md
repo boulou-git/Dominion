@@ -12,7 +12,8 @@ Tous les chemins de prefab ci-dessous sont dans `Dominion/Assets/Resources/UI/Ch
 | Plusieurs cartes ou options | `DecisionQuickChoice` | Sélection / désélection puis un seul bouton Valider |
 | Soldat : répartir entre Défausse / Deck / Écart | `DecisionCardDestinations` | Glisser-déposer, ordre du deck, une validation |
 | Alchimiste / Fièvre : tout défausser ou tout replacer | `DecisionCardDestinations` | Déplacer une carte change la destination du groupe |
-| Réordonner le deck | `DecisionCardDestinations` | Glisser les cartes dans la rangée puis valider |
+| Patrouille / simple réordonnancement du deck | `DecisionDeckOrderCompact` | Petit panneau, glisser les cartes dans la rangée puis valider |
+| Rôdeuse : Réserve ou Écart | `DecisionInstructionBar` + `TrashPileUi` | Clic direct sur une pile ou sur Écart, puis sur la carte |
 | Nommer une carte | `CardNameDecision` dans `PendingDecisionPanel` | Recherche dédiée |
 | Choisir une position d’insertion | `DeckPositionDecision` dans `PendingDecisionPanel` | Contrôle dédié |
 
@@ -24,7 +25,7 @@ La source (carte ou Artefact) reste visible à droite. Les cartes concernées ap
 
 Pour le Vassal, les boutons sont **Jouer** et **Laisser en défausse** : la carte a déjà été défaussée avant cette décision. Les autres actions explicites sur une unique carte utilisent leur verbe : Jouer, Écarter ou Défausser.
 
-Les réponses immédiates bloquent les boutons dès l’envoi. Pour plusieurs cartes/options, le compteur et le bouton Valider suivent les limites imposées par le moteur. Le bouton affiche Passer si zéro sélection est autorisé. Les cartes et options sélectionnées portent une marque visible. Les listes sont défilables, à la molette ou en faisant glisser leur contenu.
+Les réponses immédiates bloquent les boutons dès l’envoi. Pour plusieurs cartes/options, le compteur et le bouton Valider suivent les limites imposées par le moteur. Le bouton affiche Passer si zéro sélection est autorisé. Les options sélectionnées ont une coche, un libellé gras et un fond vert visibles. Les listes sont défilables, à la molette ou en faisant glisser leur contenu.
 
 ## Soldat : une seule validation
 
@@ -38,7 +39,11 @@ La reconnaissance utilise la suite déclarative `choose_cards` → `trash_select
 
 ## Alchimiste, Fièvre et ordre du deck
 
-Les cartes commencent aussi sur le deck. Déposer une carte dans Défausse y déplace tout le groupe. Revenir sur Deck y replace le groupe, que l’on peut ensuite réordonner. Une validation transmet l’option et l’ordre complet. Pour un simple réordonnancement, seule la zone Deck reste visible et occupe la largeur des destinations.
+Les cartes commencent aussi sur le deck. Déposer une carte dans Défausse y déplace tout le groupe. Revenir sur Deck y replace le groupe, que l’on peut ensuite réordonner. Une validation transmet l’option et l’ordre complet. Les simples effets `move_all_ordered` utilisent le prefab compact `DecisionDeckOrderCompact`; cela couvre notamment Patrouille, Confesseur et Encens noir sans dépendre de leur nom.
+
+## Rôdeuse : choix direct entre Réserve et Écart
+
+La Réserve et le bouton Écart sont mis en évidence simultanément. Cliquer une pile admissible répond immédiatement. Cliquer Écart envoie automatiquement la branche « aucune pile », ouvre l’Écart, assombrit les cartes non admissibles et permet de recevoir une carte admissible en un clic. La reconnaissance repose sur la suite déclarative des effets, pas sur le nom Rôdeuse.
 
 ## Où modifier quoi ?
 
@@ -50,7 +55,8 @@ Les cartes commencent aussi sur le deck. Déposer une carte dans Défausse y dé
 | Boutons sans aperçu | `Panel/OptionsOnly/Scroll/Viewport/Content` → GridLayoutGroup |
 | Carte source et texte | `Panel/Source/Artwork`, `Name`, `Rules`, `Context` |
 | Consigne | `Panel/Prompt` → Text |
-| Taille / position du tri | `DecisionCardDestinations` → `Panel` → RectTransform |
+| Taille / position du tri à 3 destinations | `DecisionCardDestinations` → `Panel` → RectTransform |
+| Taille / position du simple ordre de deck | `DecisionDeckOrderCompact` → `Panel` → RectTransform |
 | Espacement entre destinations | `Panel/Zones` → HorizontalLayoutGroup |
 | Défausse / Deck / Écart | `Panel/Zones/Discard`, `Chosen`, `Available` |
 | Taille des cartes du tri | Chaque zone → `Scroll/Viewport/Content` → GridLayoutGroup |
@@ -73,6 +79,8 @@ Les ancres, grilles et mises en page sont enregistrées dans les prefabs. Le cod
 | `HUD/PendingDecisionController.cs` | Liaison des vues, blocage des autres interactions et soumission |
 | `Rules/InspectedSortRules.cs` | Validation de la répartition et reprise du plan après les réactions |
 | `Rules/DeckChoiceRules.cs` | Validation de l’option Défausse / Deck et de l’ordre complet |
+| `Rules/AlternativeTrashChoiceRules.cs` | Détection générique du choix Réserve ou Écart |
+| `HUD/TrashPileViewController.cs` | Mise en évidence et sélection directe dans l’Écart |
 | `Rules/ResolutionQueue.cs` | Conservation du plan de tri dans l’état réseau |
 | `PlayersTurnsHandler.cs`, `Network/NetworkGameState.cs` | Commande au Master, validation de version et publication atomique |
 

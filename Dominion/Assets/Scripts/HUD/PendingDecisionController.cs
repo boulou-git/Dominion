@@ -61,10 +61,12 @@ public sealed class PendingDecisionController : MonoBehaviour
     private DecisionSourceView _sourceContext;
     private bool _usingWorkspace;
     private DecisionQuickChoiceView _quickChoice;
+    private TrashPileViewController _trashPile;
 
     private void Awake()
     {
         EnsurePanel();
+        _trashPile = GetComponent<TrashPileViewController>();
         NetworkGameState.StateChanged += Refresh;
         Refresh(NetworkGameState.State);
     }
@@ -75,6 +77,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         ClearCardBindings();
         ClearExternalCards();
         ClearSupplyDecisionVisuals();
+        _trashPile?.ClearDecisionChoice();
         ReleaseInputLock();
     }
 
@@ -99,6 +102,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             ClearCardBindings();
             ClearExternalCards();
             ClearSupplyDecisionVisuals();
+            _trashPile?.ClearDecisionChoice();
             _selected.Clear();
             _selectedSupply.Clear();
             _selectedOptions.Clear();
@@ -113,6 +117,8 @@ public sealed class PendingDecisionController : MonoBehaviour
         CardInstance sourceCard = NetworkGameState.FindCardInstance(state, DecisionPresentation.SourceId(decision));
         ExtensionCardData sourceDefinition = null;
         if (sourceCard != null) RoomGameSetup.TryResolveCard(sourceCard.DefinitionId, out _, out sourceDefinition);
+        bool alternativeSupply = AlternativeTrashChoiceRules.IsSupplyStep(decision, sourceDefinition);
+        bool alternativeTrash = AlternativeTrashChoiceRules.IsTrashStep(decision, sourceDefinition);
         bool quick = DecisionPresentation.IsQuickChoice(decision, sourceDefinition);
         if (quick && _quickChoice == null)
         {
@@ -135,6 +141,31 @@ public sealed class PendingDecisionController : MonoBehaviour
             });
             _quickChoice.SetBusy(_submitPending || state.IsPaused);
             ApplyInputLock(); return;
+        }
+        if ((alternativeSupply || alternativeTrash) && _trashPile != null)
+        {
+            SelectWorkspace(null); _usingWorkspace = false;
+            if (_quickChoice != null) _quickChoice.gameObject.SetActive(false);
+            if (_sourceContext != null) _sourceContext.gameObject.SetActive(false);
+            ConfigurePanel(CardZone.Hand, alternativeSupply, false, false, false, false, newDecision);
+            if (_barConfirmButton != null) _barConfirmButton.gameObject.SetActive(false);
+            if (_barPromptText != null) _barPromptText.text = alternativeSupply
+                ? "Choisissez une carte Action de la Réserve, ou cliquez sur ÉCART."
+                : "Choisissez directement une carte Action dans l’Écart.";
+            if (_barCountText != null) _barCountText.text = "Un clic suffit — aucune validation supplémentaire.";
+            if (alternativeSupply)
+            {
+                BindSupplyPiles(decision, SubmitAlternativeSupply);
+                _trashPile?.SetAlternativeButton(_submitPending ? (Action)null : BeginAlternativeTrashChoice);
+            }
+            else
+            {
+                ClearSupplyDecisionVisuals();
+                List<int> candidates = decision.CandidateInstanceIds ?? new List<int>();
+                _trashPile?.SetDecisionCards(candidates, SubmitAlternativeTrashCard, newDecision);
+            }
+            ApplyInputLock();
+            return;
         }
         SelectWorkspace(DecisionPresentation.WorkspacePrefab(decision, sourceDefinition));
         _usingWorkspace = _workspace != null && !supplyChoice && !deckPositionChoice && !cardNameChoice;
@@ -235,7 +266,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         return decision;
     }
 
-    private void BindSupplyPiles(PendingDecisionSnapshot decision)
+    private void BindSupplyPiles(PendingDecisionSnapshot decision, Action<string> choose = null)
     {
         HashSet<string> candidates = new HashSet<string>(decision.CandidateDefinitionIds ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
         SupplyPileInteractionBinding[] bindings = GetComponentsInChildren<SupplyPileInteractionBinding>(true);
@@ -244,8 +275,38 @@ public sealed class PendingDecisionController : MonoBehaviour
             if (binding == null || string.IsNullOrEmpty(binding.DefinitionId)) continue;
             bool candidate = candidates.Contains(binding.DefinitionId);
             bool selected = _selectedSupply.Contains(binding.DefinitionId);
-            binding.SetDecisionChoice(true, candidate, selected, ToggleSupplySelection);
+            binding.SetDecisionChoice(true, candidate, selected, choose ?? ToggleSupplySelection);
         }
+    }
+
+    private void SubmitAlternativeSupply(string definitionId)
+    {
+        PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
+        if (_submitPending || decision == null || PlayersTurnsHandler.Instance == null ||
+            decision.CandidateDefinitionIds == null || !decision.CandidateDefinitionIds.Contains(definitionId)) return;
+        _submitPending = true;
+        ClearSupplyDecisionVisuals();
+        _trashPile?.ClearDecisionChoice();
+        PlayersTurnsHandler.Instance.SubmitSupplyDecision(decision.DecisionId, new[] { definitionId });
+    }
+
+    private void BeginAlternativeTrashChoice()
+    {
+        PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
+        if (_submitPending || decision == null || PlayersTurnsHandler.Instance == null) return;
+        _submitPending = true;
+        ClearSupplyDecisionVisuals();
+        PlayersTurnsHandler.Instance.SubmitSupplyDecision(decision.DecisionId, new string[0]);
+    }
+
+    private void SubmitAlternativeTrashCard(int instanceId)
+    {
+        PendingDecisionSnapshot decision = ResolveLocalDecision(NetworkGameState.State);
+        if (_submitPending || decision == null || PlayersTurnsHandler.Instance == null ||
+            decision.CandidateInstanceIds == null || !decision.CandidateInstanceIds.Contains(instanceId)) return;
+        _submitPending = true;
+        _trashPile?.ClearDecisionChoice();
+        PlayersTurnsHandler.Instance.SubmitDecision(decision.DecisionId, new[] { instanceId });
     }
 
     private void ToggleSupplySelection(string definitionId)
@@ -567,6 +628,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         if (_workspace != null) { _workspace.Clear(); _workspace.gameObject.SetActive(false); }
         if (_sourceContext != null) _sourceContext.gameObject.SetActive(false);
         ClearCardBindings(); ClearExternalCards(); ClearSupplyDecisionVisuals();
+        _trashPile?.ClearDecisionChoice();
         _selected.Clear(); _selectedSupply.Clear(); _selectedOptions.Clear(); _boundDecisionId = string.Empty; _submitPending = false;
         if (_panel != null) _panel.gameObject.SetActive(false);
         if (_instructionBar != null) _instructionBar.SetActive(false);
@@ -588,7 +650,9 @@ public sealed class PendingDecisionController : MonoBehaviour
                                    IsChildOf(graphic.transform, _quickChoice) ||
                                    IsChildOf(graphic.transform, _sourceContext) ||
                                    IsChildOf(graphic.transform, _instructionBar) ||
-                                   IsChildOf(graphic.transform, _cardDrawer);
+                                   IsChildOf(graphic.transform, _cardDrawer) ||
+                                   (_trashPile != null && _trashPile.DecisionRoot != null &&
+                                    graphic.transform.IsChildOf(_trashPile.DecisionRoot));
             graphic.raycastTarget = _originalRaycastTargets[graphic] &&
                                     (decisionCandidate || decisionControl);
         }
@@ -777,6 +841,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         bool deckPositionChoice, bool cardNameChoice, bool hasCardPreview, bool newDecision)
     {
         if (_panel == null || _instructionBar == null || _cardDrawer == null) return;
+        if (_barConfirmButton != null) _barConfirmButton.gameObject.SetActive(true);
         bool cardsVisible = zone != CardZone.Hand && !supplyChoice && !optionChoice;
         bool compactVisible = !cardsVisible && !optionChoice;
         _panel.gameObject.SetActive(optionChoice);
