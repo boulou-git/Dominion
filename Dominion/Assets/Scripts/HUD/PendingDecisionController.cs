@@ -62,6 +62,11 @@ public sealed class PendingDecisionController : MonoBehaviour
     private bool _usingWorkspace;
     private DecisionQuickChoiceView _quickChoice;
     private TrashPileViewController _trashPile;
+    private int _queuedBranchCardId;
+    private string _queuedBranchDefinitionId;
+    private int _queuedBranchSourceId;
+    private int _queuedBranchAbilityIndex = -1;
+    private int _queuedBranchEffectIndex = -1;
 
     private void Awake()
     {
@@ -117,8 +122,11 @@ public sealed class PendingDecisionController : MonoBehaviour
         CardInstance sourceCard = NetworkGameState.FindCardInstance(state, DecisionPresentation.SourceId(decision));
         ExtensionCardData sourceDefinition = null;
         if (sourceCard != null) RoomGameSetup.TryResolveCard(sourceCard.DefinitionId, out _, out sourceDefinition);
+        if (TrySubmitQueuedBoardBranch(decision)) return;
         bool alternativeSupply = AlternativeTrashChoiceRules.IsSupplyStep(decision, sourceDefinition);
         bool alternativeTrash = AlternativeTrashChoiceRules.IsTrashStep(decision, sourceDefinition);
+        bool directBoardBranch = DirectBoardBranchChoiceRules.TryDescribe(decision, sourceDefinition,
+            out DirectBoardBranchChoiceRules.Description directBranch);
         bool quick = DecisionPresentation.IsQuickChoice(decision, sourceDefinition);
         if (quick && _quickChoice == null)
         {
@@ -163,6 +171,33 @@ public sealed class PendingDecisionController : MonoBehaviour
                 ClearSupplyDecisionVisuals();
                 List<int> candidates = decision.CandidateInstanceIds ?? new List<int>();
                 _trashPile?.SetDecisionCards(candidates, SubmitAlternativeTrashCard, newDecision);
+            }
+            ApplyInputLock();
+            return;
+        }
+        if (directBoardBranch)
+        {
+            SelectWorkspace(null); _usingWorkspace = false;
+            if (_quickChoice != null) _quickChoice.gameObject.SetActive(false);
+            if (_sourceContext != null) _sourceContext.gameObject.SetActive(false);
+            ConfigurePanel(CardZone.Hand, false, false, false, false, false, newDecision);
+            PlayerStateSnapshot player = state.Players?.Find(candidate => candidate != null &&
+                string.Equals(candidate.PlayerId, decision.PlayerId, StringComparison.Ordinal));
+            List<int> handCandidates = DirectBoardBranchChoiceRules.HandCandidates(state, player,
+                directBranch.HandChoice, ResolveDefinition);
+            List<string> supplyCandidates = DirectBoardBranchChoiceRules.SupplyCandidates(state,
+                directBranch.SupplyChoice, ResolveDefinition);
+            BindHandCards(decision, id => ChooseDirectHandBranch(decision, directBranch, id), handCandidates);
+            BindSupplyPiles(decision, id => ChooseDirectSupplyBranch(decision, directBranch, id), supplyCandidates);
+            if (_barPromptText != null) _barPromptText.text = !string.IsNullOrWhiteSpace(decision.Prompt)
+                ? decision.Prompt : "Choisissez directement une carte de votre main ou de la Réserve.";
+            if (_barCountText != null) _barCountText.text = "Cliquez sur une carte admissible, ou passez.";
+            if (_barConfirmButton != null)
+            {
+                _barConfirmButton.gameObject.SetActive(true);
+                _barConfirmButton.interactable = !_submitPending;
+                Text label = _barConfirmButton.transform.Find("Label")?.GetComponent<Text>();
+                if (label != null) label.text = "PASSER";
             }
             ApplyInputLock();
             return;
@@ -266,9 +301,11 @@ public sealed class PendingDecisionController : MonoBehaviour
         return decision;
     }
 
-    private void BindSupplyPiles(PendingDecisionSnapshot decision, Action<string> choose = null)
+    private void BindSupplyPiles(PendingDecisionSnapshot decision, Action<string> choose = null,
+        IEnumerable<string> candidateOverride = null)
     {
-        HashSet<string> candidates = new HashSet<string>(decision.CandidateDefinitionIds ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+        IEnumerable<string> candidateIds = candidateOverride ?? decision.CandidateDefinitionIds ?? new List<string>();
+        HashSet<string> candidates = new HashSet<string>(candidateIds, StringComparer.OrdinalIgnoreCase);
         SupplyPileInteractionBinding[] bindings = GetComponentsInChildren<SupplyPileInteractionBinding>(true);
         foreach (SupplyPileInteractionBinding binding in bindings)
         {
@@ -277,6 +314,86 @@ public sealed class PendingDecisionController : MonoBehaviour
             bool selected = _selectedSupply.Contains(binding.DefinitionId);
             binding.SetDecisionChoice(true, candidate, selected, choose ?? ToggleSupplySelection);
         }
+    }
+
+    private void ChooseDirectHandBranch(PendingDecisionSnapshot decision,
+        DirectBoardBranchChoiceRules.Description branch, int instanceId)
+    {
+        if (_submitPending || PlayersTurnsHandler.Instance == null) return;
+        QueueDirectBoardBranch(decision, branch.HandEffectIndex, instanceId, null);
+        SubmitDirectBoardOption(decision, branch.HandOptionId);
+    }
+
+    private void ChooseDirectSupplyBranch(PendingDecisionSnapshot decision,
+        DirectBoardBranchChoiceRules.Description branch, string definitionId)
+    {
+        if (_submitPending || PlayersTurnsHandler.Instance == null) return;
+        QueueDirectBoardBranch(decision, branch.SupplyEffectIndex, 0, definitionId);
+        SubmitDirectBoardOption(decision, branch.SupplyOptionId);
+    }
+
+    private void QueueDirectBoardBranch(PendingDecisionSnapshot decision, int effectIndex,
+        int instanceId, string definitionId)
+    {
+        _queuedBranchCardId = instanceId;
+        _queuedBranchDefinitionId = definitionId;
+        _queuedBranchSourceId = DecisionPresentation.SourceId(decision);
+        _queuedBranchAbilityIndex = decision.AbilityIndex;
+        _queuedBranchEffectIndex = effectIndex;
+    }
+
+    private void SubmitDirectBoardOption(PendingDecisionSnapshot decision, string optionId)
+    {
+        if (_submitPending || decision == null || PlayersTurnsHandler.Instance == null) return;
+        _submitPending = true;
+        ClearCardBindings();
+        ClearSupplyDecisionVisuals();
+        PlayersTurnsHandler.Instance.SubmitOptionDecision(decision.DecisionId, new[] { optionId });
+    }
+
+    private bool TrySubmitQueuedBoardBranch(PendingDecisionSnapshot decision)
+    {
+        if (_queuedBranchEffectIndex < 0 || decision == null) return false;
+        if (PlayersTurnsHandler.Instance == null)
+        {
+            ClearQueuedBoardBranch();
+            return false;
+        }
+        bool expected = DecisionPresentation.SourceId(decision) == _queuedBranchSourceId &&
+            decision.AbilityIndex == _queuedBranchAbilityIndex && decision.EffectIndex == _queuedBranchEffectIndex;
+        bool cardValid = _queuedBranchCardId > 0 && decision.CandidateInstanceIds != null &&
+            decision.CandidateInstanceIds.Contains(_queuedBranchCardId);
+        bool supplyValid = !string.IsNullOrEmpty(_queuedBranchDefinitionId) &&
+            decision.CandidateDefinitionIds != null && decision.CandidateDefinitionIds.Contains(_queuedBranchDefinitionId);
+        if (!expected || (!cardValid && !supplyValid))
+        {
+            ClearQueuedBoardBranch();
+            return false;
+        }
+
+        int cardId = _queuedBranchCardId;
+        string definitionId = _queuedBranchDefinitionId;
+        ClearQueuedBoardBranch();
+        _submitPending = true;
+        _panel.gameObject.SetActive(false);
+        _cardDrawer.SetActive(false);
+        _instructionBar.SetActive(true);
+        if (_barPromptText != null) _barPromptText.text = "Application du choix…";
+        if (_barCountText != null) _barCountText.text = string.Empty;
+        if (_barConfirmButton != null) _barConfirmButton.gameObject.SetActive(false);
+        ApplyInputLock();
+        if (cardValid) PlayersTurnsHandler.Instance.SubmitDecision(decision.DecisionId, new[] { cardId });
+        else PlayersTurnsHandler.Instance.SubmitSupplyDecision(decision.DecisionId, new[] { definitionId });
+        return true;
+    }
+
+    private void ClearQueuedBoardBranch()
+    {
+        _queuedBranchCardId = 0;
+        _queuedBranchDefinitionId = null;
+        _queuedBranchSourceId = 0;
+        _queuedBranchAbilityIndex = -1;
+        _queuedBranchEffectIndex = -1;
     }
 
     private void SubmitAlternativeSupply(string definitionId)
@@ -322,11 +439,14 @@ public sealed class PendingDecisionController : MonoBehaviour
         RefreshSelectionUi(decision);
     }
 
-    private void BindHandCards(PendingDecisionSnapshot decision)
+    private void BindHandCards(PendingDecisionSnapshot decision, Action<int> choose = null,
+        IEnumerable<int> candidateOverride = null)
     {
         Transform handRoot = FindHandCardsRoot();
         if (handRoot == null) return;
-        HashSet<int> candidates = new HashSet<int>(decision.CandidateInstanceIds ?? new List<int>());
+        IEnumerable<int> candidateIds = candidateOverride ?? decision.CandidateInstanceIds ?? new List<int>();
+        HashSet<int> candidates = new HashSet<int>(candidateIds);
+        Action<int> select = choose ?? ToggleSelection;
 
         for (int i = 0; i < handRoot.childCount; i++)
         {
@@ -346,7 +466,7 @@ public sealed class PendingDecisionController : MonoBehaviour
             if (pointer != null) pointer.SetDecisionCandidate(candidate);
             if (!candidate || pointer == null || _selectionHandlers.ContainsKey(pointer)) continue;
             int capturedId = instanceId;
-            Action handler = () => ToggleSelection(capturedId);
+            Action handler = () => select(capturedId);
             pointer.PrimaryActionRequested += handler;
             _selectionHandlers.Add(pointer, handler);
         }
@@ -629,6 +749,7 @@ public sealed class PendingDecisionController : MonoBehaviour
         if (_sourceContext != null) _sourceContext.gameObject.SetActive(false);
         ClearCardBindings(); ClearExternalCards(); ClearSupplyDecisionVisuals();
         _trashPile?.ClearDecisionChoice();
+        ClearQueuedBoardBranch();
         _selected.Clear(); _selectedSupply.Clear(); _selectedOptions.Clear(); _boundDecisionId = string.Empty; _submitPending = false;
         if (_panel != null) _panel.gameObject.SetActive(false);
         if (_instructionBar != null) _instructionBar.SetActive(false);
@@ -892,6 +1013,11 @@ public sealed class PendingDecisionController : MonoBehaviour
     }
 
     private static Color MultiplyRgb(Color color, float multiplier) => new Color(color.r * multiplier, color.g * multiplier, color.b * multiplier, color.a);
+    private static ExtensionCardData ResolveDefinition(string definitionId)
+    {
+        return RoomGameSetup.TryResolveCard(definitionId, out ExtensionPackageData _, out ExtensionCardData definition)
+            ? definition : null;
+    }
     private static Transform FindDirectChild(Transform parent, string name)
     { if (parent == null) return null; for (int i = 0; i < parent.childCount; i++) { Transform child = parent.GetChild(i); if (string.Equals(child.name, name, StringComparison.Ordinal)) return child; } return null; }
     private static Transform FindDeepChild(Transform parent, string name)

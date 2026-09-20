@@ -14,6 +14,7 @@ Tous les chemins de prefab ci-dessous sont dans `Dominion/Assets/Resources/UI/Ch
 | Alchimiste / Fièvre : tout défausser ou tout replacer | `DecisionCardDestinations` | Déplacer une carte change la destination du groupe |
 | Patrouille / simple réordonnancement du deck | `DecisionDeckOrderCompact` | Petit panneau, glisser les cartes dans la rangée puis valider |
 | Rôdeuse : Réserve ou Écart | `DecisionInstructionBar` + `TrashPileUi` | Clic direct sur une pile ou sur Écart, puis sur la carte |
+| Nécromancien : main ou Réserve | `DecisionInstructionBar` | Les deux zones sont surlignées simultanément ; clic direct ou Passer |
 | Nommer une carte | `CardNameDecision` dans `PendingDecisionPanel` | Recherche dédiée |
 | Choisir une position d’insertion | `DeckPositionDecision` dans `PendingDecisionPanel` | Contrôle dédié |
 
@@ -44,6 +45,10 @@ Les cartes commencent aussi sur le deck. Déposer une carte dans Défausse y dé
 ## Rôdeuse : choix direct entre Réserve et Écart
 
 La Réserve et le bouton Écart sont mis en évidence simultanément. Cliquer une pile admissible répond immédiatement. Cliquer Écart envoie automatiquement la branche « aucune pile », ouvre l’Écart, assombrit les cartes non admissibles et permet de recevoir une carte admissible en un clic. La reconnaissance repose sur la suite déclarative des effets, pas sur le nom Rôdeuse.
+
+## Nécromancien : main et Réserve simultanées
+
+Quand une option facultative mène soit à une sélection unique dans la main, soit à une sélection unique dans la Réserve, l’écran d’options est supprimé. Les cartes admissibles des deux zones sont surlignées en même temps et le bandeau conserve seulement la consigne et **Passer**. Le premier clic choisit implicitement la branche puis envoie automatiquement la carte au choix technique suivant. Les deux décisions restent validées par le Master. Cette présentation est détectée à partir des effets déclaratifs et s’applique donc aux futures cartes construites sur le même modèle.
 
 ## Où modifier quoi ?
 
@@ -80,6 +85,7 @@ Les ancres, grilles et mises en page sont enregistrées dans les prefabs. Le cod
 | `Rules/InspectedSortRules.cs` | Validation de la répartition et reprise du plan après les réactions |
 | `Rules/DeckChoiceRules.cs` | Validation de l’option Défausse / Deck et de l’ordre complet |
 | `Rules/AlternativeTrashChoiceRules.cs` | Détection générique du choix Réserve ou Écart |
+| `Rules/DirectBoardBranchChoiceRules.cs` | Détection et candidats des choix directs Main ou Réserve |
 | `HUD/TrashPileViewController.cs` | Mise en évidence et sélection directe dans l’Écart |
 | `Rules/ResolutionQueue.cs` | Conservation du plan de tri dans l’état réseau |
 | `PlayersTurnsHandler.cs`, `Network/NetworkGameState.cs` | Commande au Master, validation de version et publication atomique |

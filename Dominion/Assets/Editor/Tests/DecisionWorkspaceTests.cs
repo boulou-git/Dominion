@@ -78,6 +78,34 @@ public sealed class DecisionWorkspaceTests
     }
 
     [Test]
+    public void OptionalHandOrSupplyBranch_UsesTheBoardInsteadOfAnOptionDialog()
+    {
+        var source = new ExtensionCardData { abilities = new List<CardAbilityData> {
+            new CardAbilityData { effects = new List<CardEffectData> {
+                new CardEffectData { op = "choose_options", min = 0, max = 1, allowPass = true,
+                    options = new List<CardChoiceOptionData> {
+                        new CardChoiceOptionData { id = "hand", label = "Main" },
+                        new CardChoiceOptionData { id = "supply", label = "Réserve" }
+                    } },
+                new CardEffectData { op = "choose_cards", zone = "hand", min = 1, max = 1,
+                    requiresSelectedOption = "hand" },
+                new CardEffectData { op = "trash_selected", requiresSelectedOption = "hand" },
+                new CardEffectData { op = "choose_supply", min = 1, max = 1, cardType = "Action",
+                    requiresSelectedOption = "supply" },
+                new CardEffectData { op = "trash_selected_supply", requiresSelectedOption = "supply" }
+            } }
+        } };
+        var decision = new PendingDecisionSnapshot { Zone = "options", Operation = "choose_options",
+            MinSelections = 0, MaxSelections = 1, AllowPass = true, AbilityIndex = 0, EffectIndex = 0 };
+        decision.CandidateDefinitionIds.AddRange(new[] { "hand", "supply" });
+
+        Assert.IsTrue(DirectBoardBranchChoiceRules.TryDescribe(decision, source, out DirectBoardBranchChoiceRules.Description branch));
+        Assert.AreEqual("hand", branch.HandOptionId);
+        Assert.AreEqual("supply", branch.SupplyOptionId);
+        Assert.IsFalse(DecisionPresentation.IsQuickChoice(decision, source));
+    }
+
+    [Test]
     public void QuickChoicePrefab_HasNoSelectionOrConfirmationArea()
     {
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/UI/Choices/DecisionQuickChoice.prefab");

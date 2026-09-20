@@ -33,6 +33,7 @@ public static class DecisionPresentation
     {
         if (decision == null || decision.Zone == "hand" || decision.Zone == "supply") return false;
         if (AlternativeTrashChoiceRules.IsTrashStep(decision, source)) return false;
+        if (DirectBoardBranchChoiceRules.TryDescribe(decision, source, out _)) return false;
         string op = decision.Operation ?? "";
         return op != "name_card" && !op.StartsWith("insert_selected_into_deck|", StringComparison.OrdinalIgnoreCase) &&
             !op.StartsWith("move_all_ordered|", StringComparison.OrdinalIgnoreCase) &&
