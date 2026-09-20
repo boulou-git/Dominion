@@ -7,21 +7,34 @@ using UnityEngine.UI;
 public sealed class PrefabUiContractTests
 {
     [Test]
-    public void JournalChatAndEntries_ArePrefabAuthored()
+    public void JournalChatAndEmotes_ArePrefabAuthored()
     {
-        GameObject surface = Load("JournalSurface");
-        Transform scroll = surface.transform.Find("EntriesScroll");
-        Transform viewport = scroll?.Find("Viewport");
-        Transform content = viewport?.Find("Content");
-        Assert.NotNull(scroll?.GetComponent<ScrollRect>());
-        Assert.NotNull(viewport?.GetComponent<Mask>());
-        Assert.NotNull(content?.GetComponent<Text>());
-        InputField input = surface.transform.Find("Composer/MessageInput")?.GetComponent<InputField>();
+        GameObject gameScreen = Load("Board/GameScreen");
+        Transform journal = gameScreen.transform.Find("JournalPanel");
+        Transform social = journal?.Find("JournalSocialPanel");
+        Assert.NotNull(social, "JournalSocialPanel must be instanced in GameScreen.prefab.");
+        Assert.NotNull(social.GetComponent<JournalSocialPanel>());
+
+        InputField input = social.Find("MessageInput")?.GetComponent<InputField>();
         Assert.NotNull(input);
         Assert.AreEqual(JournalRules.MaxChatLength, input.characterLimit);
-        Assert.NotNull(surface.transform.Find("Composer/SendButton")?.GetComponent<Button>());
+        Assert.NotNull(social.Find("SendButton")?.GetComponent<Button>());
+        Assert.NotNull(social.Find("EmoteButton")?.GetComponent<Button>());
+        Transform wheel = social.Find("EmoteWheel");
+        Assert.NotNull(wheel);
+        Assert.AreEqual(4, wheel.GetComponentsInChildren<Button>(true).Length);
+        Assert.NotNull(social.Find("EmoteAnimationRoot"));
+        Assert.NotNull(social.GetComponent<AudioSource>());
 
-        Assert.Greater((content as RectTransform).sizeDelta.y, 0f);
+        string[] iconNames = { "EmoteBlue", "EmoteGreen", "EmoteGold", "EmoteRose" };
+        foreach (string iconName in iconNames)
+        {
+            GameObject icon = Load("Emotes/" + iconName);
+            Assert.NotNull(icon.GetComponent<EmoteCircleGraphic>());
+            CanvasGroup group = icon.GetComponent<CanvasGroup>();
+            Assert.NotNull(group);
+            Assert.IsFalse(group.blocksRaycasts);
+        }
     }
 
     [Test]

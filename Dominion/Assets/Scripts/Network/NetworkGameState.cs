@@ -312,6 +312,21 @@ public static class NetworkGameState
         return CommitState(next);
     }
 
+    public static bool TrySendEmote(string requesterPlayerId, string emoteId, int expectedAuthorityEpoch)
+    {
+        if (!CanWrite() || _state == null || !_state.IsStarted ||
+            PendingDecisionInputLock.IsActive(_state) ||
+            _state.AuthorityEpoch != expectedAuthorityEpoch) return false;
+        GameStateSnapshot next = Clone(_state);
+        if (!JournalRules.TryRecordEmote(next, requesterPlayerId, emoteId,
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), out string error))
+        {
+            Debug.LogWarning("Rejected emote: " + error);
+            return false;
+        }
+        return CommitState(next);
+    }
+
     private static void CreateSupply(GameStateSnapshot state, int playerCount)
     {
         if (state == null) return;

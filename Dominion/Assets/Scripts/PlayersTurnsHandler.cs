@@ -120,6 +120,15 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
             NetworkGameState.LocalPlayerId, message, state.AuthorityEpoch);
     }
 
+    public void SendEmote(string emoteId)
+    {
+        GameStateSnapshot state = NetworkGameState.State;
+        if (state == null || !state.IsStarted || PendingDecisionInputLock.IsActive(state) ||
+            !JournalRules.IsSupportedEmote(emoteId)) return;
+        photonView.RPC(nameof(RpcRequestEmote), RpcTarget.MasterClient,
+            NetworkGameState.LocalPlayerId, emoteId, state.AuthorityEpoch);
+    }
+
     [PunRPC]
     private void RpcRequestAdvancePhase(string requesterPlayerId, int[] visualHandOrder, int expectedVersion, int expectedAuthorityEpoch, PhotonMessageInfo info)
     {
@@ -177,6 +186,14 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     {
         if (!ValidateSender(requesterPlayerId, info)) return;
         NetworkGameState.TrySendChatMessage(requesterPlayerId, message, expectedAuthorityEpoch);
+    }
+
+    [PunRPC]
+    private void RpcRequestEmote(string requesterPlayerId, string emoteId, int expectedAuthorityEpoch,
+        PhotonMessageInfo info)
+    {
+        if (!ValidateSender(requesterPlayerId, info)) return;
+        NetworkGameState.TrySendEmote(requesterPlayerId, emoteId, expectedAuthorityEpoch);
     }
 
     private static bool CanSendActivePlayerCommand(GameStateSnapshot state)

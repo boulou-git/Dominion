@@ -17,6 +17,19 @@ public sealed class JournalRulesTests
     }
 
     [Test]
+    public void Emotes_AreValidatedReplicatedAndRateLimitedWithChat()
+    {
+        GameStateSnapshot state = State();
+
+        Assert.IsTrue(JournalRules.TryRecordEmote(state, "p1", "blue", 10000, out string error), error);
+        Assert.AreEqual(JournalRules.EmoteKind, state.Journal[0].Kind);
+        Assert.AreEqual("blue", state.Journal[0].Message);
+        Assert.IsFalse(JournalRules.TryRecordChat(state, "p1", "Trop vite", 10999, out _));
+        Assert.IsFalse(JournalRules.TryRecordEmote(state, "p2", "unknown", 11000, out _));
+        Assert.IsTrue(JournalRules.TryRecordEmote(state, "p1", "rose", 11000, out string nextError), nextError);
+    }
+
+    [Test]
     public void PlayedAndGainedEvents_BecomeSemanticJournalEntries()
     {
         GameStateSnapshot state = State();

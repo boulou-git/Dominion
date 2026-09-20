@@ -9,6 +9,7 @@ public static class JournalRules
     public const string GainedKind = "gained";
     public const string ChoiceKind = "choice";
     public const string ChatKind = "chat";
+    public const string EmoteKind = "emote";
     public const int ChatCooldownMilliseconds = 1000;
     public const int MaxChatLength = 200;
     private const int MaxEntries = 128;
@@ -110,6 +111,38 @@ public static class JournalRules
         player.LastChatMessageUnixMilliseconds = nowUnixMilliseconds;
         Append(state, ChatKind, player, string.Empty, string.Empty, message);
         return true;
+    }
+
+    public static bool TryRecordEmote(GameStateSnapshot state, string playerId, string emoteId,
+        long nowUnixMilliseconds, out string error)
+    {
+        error = string.Empty;
+        PlayerStateSnapshot player = FindPlayer(state, playerId);
+        if (state == null || player == null || !player.IsConnected)
+        { error = "Le joueur n’est pas connecté à cette partie."; return false; }
+        if (!IsSupportedEmote(emoteId))
+        { error = "Cette emote n’existe pas."; return false; }
+        if (player.LastChatMessageUnixMilliseconds > 0 &&
+            nowUnixMilliseconds - player.LastChatMessageUnixMilliseconds < ChatCooldownMilliseconds)
+        { error = "Veuillez attendre une seconde avant une nouvelle interaction."; return false; }
+        player.LastChatMessageUnixMilliseconds = nowUnixMilliseconds;
+        Append(state, EmoteKind, player, string.Empty, string.Empty, emoteId.Trim().ToLowerInvariant());
+        return true;
+    }
+
+    public static bool IsSupportedEmote(string emoteId)
+    {
+        if (string.IsNullOrWhiteSpace(emoteId)) return false;
+        switch (emoteId.Trim().ToLowerInvariant())
+        {
+            case "blue":
+            case "green":
+            case "gold":
+            case "rose":
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static void RecordChoice(GameStateSnapshot state, PendingDecisionSnapshot decision, IEnumerable<string> values)
