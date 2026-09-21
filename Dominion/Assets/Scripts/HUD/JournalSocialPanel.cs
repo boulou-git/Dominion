@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 
 /// <summary>
 /// Prefab-owned chat composer and replicated emote interaction for the public journal.
@@ -78,7 +79,9 @@ public sealed class JournalSocialPanel : MonoBehaviour
 
     private void Update()
     {
-        if (_emoteWheel != null && _emoteWheel.activeSelf && Input.GetKeyDown(KeyCode.Escape))
+        Keyboard keyboard = Keyboard.current;
+        if (_emoteWheel != null && _emoteWheel.activeSelf &&
+            keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
             _emoteWheel.SetActive(false);
     }
 
@@ -132,7 +135,9 @@ public sealed class JournalSocialPanel : MonoBehaviour
 
     private void HandleChatEndEdit(string value)
     {
-        if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null &&
+            (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
             SubmitChat();
     }
 
