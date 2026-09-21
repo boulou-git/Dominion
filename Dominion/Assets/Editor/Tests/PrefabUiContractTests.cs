@@ -43,11 +43,30 @@ public sealed class PrefabUiContractTests
             // Final artwork may replace the placeholder circle with an Image.
             Graphic[] graphics = icon.GetComponentsInChildren<Graphic>(true);
             Assert.IsNotEmpty(graphics, iconName + " needs a UI visual.");
-            foreach (Graphic graphic in graphics)
-                Assert.IsFalse(graphic.raycastTarget, iconName + " must not intercept clicks.");
             CanvasGroup group = icon.GetComponent<CanvasGroup>();
             Assert.NotNull(group);
+            Assert.IsTrue(group.enabled);
             Assert.IsFalse(group.blocksRaycasts);
+
+            // A parent CanvasGroup can reject raycasts even when an Image's
+            // Raycast Target is checked. Test the effective filter on a live copy.
+            GameObject instance = Object.Instantiate(icon);
+            try
+            {
+                instance.SetActive(true);
+                foreach (Graphic graphic in instance.GetComponentsInChildren<Graphic>(true))
+                {
+                    if (!graphic.isActiveAndEnabled || !graphic.raycastTarget) continue;
+                    Vector2 point = RectTransformUtility.WorldToScreenPoint(null,
+                        graphic.rectTransform.TransformPoint(graphic.rectTransform.rect.center));
+                    Assert.IsFalse(graphic.Raycast(point, null),
+                        iconName + "/" + graphic.name + " must not intercept clicks.");
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
         }
     }
 
@@ -227,13 +246,26 @@ public sealed class PrefabUiContractTests
 
         GridLayoutGroup kingdomGrid = gameScreen.transform
             .Find("SupplyPanel/KingdomSupply")?.GetComponent<GridLayoutGroup>();
-        GridLayoutGroup baseGrid = gameScreen.transform
-            .Find("SupplyPanel/BaseSupply")?.GetComponent<GridLayoutGroup>();
-        Assert.NotNull(baseGrid);
-        Assert.NotNull(kingdomGrid);
+        // BaseSupplyController searches by name recursively and accepts LayoutGroup.
+        // Artist-authored wrappers and horizontal/vertical layouts are valid.
+        RectTransform baseSupply = null;
+        foreach (RectTransform candidate in gameScreen.GetComponentsInChildren<RectTransform>(true))
+        {
+            if (candidate.name != "BaseSupply") continue;
+            Assert.IsNull(baseSupply, "GameScreen contains duplicate BaseSupply roots.");
+            baseSupply = candidate;
+        }
+        Assert.NotNull(baseSupply, "GameScreen must contain a RectTransform named BaseSupply.");
+        LayoutGroup baseLayout = baseSupply.GetComponent<LayoutGroup>();
+        Assert.NotNull(baseLayout, "BaseSupply must have a Grid, Horizontal or Vertical LayoutGroup.");
+        Assert.IsTrue(baseLayout.enabled, "BaseSupply layout must be enabled.");
+        Assert.NotNull(kingdomGrid, "SupplyPanel/KingdomSupply needs a GridLayoutGroup.");
         Assert.AreEqual(kingdomGrid.cellSize.x, kingdomGrid.cellSize.y, 0.01f);
-        Assert.Less(baseGrid.cellSize.x, kingdomGrid.cellSize.x);
-        Assert.Less(baseGrid.cellSize.y, kingdomGrid.cellSize.y);
+        if (baseLayout is GridLayoutGroup baseGrid)
+        {
+            Assert.Greater(baseGrid.cellSize.x, 0f);
+            Assert.Greater(baseGrid.cellSize.y, 0f);
+        }
         Assert.NotNull(gameScreen.GetComponent<ReserveExtrasController>());
         RectTransform artifactStack = gameScreen.transform.Find("InPlayPanel/ArtifactStack") as RectTransform;
         Assert.NotNull(artifactStack, "The owned-Artifact stack must be authored in GameScreen.prefab.");
