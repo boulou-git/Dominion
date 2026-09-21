@@ -187,7 +187,7 @@ public sealed class PublicJournalView : MonoBehaviour, IPointerClickHandler
             return;
         }
 
-        string name = string.IsNullOrWhiteSpace(definition.name) ? definitionId : definition.name;
+        string name = SafePlainText(string.IsNullOrWhiteSpace(definition.name) ? definitionId : definition.name);
         int start = visibleCharacters;
         bool bold = HasType(definition, "Action");
         string color = ResolveTypeColor(definition);
@@ -217,8 +217,15 @@ public sealed class PublicJournalView : MonoBehaviour, IPointerClickHandler
     {
         if (string.IsNullOrEmpty(value))
             return;
-        text.Append(value);
+        text.Append(SafePlainText(value));
         visibleCharacters += value.Length;
+    }
+
+    // Legacy UI.Text has no reliable HTML entity escaping. Same-length substitutes
+    // prevent rich-text injection while preserving clickable character offsets.
+    public static string SafePlainText(string value)
+    {
+        return (value ?? string.Empty).Replace('<', '‹').Replace('>', '›');
     }
 
     private static bool CanDisplay(GameJournalEntrySnapshot entry)

@@ -86,7 +86,7 @@ public sealed class FleauxFoundationRulesTests
 
         Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
         Assert.That(player.Coins, Is.EqualTo(2));
-        Assert.That(player.Discard, Does.Contain(disease.InstanceId));
+        Assert.That(player.Discard, Has.Member(disease.InstanceId));
         Assert.That(pile.CardInstanceIds, Is.Empty);
     }
 
@@ -323,9 +323,9 @@ public sealed class FleauxFoundationRulesTests
         TriggerResolutionResult result = TriggerResolver.ResolvePending(queue, state, Resolve, new Random(1));
 
         Assert.That(result.Status, Is.EqualTo(EffectResolutionStatus.Applied), result.Error);
-        //Assert.That(player.Inspected, Does.Not.Contain(horror.InstanceId));
-        //Assert.That(player.InPlay, Does.Not.Contain(horror.InstanceId));
-        Assert.That(player.Discard, Does.Contain(horror.InstanceId));
+        Assert.That(player.Inspected, Has.None.EqualTo(horror.InstanceId));
+        Assert.That(player.InPlay, Has.None.EqualTo(horror.InstanceId));
+        Assert.That(player.Discard, Has.Member(horror.InstanceId));
         Assert.That(queue.Events.SnapshotHistory().Exists(gameEvent =>
             gameEvent.Type == GameEventType.CardPlayed && gameEvent.CardInstanceId == horror.InstanceId), Is.True);
     }
@@ -341,9 +341,9 @@ public sealed class FleauxFoundationRulesTests
         GameRuleResult result = GameRules.TryPlayCard(state, player.PlayerId, confessor.InstanceId, Resolve, new Random(1));
 
         Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
-        Assert.That(player.Hand, Does.Contain(drawn.InstanceId));
-        Assert.That(player.Discard, Does.Contain(horror.InstanceId));
-        //Assert.That(player.Deck, Does.Not.Contain(horror.InstanceId));
+        Assert.That(player.Hand, Has.Member(drawn.InstanceId));
+        Assert.That(player.Discard, Has.Member(horror.InstanceId));
+        Assert.That(player.Deck, Has.None.EqualTo(horror.InstanceId));
         Assert.That(result.Events.Exists(gameEvent => gameEvent.Type == GameEventType.CardRevealed &&
             gameEvent.CardInstanceId == horror.InstanceId), Is.True);
         Assert.That(result.Events.Exists(gameEvent => gameEvent.Type == GameEventType.CardPlayed &&

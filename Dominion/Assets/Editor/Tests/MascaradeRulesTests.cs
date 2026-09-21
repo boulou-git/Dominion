@@ -26,16 +26,16 @@ public sealed class MascaradeRulesTests
         GameRuleResult firstChoice = Submit(state, first, firstPassed);
         Assert.That(firstChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), firstChoice.Error);
         Assert.That(state.Resolution.PendingDecision.PlayerId, Is.EqualTo(second.PlayerId));
-        Assert.That(first.Hand, Does.Contain(firstPassed));
-        Assert.That(second.Hand, Does.Contain(secondPassed));
-        Assert.That(third.Hand, Does.Contain(thirdPassed));
+        Assert.That(first.Hand, Has.Member(firstPassed));
+        Assert.That(second.Hand, Has.Member(secondPassed));
+        Assert.That(third.Hand, Has.Member(thirdPassed));
         CollectionAssert.AreEqual(new[] { first.PlayerId }, state.Resolution.StagedSelectionPlayerIds);
 
         GameRuleResult secondChoice = Submit(state, second, secondPassed);
         Assert.That(secondChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), secondChoice.Error);
         Assert.That(state.Resolution.PendingDecision.PlayerId, Is.EqualTo(third.PlayerId));
-        Assert.That(first.Hand, Does.Contain(firstPassed));
-        Assert.That(second.Hand, Does.Contain(secondPassed));
+        Assert.That(first.Hand, Has.Member(firstPassed));
+        Assert.That(second.Hand, Has.Member(secondPassed));
         CollectionAssert.AreEqual(new[] { first.PlayerId, second.PlayerId }, state.Resolution.StagedSelectionPlayerIds);
         Assert.That(GameStateValidator.TryValidate(state, out string pendingError), Is.True, pendingError);
 
@@ -43,9 +43,9 @@ public sealed class MascaradeRulesTests
         Assert.That(thirdChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), thirdChoice.Error);
         Assert.That(state.Resolution.PendingDecision.PlayerId, Is.EqualTo(first.PlayerId));
         Assert.That(state.Resolution.StagedSelectionPlayerIds, Is.Empty);
-        Assert.That(first.Hand, Does.Contain(thirdPassed));
-        Assert.That(second.Hand, Does.Contain(firstPassed));
-        Assert.That(third.Hand, Does.Contain(secondPassed));
+        Assert.That(first.Hand, Has.Member(thirdPassed));
+        Assert.That(second.Hand, Has.Member(firstPassed));
+        Assert.That(third.Hand, Has.Member(secondPassed));
         Assert.That(Owner(state, thirdPassed), Is.EqualTo(first.PlayerId));
         Assert.That(Owner(state, firstPassed), Is.EqualTo(second.PlayerId));
         Assert.That(Owner(state, secondPassed), Is.EqualTo(third.PlayerId));
@@ -76,8 +76,8 @@ public sealed class MascaradeRulesTests
 
         GameRuleResult thirdChoice = Submit(state, third, thirdPassed);
         Assert.That(thirdChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), thirdChoice.Error);
-        Assert.That(first.Hand, Does.Contain(thirdPassed));
-        Assert.That(third.Hand, Does.Contain(firstPassed));
+        Assert.That(first.Hand, Has.Member(thirdPassed));
+        Assert.That(third.Hand, Has.Member(firstPassed));
         Assert.That(empty.Hand, Is.Empty);
 
         GameRuleResult noTrash = GameRules.TrySubmitDecision(state, first.PlayerId,

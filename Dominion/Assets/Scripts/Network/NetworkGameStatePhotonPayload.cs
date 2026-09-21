@@ -12,10 +12,14 @@ public static class NetworkGameStatePhotonPayload
 {
     private const byte RawUtf8Format = 1;
     private const byte GzipUtf8Format = 2;
+    // Application safety bound, not a Photon transport guarantee. Keep encode/decode
+    // symmetric so a compressed payload cannot allocate unbounded memory.
+    public const int MaxDecodedBytes = 8 * 1024 * 1024;
 
     public static byte[] Encode(string json)
     {
         if (json == null) return null;
+        if (Encoding.UTF8.GetByteCount(json) > MaxDecodedBytes) return null;
 
         byte[] utf8 = Encoding.UTF8.GetBytes(json);
         if (utf8.Length < 1024)
@@ -37,6 +41,7 @@ public static class NetworkGameStatePhotonPayload
         // Backward compatibility with rooms created before the binary payload migration.
         if (value is string legacyJson)
         {
+            if (Encoding.UTF8.GetByteCount(legacyJson) > MaxDecodedBytes) return false;
             json = legacyJson;
             return true;
         }
@@ -51,15 +56,23 @@ public static class NetworkGameStatePhotonPayload
             switch (format)
             {
                 case RawUtf8Format:
+                    if (payload.Length - 1 > MaxDecodedBytes) return false;
                     json = Encoding.UTF8.GetString(payload, 1, payload.Length - 1);
                     return true;
 
                 case GzipUtf8Format:
                     using (MemoryStream input = new MemoryStream(payload, 1, payload.Length - 1, false))
                     using (GZipStream gzip = new GZipStream(input, CompressionMode.Decompress))
-                    using (StreamReader reader = new StreamReader(gzip, Encoding.UTF8))
+                    using (MemoryStream output = new MemoryStream())
                     {
-                        json = reader.ReadToEnd();
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        while ((read = gzip.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            if (output.Length + read > MaxDecodedBytes) return false;
+                            output.Write(buffer, 0, read);
+                        }
+                        json = Encoding.UTF8.GetString(output.ToArray());
                         return true;
                     }
 

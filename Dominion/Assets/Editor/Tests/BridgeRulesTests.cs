@@ -30,7 +30,7 @@ public sealed class BridgeRulesTests
         Assert.That(bought.Status, Is.EqualTo(GameRuleStatus.Applied), bought.Error);
         Assert.That(player.Coins, Is.Zero);
         Assert.That(player.Buys, Is.EqualTo(1));
-        Assert.That(player.Discard.Select(id => DefinitionId(state, id)), Does.Contain("base:argent"));
+        Assert.That(player.Discard.Select(id => DefinitionId(state, id)), Has.Member("base:argent"));
         Assert.That(GameStateValidator.TryValidate(state, out string validationError), Is.True, validationError);
     }
 

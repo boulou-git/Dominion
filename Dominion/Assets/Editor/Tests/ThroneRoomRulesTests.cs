@@ -33,8 +33,8 @@ public sealed class ThroneRoomRulesTests
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
         Assert.That(state.Resolution.PendingDecision.IsPending, Is.False);
-        Assert.That(player.InPlay, Does.Contain(inner.InstanceId));
-        Assert.That(player.InPlay, Does.Contain(village.InstanceId));
+        Assert.That(player.InPlay, Has.Member(inner.InstanceId));
+        Assert.That(player.InPlay, Has.Member(village.InstanceId));
     }
 
     [Test]
@@ -63,7 +63,7 @@ public sealed class ThroneRoomRulesTests
 
         Assert.That(chooseSecondAction.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), chooseSecondAction.Error);
         CollectionAssert.AreEqual(new[] { drawnAction.InstanceId }, state.Resolution.PendingDecision.CandidateInstanceIds);
-        Assert.That(player.Hand, Does.Contain(drawnAction.InstanceId),
+        Assert.That(player.Hand, Has.Member(drawnAction.InstanceId),
             "The first selected Action must finish both plays before Throne Room asks again.");
         Assert.That(player.Actions, Is.EqualTo(4));
 
@@ -73,7 +73,7 @@ public sealed class ThroneRoomRulesTests
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
         Assert.That(state.Resolution.PendingDecision.IsPending, Is.False);
-        Assert.That(player.InPlay, Does.Contain(drawnAction.InstanceId));
+        Assert.That(player.InPlay, Has.Member(drawnAction.InstanceId));
     }
 
     private static GameStateSnapshot NewState(out PlayerStateSnapshot player)

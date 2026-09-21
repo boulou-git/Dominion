@@ -31,3 +31,8 @@ Tous les choix génériques utilisent désormais `DecisionQuickChoice`, y compri
 | EventSystem | `SingleEventSystemGuard` | Un seul EventSystem actif, y compris pendant les transitions additives. |
 
 `FollowActivePlayerToggle`, `JournalEntry` et `KingdomRevealScreen` n'existent plus comme prefabs autonomes : ces éléments sont déjà composés dans leur écran parent. La sensibilité des listes du lobby est également sérialisée directement dans `LobbySetupScreen.prefab`, sans objet runtime auxiliaire.
+# Maintenance du journal et des emotes
+
+Voir [l'audit de maintenance](audit_code.md#où-modifier-quoi) pour les prefabs du chat,
+les quatre icônes, le son optionnel et les réglages de durée/distance/limite d'animation.
+Le panneau social est imbriqué dans `GameScreen.prefab` ; ne pas en créer une seconde instance par code.

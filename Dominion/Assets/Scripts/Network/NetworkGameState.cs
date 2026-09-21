@@ -299,9 +299,7 @@ public static class NetworkGameState
 
     public static bool TrySendChatMessage(string requesterPlayerId, string message, int expectedAuthorityEpoch)
     {
-        if (!CanWrite() || _state == null || !_state.IsStarted ||
-            PendingDecisionInputLock.IsActive(_state) ||
-            _state.AuthorityEpoch != expectedAuthorityEpoch) return false;
+        if (!ValidateSocialCommand(expectedAuthorityEpoch)) return false;
         GameStateSnapshot next = Clone(_state);
         if (!JournalRules.TryRecordChat(next, requesterPlayerId, message,
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), out string error))
@@ -314,9 +312,7 @@ public static class NetworkGameState
 
     public static bool TrySendEmote(string requesterPlayerId, string emoteId, int expectedAuthorityEpoch)
     {
-        if (!CanWrite() || _state == null || !_state.IsStarted ||
-            PendingDecisionInputLock.IsActive(_state) ||
-            _state.AuthorityEpoch != expectedAuthorityEpoch) return false;
+        if (!ValidateSocialCommand(expectedAuthorityEpoch)) return false;
         GameStateSnapshot next = Clone(_state);
         if (!JournalRules.TryRecordEmote(next, requesterPlayerId, emoteId,
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), out string error))
@@ -325,6 +321,13 @@ public static class NetworkGameState
             return false;
         }
         return CommitState(next);
+    }
+
+    private static bool ValidateSocialCommand(int expectedAuthorityEpoch)
+    {
+        return CanWrite() && _state != null && _state.IsStarted && !_state.IsPaused &&
+               !_state.IsGameOver && !PendingDecisionInputLock.IsActive(_state) &&
+               _state.AuthorityEpoch == expectedAuthorityEpoch;
     }
 
     private static void CreateSupply(GameStateSnapshot state, int playerCount)
@@ -580,7 +583,16 @@ public static class NetworkGameState
     private static bool ApplyJson(string json, bool force)
     {
         if (string.IsNullOrEmpty(json)) return false;
-        GameStateSnapshot incoming = JsonUtility.FromJson<GameStateSnapshot>(json);
+        GameStateSnapshot incoming;
+        try
+        {
+            incoming = JsonUtility.FromJson<GameStateSnapshot>(json);
+        }
+        catch (ArgumentException exception)
+        {
+            Debug.LogWarning("Ignoring malformed replicated game state: " + exception.Message);
+            return false;
+        }
         if (incoming == null) return false;
         if (!GameStateSnapshotMigration.TryUpgradeToCurrent(incoming, out string migrationError))
         {

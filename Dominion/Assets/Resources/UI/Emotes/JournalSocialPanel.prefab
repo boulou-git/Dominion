@@ -69,10 +69,10 @@ MonoBehaviour:
   - gold
   - rose
   _emoteIconPrefabs:
-  - {fileID: 100100000, guid: a1111111111111111111111111111011, type: 3}
-  - {fileID: 100100000, guid: a1111111111111111111111111111012, type: 3}
-  - {fileID: 100100000, guid: a1111111111111111111111111111013, type: 3}
-  - {fileID: 100100000, guid: a1111111111111111111111111111014, type: 3}
+  - {fileID: 1000, guid: a1111111111111111111111111111011, type: 3}
+  - {fileID: 1000, guid: a1111111111111111111111111111012, type: 3}
+  - {fileID: 1000, guid: a1111111111111111111111111111013, type: 3}
+  - {fileID: 1000, guid: a1111111111111111111111111111014, type: 3}
   _emoteAnimationRoot: {fileID: 1501}
   _emoteAudioSource: {fileID: 1003}
   _emoteSound: {fileID: 0}

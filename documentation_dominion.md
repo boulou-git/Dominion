@@ -1,5 +1,8 @@
 # Dominion Unity — Guide de maintenance et lexique technique
 
+> Audit du 21 septembre 2026 : [correctifs, risques ouverts, réglages et recette réseau](audit_code.md).
+> Les références historiques ci-dessous ne constituent pas une validation de la version actuelle ; l'audit précise les limites de vérification et les nouveaux composants du journal.
+
 > Mise à jour UI : voir [Choix interactifs — réglages des prefabs et tests](decision_workspace.md) pour la nouvelle zone de résolution. Les anciennes entrées de décision ci-dessous restent utiles pour les contrôles spécialisés et le fallback.
 
 > Référence analysée : dépôt `boulou-git/Dominion`, branche `fleaux`, commit `66fd85beb415f8441b39e2e55700e0b9fc18f8a9` (12 septembre 2026).  

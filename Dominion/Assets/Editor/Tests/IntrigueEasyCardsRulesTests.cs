@@ -27,7 +27,7 @@ public sealed class IntrigueEasyCardsRulesTests
         Assert.That(player.Actions, Is.EqualTo(2));
         Assert.That(player.Hand.Count, Is.EqualTo(3));
         Assert.That(state.Journal.Any(entry => entry.CardDefinitionId == "base:cuivre" && entry.Kind == JournalRules.RevealKind), Is.True);
-        Assert.That(player.Hand, Does.Contain(shownCopper));
+        Assert.That(player.Hand, Has.Member(shownCopper));
 
         GameStateSnapshot actionState = NewState(out PlayerStateSnapshot actionPlayer);
         int actionTaudis = AddCard(actionState, actionPlayer, "intrigue:taudis", CardZone.Hand);

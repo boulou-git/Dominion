@@ -27,7 +27,7 @@ public sealed class MagouilleRulesTests
         CollectionAssert.AreEqual(new[] { "base:malediction" }, state.Resolution.PendingDecision.CandidateDefinitionIds);
         CollectionAssert.Contains(state.TrashedCards, copper);
         Assert.That(firstVictim.Deck, Is.Empty);
-        Assert.That(secondVictim.Deck, Does.Contain(estate));
+        Assert.That(secondVictim.Deck, Has.Member(estate));
 
         GameRuleResult firstReplacement = SubmitSupply(state, attacker, "base:malediction");
 

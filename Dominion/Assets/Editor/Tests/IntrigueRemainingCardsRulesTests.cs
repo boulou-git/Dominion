@@ -38,7 +38,7 @@ public sealed class IntrigueRemainingCardsRulesTests
         Assert.That(smith.Actions, Is.EqualTo(1));
         Assert.That(smith.Coins, Is.Zero);
         CollectionAssert.Contains(smith.Hand, bonusDraw);
-        Assert.That(smith.Discard.Select(id => DefinitionId(ironworksState, id)), Does.Contain("intrigue:moulin"));
+        Assert.That(smith.Discard.Select(id => DefinitionId(ironworksState, id)), Has.Member("intrigue:moulin"));
     }
 
     [Test]
@@ -93,7 +93,7 @@ public sealed class IntrigueRemainingCardsRulesTests
 
         Assert.That(options.Status, Is.EqualTo(GameRuleStatus.Applied), options.Error);
         Assert.That(player.Coins, Is.EqualTo(3));
-        Assert.That(player.Discard.Select(id => DefinitionId(state, id)), Does.Contain("base:or"));
+        Assert.That(player.Discard.Select(id => DefinitionId(state, id)), Has.Member("base:or"));
         Assert.That(state.Journal.Any(entry => entry.CardDefinitionId == "intrigue:harem"), Is.True);
     }
 
@@ -155,7 +155,7 @@ public sealed class IntrigueRemainingCardsRulesTests
 
         Assert.That(curseChosen.Status, Is.EqualTo(GameRuleStatus.Applied), curseChosen.Error);
         Assert.That(discarder.Hand, Is.Empty);
-        Assert.That(gainer.Hand.Select(id => DefinitionId(torturerState, id)), Does.Contain("base:malediction"));
+        Assert.That(gainer.Hand.Select(id => DefinitionId(torturerState, id)), Has.Member("base:malediction"));
     }
 
     [Test]
@@ -173,8 +173,8 @@ public sealed class IntrigueRemainingCardsRulesTests
 
         Assert.That(replaced.Status, Is.EqualTo(GameRuleStatus.Applied), replaced.Error);
         CollectionAssert.Contains(replacementState.TrashedCards, copper);
-        Assert.That(attacker.Discard.Select(id => DefinitionId(replacementState, id)), Does.Contain("base:domaine"));
-        Assert.That(victim.Discard.Select(id => DefinitionId(replacementState, id)), Does.Contain("base:malediction"));
+        Assert.That(attacker.Discard.Select(id => DefinitionId(replacementState, id)), Has.Member("base:domaine"));
+        Assert.That(victim.Discard.Select(id => DefinitionId(replacementState, id)), Has.Member("base:malediction"));
 
         GameStateSnapshot upgradeState = NewState(out PlayerStateSnapshot upgrader);
         int upgrade = AddCard(upgradeState, upgrader, "intrigue:amelioration", CardZone.Hand);
@@ -190,7 +190,7 @@ public sealed class IntrigueRemainingCardsRulesTests
 
         Assert.That(upgraded.Status, Is.EqualTo(GameRuleStatus.Applied), upgraded.Error);
         CollectionAssert.Contains(upgradeState.TrashedCards, estate);
-        Assert.That(upgrader.Discard.Select(id => DefinitionId(upgradeState, id)), Does.Contain("base:argent"));
+        Assert.That(upgrader.Discard.Select(id => DefinitionId(upgradeState, id)), Has.Member("base:argent"));
         Assert.That(GameStateValidator.TryValidate(upgradeState, out string validationError), Is.True, validationError);
     }
 

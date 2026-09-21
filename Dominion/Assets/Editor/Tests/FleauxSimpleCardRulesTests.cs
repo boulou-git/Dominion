@@ -82,7 +82,7 @@ public sealed class FleauxSimpleCardRulesTests
         Assert.That(result.Status, Is.EqualTo(GameRuleStatus.Applied), result.Error);
         Assert.That(player.Coins, Is.EqualTo(2));
         Assert.That(player.Discard.Select(id => state.CardInstances.Find(card => card.InstanceId == id).DefinitionId),
-            Does.Contain("base:domaine"));
+            Has.Member("base:domaine"));
         Assert.That(pile.CardInstanceIds.Contains(heritage.InstanceId), Is.True);
         Assert.That(heritage.OwnerPlayerId, Is.Empty);
         Assert.That(state.Resolution.IsActive, Is.False);
@@ -186,7 +186,7 @@ public sealed class FleauxSimpleCardRulesTests
 
         Assert.That(reacted.Status, Is.EqualTo(GameRuleStatus.Applied), reacted.Error);
         Assert.That(player.Hand.Contains(fossoyeur.InstanceId), Is.False);
-        Assert.That(player.Discard, Does.Contain(fossoyeur.InstanceId));
+        Assert.That(player.Discard, Has.Member(fossoyeur.InstanceId));
         Assert.That(player.Actions, Is.EqualTo(actionsBefore + 1));
         Assert.That(player.Coins, Is.EqualTo(coinsBefore + 1));
         Assert.That(state.Resolution.IsActive, Is.False);
@@ -237,7 +237,7 @@ public sealed class FleauxSimpleCardRulesTests
         Assert.That(player.Hand.Contains(market.InstanceId), Is.False);
         Assert.That(player.Discard.Contains(market.InstanceId), Is.True);
         Assert.That(player.Discard.Select(id => state.CardInstances.Find(card => card.InstanceId == id).DefinitionId),
-            Does.Contain("base:or"));
+            Has.Member("base:or"));
     }
 
     [Test]
@@ -303,10 +303,10 @@ public sealed class FleauxSimpleCardRulesTests
 
         Assert.That(start.Status, Is.EqualTo(GameRuleStatus.Applied), start.Error);
         Assert.That(player.Hand.Count, Is.EqualTo(2));
-        Assert.That(state.TrashedCards, Does.Contain(cultist.InstanceId));
-        //Assert.That(player.InPlay, Does.Not.Contain(cultist.InstanceId));
-        //Assert.That(player.ResolvedDurationCards, Does.Not.Contain(cultist.InstanceId));
-        Assert.That(player.Discard, Does.Contain(horror.InstanceId));
+        Assert.That(state.TrashedCards, Has.Member(cultist.InstanceId));
+        Assert.That(player.InPlay, Has.None.EqualTo(cultist.InstanceId));
+        Assert.That(player.ResolvedDurationCards, Has.None.EqualTo(cultist.InstanceId));
+        Assert.That(player.Discard, Has.Member(horror.InstanceId));
         Assert.That(horror.OwnerPlayerId, Is.EqualTo(player.PlayerId));
     }
 

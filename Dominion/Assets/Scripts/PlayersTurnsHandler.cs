@@ -16,6 +16,12 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
 
     public void Initialise()
     {
+        if (Instance != null && Instance != this)
+        {
+            Debug.LogError("Duplicate PlayersTurnsHandler: keeping the initial command router.", this);
+            Destroy(this);
+            return;
+        }
         Instance = this;
         NetworkGameState.StateChanged -= OnGameStateChanged;
         NetworkGameState.StateChanged += OnGameStateChanged;
@@ -26,10 +32,12 @@ public class PlayersTurnsHandler : MonoBehaviourPunCallbacks
     private void OnDestroy()
     {
         NetworkGameState.StateChanged -= OnGameStateChanged;
+        if (Instance == this) Instance = null;
     }
 
     private void Update()
     {
+        if (Instance != this) return;
         GameStateSnapshot state = NetworkGameState.State;
         if (!ShouldAutoAdvanceActionPhase(state) || _lastAutoAdvanceVersion == state.Version) return;
 

@@ -14,6 +14,16 @@ public sealed class PrefabUiContractTests
         Transform social = journal?.Find("JournalSocialPanel");
         Assert.NotNull(social, "JournalSocialPanel must be instanced in GameScreen.prefab.");
         Assert.NotNull(social.GetComponent<JournalSocialPanel>());
+        SerializedObject contract = new SerializedObject(social.GetComponent<JournalSocialPanel>());
+        SerializedProperty icons = contract.FindProperty("_emoteIconPrefabs");
+        Assert.AreEqual(4, icons.arraySize);
+        for (int index = 0; index < icons.arraySize; index++)
+        {
+            GameObject icon = icons.GetArrayElementAtIndex(index).objectReferenceValue as GameObject;
+            Assert.NotNull(icon, "Broken emote prefab reference at index " + index);
+            Assert.NotNull(icon.GetComponent<CanvasGroup>());
+            Assert.NotNull(icon.GetComponent<RectTransform>());
+        }
 
         InputField input = social.Find("MessageInput")?.GetComponent<InputField>();
         Assert.NotNull(input);

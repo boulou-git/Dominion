@@ -21,8 +21,8 @@ public sealed class SpecialDecisionUiTests
         var matches = CardNameDecisionView.FindMatches("e", labels, CardNameDecisionView.MaximumVisibleSuggestions);
 
         Assert.AreEqual(4, matches.Count);
-        //Assert.That(matches, Does.Contain(0));
-        //Assert.That(matches, Does.Not.Contain(5));
+        Assert.That(matches, Has.Member(0));
+        Assert.That(matches, Has.None.EqualTo(5));
     }
 
     [TestCase(PointerEventData.InputButton.Left, true)]

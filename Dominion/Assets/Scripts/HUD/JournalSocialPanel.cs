@@ -8,8 +8,11 @@ using UnityEngine.UI;
 /// </summary>
 public sealed class JournalSocialPanel : MonoBehaviour
 {
-    private const float EmoteDuration = 2.4f;
-    private const float EmoteRise = 125f;
+    [SerializeField, Min(0.1f)] private float _emoteDuration = 2.4f;
+    [SerializeField] private float _emoteRise = 125f;
+    [SerializeField, Min(1)] private int _maxConcurrentEmotes = 8;
+    private readonly List<GameObject> _activeEmotes = new List<GameObject>();
+    private UnityEngine.Events.UnityAction[] _emoteListeners;
 
     [SerializeField] private InputField _chatInput;
     [SerializeField] private Button _sendButton;
@@ -39,10 +42,12 @@ public sealed class JournalSocialPanel : MonoBehaviour
         _sendButton.onClick.AddListener(SubmitChat);
         _chatInput.onEndEdit.AddListener(HandleChatEndEdit);
         _emoteButton.onClick.AddListener(ToggleEmoteWheel);
+        _emoteListeners = new UnityEngine.Events.UnityAction[_emoteButtons.Length];
         for (int index = 0; index < _emoteButtons.Length; index++)
         {
             int capturedIndex = index;
-            _emoteButtons[index].onClick.AddListener(() => SubmitEmote(capturedIndex));
+            _emoteListeners[index] = () => SubmitEmote(capturedIndex);
+            _emoteButtons[index].onClick.AddListener(_emoteListeners[index]);
         }
 
         _emoteWheel.SetActive(false);
@@ -56,12 +61,32 @@ public sealed class JournalSocialPanel : MonoBehaviour
         if (_sendButton != null) _sendButton.onClick.RemoveListener(SubmitChat);
         if (_chatInput != null) _chatInput.onEndEdit.RemoveListener(HandleChatEndEdit);
         if (_emoteButton != null) _emoteButton.onClick.RemoveListener(ToggleEmoteWheel);
+        if (_emoteListeners != null)
+            for (int index = 0; index < _emoteListeners.Length; index++)
+                if (_emoteButtons[index] != null)
+                    _emoteButtons[index].onClick.RemoveListener(_emoteListeners[index]);
+    }
+
+    private void OnDisable()
+    {
+        StopAllCoroutines();
+        foreach (GameObject instance in _activeEmotes)
+            if (instance != null) Destroy(instance);
+        _activeEmotes.Clear();
+        if (_emoteWheel != null) _emoteWheel.SetActive(false);
     }
 
     private void Update()
     {
         if (_emoteWheel != null && _emoteWheel.activeSelf && Input.GetKeyDown(KeyCode.Escape))
             _emoteWheel.SetActive(false);
+    }
+
+    private void OnEnable()
+    {
+        if (_emoteListeners == null) return;
+        _emoteCursorInitialised = false;
+        Refresh(NetworkGameState.State);
     }
 
     private bool HasValidPrefabContract()
@@ -72,15 +97,21 @@ public sealed class JournalSocialPanel : MonoBehaviour
         if (_emoteButtons == null || _emoteIds == null || _emoteIconPrefabs == null ||
             _emoteButtons.Length != 4 || _emoteIds.Length != 4 || _emoteIconPrefabs.Length != 4)
             return false;
+        HashSet<string> ids = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
         for (int index = 0; index < 4; index++)
             if (_emoteButtons[index] == null || _emoteIconPrefabs[index] == null ||
+                !ids.Add(_emoteIds[index]) ||
+                _emoteIconPrefabs[index].GetComponent<RectTransform>() == null ||
+                _emoteIconPrefabs[index].GetComponent<CanvasGroup>() == null ||
                 !JournalRules.IsSupportedEmote(_emoteIds[index])) return false;
         return true;
     }
 
     private void Refresh(GameStateSnapshot state)
     {
-        bool interactable = state != null && state.IsStarted && !state.IsPaused &&
+        if (!isActiveAndEnabled) return;
+        bool interactable = state != null && state.IsStarted && !state.IsPaused && !state.IsGameOver &&
+                            Photon.Pun.PhotonNetwork.InRoom &&
                             !PendingDecisionInputLock.IsActive(state);
         _chatInput.interactable = interactable;
         _sendButton.interactable = interactable;
@@ -151,11 +182,14 @@ public sealed class JournalSocialPanel : MonoBehaviour
 
     private void PlayEmote(string emoteId)
     {
+        _activeEmotes.RemoveAll(instance => instance == null);
+        if (_activeEmotes.Count >= Mathf.Max(1, _maxConcurrentEmotes)) return;
         int index = System.Array.FindIndex(_emoteIds,
             candidate => string.Equals(candidate, emoteId, System.StringComparison.OrdinalIgnoreCase));
         if (index < 0 || index >= _emoteIconPrefabs.Length) return;
 
         GameObject instance = Instantiate(_emoteIconPrefabs[index], _emoteAnimationRoot, false);
+        _activeEmotes.Add(instance);
         RectTransform rect = instance.transform as RectTransform;
         if (rect != null)
             rect.anchoredPosition = new Vector2(Random.Range(-22f, 22f), 0f);
@@ -164,7 +198,7 @@ public sealed class JournalSocialPanel : MonoBehaviour
         StartCoroutine(AnimateEmote(instance));
     }
 
-    private static IEnumerator AnimateEmote(GameObject instance)
+    private IEnumerator AnimateEmote(GameObject instance)
     {
         if (instance == null) yield break;
         RectTransform rect = instance.transform as RectTransform;
@@ -172,13 +206,14 @@ public sealed class JournalSocialPanel : MonoBehaviour
         Vector2 start = rect != null ? rect.anchoredPosition : Vector2.zero;
         float elapsed = 0f;
 
-        while (instance != null && elapsed < EmoteDuration)
+        float duration = Mathf.Max(0.1f, _emoteDuration);
+        while (instance != null && elapsed < duration)
         {
             elapsed += Time.unscaledDeltaTime;
-            float progress = Mathf.Clamp01(elapsed / EmoteDuration);
+            float progress = Mathf.Clamp01(elapsed / duration);
             if (rect != null)
             {
-                rect.anchoredPosition = start + Vector2.up * (EmoteRise * progress);
+                rect.anchoredPosition = start + Vector2.up * (_emoteRise * progress);
                 float scale = Mathf.Lerp(0.72f, 1f, Mathf.Min(1f, progress * 4f));
                 rect.localScale = Vector3.one * scale;
             }
@@ -187,6 +222,7 @@ public sealed class JournalSocialPanel : MonoBehaviour
             yield return null;
         }
 
+        _activeEmotes.Remove(instance);
         if (instance != null) Destroy(instance);
     }
 }

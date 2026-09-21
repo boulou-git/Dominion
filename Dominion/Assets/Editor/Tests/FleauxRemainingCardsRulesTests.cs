@@ -57,7 +57,7 @@ public sealed class FleauxRemainingCardsRulesTests
             state.Resolution.PendingDecision.DecisionId, new[] { "coin" }, Resolve, new Random(1));
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
-        Assert.That(state.TrashedCards, Does.Contain(copper.InstanceId));
+        Assert.That(state.TrashedCards, Has.Member(copper.InstanceId));
         Assert.That(player.Coins, Is.EqualTo(1));
     }
 
@@ -76,12 +76,12 @@ public sealed class FleauxRemainingCardsRulesTests
             state.Resolution.PendingDecision.DecisionId, new[] { "gain_trash" }, Resolve, new Random(1));
 
         Assert.That(cardChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), cardChoice.Error);
-        Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds, Does.Contain(silver.InstanceId));
+        Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds, Has.Member(silver.InstanceId));
         GameRuleResult finished = GameRules.TrySubmitDecision(state, player.PlayerId,
             state.Resolution.PendingDecision.DecisionId, new[] { silver.InstanceId }, Resolve, new Random(1));
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
-        Assert.That(player.Discard, Does.Contain(silver.InstanceId));
+        Assert.That(player.Discard, Has.Member(silver.InstanceId));
         Assert.That(state.TrashedCards.Contains(silver.InstanceId), Is.False);
     }
 
@@ -99,14 +99,14 @@ public sealed class FleauxRemainingCardsRulesTests
             state.Resolution.PendingDecision.DecisionId, new[] { "trash_discard" }, Resolve, new Random(1));
 
         Assert.That(cardChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), cardChoice.Error);
-        Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds, Does.Contain(estate.InstanceId));
+        Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds, Has.Member(estate.InstanceId));
         Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds.Contains(copper.InstanceId), Is.False);
         GameRuleResult finished = GameRules.TrySubmitDecision(state, player.PlayerId,
             state.Resolution.PendingDecision.DecisionId, new[] { estate.InstanceId }, Resolve, new Random(1));
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
-        Assert.That(state.TrashedCards, Does.Contain(estate.InstanceId));
-        Assert.That(player.Discard, Does.Contain(copper.InstanceId));
+        Assert.That(state.TrashedCards, Has.Member(estate.InstanceId));
+        Assert.That(player.Discard, Has.Member(copper.InstanceId));
     }
 
     [Test]
@@ -120,7 +120,7 @@ public sealed class FleauxRemainingCardsRulesTests
 
         GameRuleResult waiting = GameRules.TryPlayCard(state, attacker.PlayerId, inquisitor.InstanceId, Resolve, new Random(1));
         Assert.That(waiting.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), waiting.Error);
-        Assert.That(state.Resolution.PendingDecision.CandidateDefinitionIds, Does.Contain("base:cuivre"));
+        Assert.That(state.Resolution.PendingDecision.CandidateDefinitionIds, Has.Member("base:cuivre"));
         GameRuleResult finished = GameRules.TrySubmitOptionDecision(state, attacker.PlayerId,
             state.Resolution.PendingDecision.DecisionId, new[] { "base:cuivre" }, Resolve, new Random(1));
 
@@ -154,7 +154,7 @@ public sealed class FleauxRemainingCardsRulesTests
         GameRuleResult finished = GameRules.TrySubmitDecision(state, player.PlayerId,
             state.Resolution.PendingDecision.DecisionId, new[] { copperId }, Resolve, new Random(1));
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
-        Assert.That(state.TrashedCards, Does.Contain(copperId));
+        Assert.That(state.TrashedCards, Has.Member(copperId));
     }
 
     [Test]
@@ -174,8 +174,8 @@ public sealed class FleauxRemainingCardsRulesTests
             state.Resolution.PendingDecision.DecisionId, new[] { "supply" }, Resolve, new Random(1));
 
         Assert.That(supplyChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), supplyChoice.Error);
-        Assert.That(state.Resolution.PendingDecision.CandidateDefinitionIds, Does.Contain("base:village"));
-        Assert.That(state.Resolution.PendingDecision.CandidateDefinitionIds, Does.Not.Contain("base:argent"));
+        Assert.That(state.Resolution.PendingDecision.CandidateDefinitionIds, Has.Member("base:village"));
+        Assert.That(state.Resolution.PendingDecision.CandidateDefinitionIds, Has.None.EqualTo("base:argent"));
         GameRuleResult finished = GameRules.TrySubmitSupplyDecision(state, player.PlayerId,
             state.Resolution.PendingDecision.DecisionId, new[] { "base:village" }, Resolve, new Random(1));
 
@@ -184,7 +184,7 @@ public sealed class FleauxRemainingCardsRulesTests
         Assert.That(player.CardsTrashedThisTurn, Is.EqualTo(1));
         Assert.That(player.Artifacts, Is.Empty);
         Assert.That(state.TrashedCards.Select(id => state.CardInstances.Single(card => card.InstanceId == id).DefinitionId),
-            Does.Contain("base:village"));
+            Has.Member("base:village"));
     }
 
     [Test]
@@ -199,7 +199,7 @@ public sealed class FleauxRemainingCardsRulesTests
             state.Resolution.PendingDecision.DecisionId, new[] { "self" }, Resolve, new Random(1));
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
-        Assert.That(state.TrashedCards, Does.Contain(cart.InstanceId));
+        Assert.That(state.TrashedCards, Has.Member(cart.InstanceId));
         Assert.That(player.InPlay.Contains(cart.InstanceId), Is.False);
         Assert.That(player.Coins, Is.EqualTo(5));
     }
@@ -220,8 +220,8 @@ public sealed class FleauxRemainingCardsRulesTests
             state.Resolution.PendingDecision.DecisionId, new[] { action.InstanceId }, Resolve, new Random(1));
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
-        Assert.That(state.TrashedCards, Does.Contain(action.InstanceId));
-        Assert.That(player.InPlay, Does.Contain(cart.InstanceId));
+        Assert.That(state.TrashedCards, Has.Member(action.InstanceId));
+        Assert.That(player.InPlay, Has.Member(cart.InstanceId));
         Assert.That(player.Coins, Is.EqualTo(5));
     }
 
@@ -244,8 +244,8 @@ public sealed class FleauxRemainingCardsRulesTests
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
         Assert.That(state.SetAsideCards.Exists(entry => entry.CardInstanceId == kept.InstanceId), Is.True);
-        Assert.That(player.Discard, Does.Contain(first.InstanceId));
-        Assert.That(player.Discard, Does.Contain(second.InstanceId));
+        Assert.That(player.Discard, Has.Member(first.InstanceId));
+        Assert.That(player.Discard, Has.Member(second.InstanceId));
     }
 
     [Test]
@@ -285,7 +285,7 @@ public sealed class FleauxRemainingCardsRulesTests
         GameRuleResult played = GameRules.TryPlayCard(state, attacker.PlayerId, pestiferous.InstanceId, Resolve, new Random(1));
 
         Assert.That(played.Status, Is.EqualTo(GameRuleStatus.Applied), played.Error);
-        Assert.That(defender.Hand, Does.Contain(disease.InstanceId));
+        Assert.That(defender.Hand, Has.Member(disease.InstanceId));
         Assert.That(attacker.Hand.Contains(disease.InstanceId), Is.False);
         Assert.That(defender.ConditionalCostModifiers.Count, Is.EqualTo(1));
         state.ActivePlayerId = defender.PlayerId;
@@ -304,7 +304,7 @@ public sealed class FleauxRemainingCardsRulesTests
 
         Assert.That(nextTurn.Status, Is.EqualTo(GameRuleStatus.Applied), nextTurn.Error);
         Assert.That(defender.ConditionalCostModifiers, Is.Empty);
-        Assert.That(attacker.ResolvedDurationCards, Does.Contain(pestiferous.InstanceId));
+        Assert.That(attacker.ResolvedDurationCards, Has.Member(pestiferous.InstanceId));
     }
 
     [Test]
@@ -365,14 +365,14 @@ public sealed class FleauxRemainingCardsRulesTests
         GameRuleResult cardChoice = GameRules.TrySubmitOptionDecision(state, player.PlayerId,
             state.Resolution.PendingDecision.DecisionId, new[] { "coins", "double" }, Resolve, new Random(1));
         Assert.That(cardChoice.Status, Is.EqualTo(GameRuleStatus.WaitingForChoice), cardChoice.Error);
-        Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds, Does.Contain(village.InstanceId));
+        Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds, Has.Member(village.InstanceId));
         Assert.That(state.Resolution.PendingDecision.CandidateInstanceIds.Contains(cultist.InstanceId), Is.False);
         GameRuleResult finished = GameRules.TrySubmitDecision(state, player.PlayerId,
             state.Resolution.PendingDecision.DecisionId, new[] { village.InstanceId }, Resolve, new Random(1));
 
         Assert.That(finished.Status, Is.EqualTo(GameRuleStatus.Applied), finished.Error);
         Assert.That(player.Coins, Is.EqualTo(3));
-        Assert.That(state.TrashedCards, Does.Contain(village.InstanceId));
+        Assert.That(state.TrashedCards, Has.Member(village.InstanceId));
         Assert.That(pile.RemainingCount, Is.EqualTo(10));
     }
 
