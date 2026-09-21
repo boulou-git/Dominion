@@ -44,19 +44,33 @@ public sealed class InspectedSortRulesTests
     }
 
     [TestCase(false)] [TestCase(true)]
-    public void Sorting_WaitsForReactionAndRetainsTheDraftAcrossSerialization(bool react)
+    public void Sorting_RetainsDraftThenPendingReactionAcrossSerialization(bool react)
     {
         var state = Start(out PlayerStateSnapshot player, out int first, out int second);
         var gravedigger = Add(state, player, "fleaux:fossoyeur", CardZone.Hand);
         var result = InspectedSortRules.Submit(state, player.PlayerId, state.Resolution.PendingDecision.DecisionId,
             new[] { first }, new int[0], new[] { second }, Resolve, new System.Random(1));
         Assert.AreEqual(GameRuleStatus.WaitingForChoice, result.Status, result.Error);
-        result = InspectedSortRules.Continue(state, result, Resolve, new System.Random(1));
-        Assert.AreEqual(gravedigger.InstanceId, state.Resolution.PendingDecision.ListenerCardInstanceId);
+        // The draft is still needed while the original card's choices are pending.
         Assert.IsNotEmpty(state.Resolution.SortPlans);
         Assert.IsTrue(player.Inspected.Contains(second));
         state = JsonUtility.FromJson<GameStateSnapshot>(JsonUtility.ToJson(state));
         player = state.Players[0];
+        Assert.IsNotEmpty(state.Resolution.SortPlans);
+        result = InspectedSortRules.Continue(state, result, Resolve, new System.Random(1));
+
+        // Queued trash reactions are dispatched after the card's effects finish.
+        // The completed draft must be gone, but the reaction must remain pending.
+        Assert.AreEqual(GameRuleStatus.WaitingForChoice, result.Status, result.Error);
+        Assert.AreEqual(gravedigger.InstanceId, state.Resolution.PendingDecision.ListenerCardInstanceId);
+        Assert.IsEmpty(state.Resolution.SortPlans);
+        Assert.IsEmpty(player.Inspected);
+        CollectionAssert.AreEqual(new[] { second }, player.Deck);
+        state = JsonUtility.FromJson<GameStateSnapshot>(JsonUtility.ToJson(state));
+        player = state.Players[0];
+        Assert.AreEqual(gravedigger.InstanceId, state.Resolution.PendingDecision.ListenerCardInstanceId);
+        int actionsBefore = player.Actions;
+        int coinsBefore = player.Coins;
         result = GameRules.TrySubmitOptionDecision(state, player.PlayerId, state.Resolution.PendingDecision.DecisionId,
             react ? new[] { "react" } : new string[0], Resolve, new System.Random(1));
         Assert.AreNotEqual(GameRuleStatus.Rejected, result.Status, result.Error);
@@ -65,6 +79,11 @@ public sealed class InspectedSortRulesTests
         CollectionAssert.AreEqual(new[] { second }, player.Deck);
         Assert.IsTrue(state.TrashedCards.Contains(first));
         Assert.IsEmpty(state.Resolution.SortPlans);
+        Assert.AreEqual(actionsBefore + (react ? 1 : 0), player.Actions);
+        Assert.AreEqual(coinsBefore + (react ? 1 : 0), player.Coins);
+        Assert.AreEqual(!react, player.Hand.Contains(gravedigger.InstanceId));
+        Assert.AreEqual(react, player.Discard.Contains(gravedigger.InstanceId));
+        Assert.IsFalse(state.Resolution.PendingDecision.IsPending);
     }
 
     private static GameStateSnapshot Start(out PlayerStateSnapshot player, out int first, out int second)

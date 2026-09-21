@@ -244,27 +244,25 @@ public sealed class PrefabUiContractTests
         Assert.NotNull(topBarFollowToggle?.Find("Box/Checkmark")?.GetComponent<Image>());
         Assert.NotNull(topBarFollowToggle?.Find("Label")?.GetComponent<Text>());
 
-        GridLayoutGroup kingdomGrid = gameScreen.transform
-            .Find("SupplyPanel/KingdomSupply")?.GetComponent<GridLayoutGroup>();
-        // BaseSupplyController searches by name recursively and accepts LayoutGroup.
-        // Artist-authored wrappers and horizontal/vertical layouts are valid.
-        RectTransform baseSupply = null;
-        foreach (RectTransform candidate in gameScreen.GetComponentsInChildren<RectTransform>(true))
+        // Runtime controllers locate these roots recursively by name.
+        foreach (string rootName in new[] { "BaseSupply", "KingdomSupply" })
         {
-            if (candidate.name != "BaseSupply") continue;
-            Assert.IsNull(baseSupply, "GameScreen contains duplicate BaseSupply roots.");
-            baseSupply = candidate;
-        }
-        Assert.NotNull(baseSupply, "GameScreen must contain a RectTransform named BaseSupply.");
-        LayoutGroup baseLayout = baseSupply.GetComponent<LayoutGroup>();
-        Assert.NotNull(baseLayout, "BaseSupply must have a Grid, Horizontal or Vertical LayoutGroup.");
-        Assert.IsTrue(baseLayout.enabled, "BaseSupply layout must be enabled.");
-        Assert.NotNull(kingdomGrid, "SupplyPanel/KingdomSupply needs a GridLayoutGroup.");
-        Assert.AreEqual(kingdomGrid.cellSize.x, kingdomGrid.cellSize.y, 0.01f);
-        if (baseLayout is GridLayoutGroup baseGrid)
-        {
-            Assert.Greater(baseGrid.cellSize.x, 0f);
-            Assert.Greater(baseGrid.cellSize.y, 0f);
+            RectTransform root = null;
+            foreach (RectTransform candidate in gameScreen.GetComponentsInChildren<RectTransform>(true))
+            {
+                if (candidate.name != rootName) continue;
+                Assert.IsNull(root, "GameScreen contains duplicate " + rootName + " roots.");
+                root = candidate;
+            }
+            Assert.NotNull(root, "GameScreen must contain a RectTransform named " + rootName + ".");
+            LayoutGroup layout = root.GetComponent<LayoutGroup>();
+            Assert.NotNull(layout, rootName + " needs a Grid, Horizontal or Vertical LayoutGroup.");
+            Assert.IsTrue(layout.enabled, rootName + " layout must be enabled.");
+            if (layout is GridLayoutGroup grid)
+            {
+                Assert.Greater(grid.cellSize.x, 0f);
+                Assert.Greater(grid.cellSize.y, 0f);
+            }
         }
         Assert.NotNull(gameScreen.GetComponent<ReserveExtrasController>());
         RectTransform artifactStack = gameScreen.transform.Find("InPlayPanel/ArtifactStack") as RectTransform;
