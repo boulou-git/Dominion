@@ -265,8 +265,27 @@ public sealed class PrefabUiContractTests
             }
         }
         Assert.NotNull(gameScreen.GetComponent<ReserveExtrasController>());
-        RectTransform artifactStack = gameScreen.transform.Find("InPlayPanel/ArtifactStack") as RectTransform;
+        // Like BuyPhaseGameplayController.ResolveUi, find the board recursively
+        // but require ArtifactStack to remain a direct child of InPlayPanel.
+        RectTransform inPlayPanel = null;
+        RectTransform artifactStack = null;
+        foreach (RectTransform candidate in gameScreen.GetComponentsInChildren<RectTransform>(true))
+        {
+            if (candidate.name == "InPlayPanel")
+            {
+                Assert.IsNull(inPlayPanel, "GameScreen contains duplicate InPlayPanel roots.");
+                inPlayPanel = candidate;
+            }
+            if (candidate.name == "ArtifactStack")
+            {
+                Assert.IsNull(artifactStack, "GameScreen contains duplicate ArtifactStack roots.");
+                artifactStack = candidate;
+            }
+        }
+        Assert.NotNull(inPlayPanel, "GameScreen must contain an InPlayPanel RectTransform.");
         Assert.NotNull(artifactStack, "The owned-Artifact stack must be authored in GameScreen.prefab.");
+        Assert.AreEqual(inPlayPanel, artifactStack.parent,
+            "ArtifactStack must be a direct child of InPlayPanel, as required by ResolveUi.");
         Assert.AreEqual(new Vector2(0f, 1f), artifactStack.anchorMin);
         Assert.AreEqual(new Vector2(0f, 1f), artifactStack.anchorMax);
         Assert.NotNull(gameScreen.transform.Find("CardZoomOverlay/Card")?.GetComponent<AdaptiveCardZoomView>());
