@@ -34,6 +34,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         PublishUserId = true
     };
 
+    private string _pendingJoinPseudo;
     private bool _tryingToRejoin;
     private bool _resumeAttemptedThisConnection;
     private bool _joinAfterFailedRejoin;
@@ -44,6 +45,11 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
     public string LocalPlayerId { get; private set; }
     public bool IsTryingToRejoin => _tryingToRejoin;
+
+    // Readiness alone can also be true on the NameServer.
+    public static bool IsMatchmakingReady => !PhotonNetwork.OfflineMode &&
+        PhotonNetwork.IsConnectedAndReady && !PhotonNetwork.InRoom &&
+        PhotonNetwork.NetworkingClient.Server == ServerConnection.MasterServer;
 
     private void Awake()
     {
@@ -68,42 +74,46 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
             PhotonNetwork.ConnectUsingSettings();
     }
 
-    public void JoinRoom(string pseudo)
+    public void JoinRoom(string pseudo) => TryJoinRoom(pseudo);
+
+    public bool TryJoinRoom(string pseudo)
     {
-        if (string.IsNullOrWhiteSpace(pseudo))
-            return;
-
-        PhotonNetwork.NickName = pseudo.Trim();
-
-        if (!PhotonNetwork.IsConnectedAndReady)
+        if (string.IsNullOrWhiteSpace(pseudo) || PhotonNetwork.InRoom)
+            return false;
+        if (!IsMatchmakingReady)
         {
-            Debug.LogWarning("Photon is not ready yet. JoinRoom ignored.");
-            return;
+            _pendingJoinPseudo = pseudo.Trim();
+            return true;
         }
 
-        if (PhotonNetwork.InRoom)
-            return;
-
+        _pendingJoinPseudo = null;
+        PhotonNetwork.NickName = pseudo.Trim();
         string rememberedRoom = PlayerPrefs.GetString(LastRoomPrefKey, string.Empty);
         if (string.Equals(rememberedRoom, RoomName, StringComparison.Ordinal))
         {
             _lastRoomName = rememberedRoom;
-            _tryingToRejoin = true;
-            _joinAfterFailedRejoin = true;
-            Debug.Log($"Trying to rejoin inactive player slot in '{RoomName}' before normal join.");
-            PhotonNetwork.RejoinRoom(RoomName);
-            return;
+            return TryRejoinRoom(RoomName, true);
         }
-
-        JoinOrCreateLobbyRoom();
+        return JoinOrCreateLobbyRoom();
     }
 
-    private void JoinOrCreateLobbyRoom()
+    private bool TryRejoinRoom(string roomName, bool joinAfterFailure)
     {
+        if (!IsMatchmakingReady) return false;
+        bool queued = PhotonNetwork.RejoinRoom(roomName);
+        _tryingToRejoin = queued;
+        _joinAfterFailedRejoin = queued && joinAfterFailure;
+        if (queued) _resumeAttemptedThisConnection = true;
+        return queued;
+    }
+
+    private bool JoinOrCreateLobbyRoom()
+    {
+        if (!IsMatchmakingReady) return false;
         _tryingToRejoin = false;
         _joinAfterFailedRejoin = false;
         _leavingBecauseRoomClosed = false;
-        PhotonNetwork.JoinOrCreateRoom(RoomName, RoomOptions, TypedLobby);
+        return PhotonNetwork.JoinOrCreateRoom(RoomName, RoomOptions, TypedLobby);
     }
 
     public void StartGameMaster()
@@ -173,6 +183,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
     public override void OnJoinedRoom()
     {
+        _pendingJoinPseudo = null;
         _lastRoomName = PhotonNetwork.CurrentRoom.Name;
         SaveLastRoom(_lastRoomName);
         _tryingToRejoin = false;
@@ -196,6 +207,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
     public override void OnDisconnected(DisconnectCause cause)
     {
         Debug.LogWarning($"Photon disconnected: {cause}");
+        _pendingJoinPseudo = null;
 
         // A deliberate host shutdown must never trigger reconnect/rejoin behavior.
         if (_leavingBecauseRoomClosed)
@@ -224,6 +236,15 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
     public override void OnConnectedToMaster()
     {
+        if (!IsMatchmakingReady) return;
+        if (!string.IsNullOrEmpty(_pendingJoinPseudo))
+        {
+            string pseudo = _pendingJoinPseudo;
+            _pendingJoinPseudo = null;
+            JoinRoom(pseudo);
+            return;
+        }
+
         if (_resumeAttemptedThisConnection)
             return;
 
@@ -233,23 +254,18 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         if (string.IsNullOrEmpty(_lastRoomName))
             return;
 
-        _resumeAttemptedThisConnection = true;
-        _tryingToRejoin = true;
-        _joinAfterFailedRejoin = false;
         Debug.Log($"Trying to resume previous room '{_lastRoomName}'.");
-        PhotonNetwork.RejoinRoom(_lastRoomName);
+        TryRejoinRoom(_lastRoomName, false);
     }
 
     public override void OnJoinRoomFailed(short returnCode, string message)
     {
         if (!_tryingToRejoin)
         {
-            if (returnCode == 32749 && PhotonNetwork.IsConnectedAndReady)
+            if (returnCode == 32749 && IsMatchmakingReady)
             {
-                _tryingToRejoin = true;
-                _joinAfterFailedRejoin = false;
                 Debug.LogWarning("Normal join found an inactive local UserId. Retrying as RejoinRoom.");
-                PhotonNetwork.RejoinRoom(RoomName);
+                TryRejoinRoom(RoomName, false);
                 return;
             }
 
@@ -267,7 +283,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
         NetworkGameState.ResetLocalState();
         EnsureLobbySceneLoaded();
 
-        if (shouldJoinFreshLobby && PhotonNetwork.IsConnectedAndReady)
+        if (shouldJoinFreshLobby && IsMatchmakingReady)
         {
             Debug.Log("No inactive slot could be resumed. Joining/creating a fresh Dominion lobby.");
             JoinOrCreateLobbyRoom();
@@ -337,6 +353,7 @@ public class RoomConnectionHandler : MonoBehaviourPunCallbacks
 
     public override void OnLeftRoom()
     {
+        _pendingJoinPseudo = null;
         _lastRoomName = null;
         _tryingToRejoin = false;
         _joinAfterFailedRejoin = false;

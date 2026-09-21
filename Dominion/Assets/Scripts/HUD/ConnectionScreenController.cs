@@ -74,7 +74,7 @@ public sealed class ConnectionScreenController : MonoBehaviourPunCallbacks
         if (_pseudoInput == null || string.IsNullOrWhiteSpace(_pseudoInput.text))
             return;
 
-        if (!PhotonNetwork.IsConnectedAndReady || PhotonNetwork.InRoom)
+        if (_joinRequested || !RoomConnectionHandler.IsMatchmakingReady || PhotonNetwork.InRoom)
             return;
 
         RoomConnectionHandler handler = RoomConnectionHandler.Instance;
@@ -90,15 +90,16 @@ public sealed class ConnectionScreenController : MonoBehaviourPunCallbacks
         PlayerPrefs.Save();
 
         _lastError = string.Empty;
-        _joinRequested = true;
+        _joinRequested = handler.TryJoinRoom(pseudo);
+        if (!_joinRequested)
+            _lastError = "Connexion indisponible. Réessayez.";
         RefreshState();
-        handler.JoinRoom(pseudo);
     }
 
     private void RefreshState()
     {
         bool inRoom = PhotonNetwork.InRoom;
-        bool networkReady = PhotonNetwork.IsConnectedAndReady;
+        bool networkReady = RoomConnectionHandler.IsMatchmakingReady;
 
         if (_visualRoot != null)
             _visualRoot.SetActive(!inRoom);
@@ -176,6 +177,11 @@ public sealed class ConnectionScreenController : MonoBehaviourPunCallbacks
         _joinRequested = false;
         _lastError = "Impossible de rejoindre la partie. Réessayez.";
         RefreshState();
+    }
+
+    public override void OnCreateRoomFailed(short returnCode, string message)
+    {
+        OnJoinRoomFailed(returnCode, message);
     }
 
     public override void OnDisconnected(Photon.Realtime.DisconnectCause cause)
