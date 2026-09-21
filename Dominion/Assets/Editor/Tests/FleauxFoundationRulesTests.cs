@@ -352,7 +352,7 @@ public sealed class FleauxFoundationRulesTests
 
     private static GameStateSnapshot NewState(out PlayerStateSnapshot player)
     {
-        GameStateSnapshot state = new GameStateSnapshot { ActivePlayerId = "p1", IsStarted = true };
+        GameStateSnapshot state = new GameStateSnapshot { ActivePlayerId = "p1", IsStarted = true, Phase = GameRules.ActionPhase, TurnNumber = 1 };
         player = new PlayerStateSnapshot { PlayerId = "p1", NickName = "P1", Actions = 1, Buys = 1 };
         state.Players.Add(player);
         return state;

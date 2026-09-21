@@ -69,7 +69,7 @@ public sealed class InspectedSortRulesTests
 
     private static GameStateSnapshot Start(out PlayerStateSnapshot player, out int first, out int second)
     {
-        var state = new GameStateSnapshot { ActivePlayerId = "p1", IsStarted = true };
+        var state = new GameStateSnapshot { ActivePlayerId = "p1", IsStarted = true, Phase = GameRules.ActionPhase, TurnNumber = 1 };
         player = new PlayerStateSnapshot { PlayerId = "p1", NickName = "P1", Actions = 1, Buys = 1 };
         state.Players.Add(player);
         first = Add(state, player, "base:cuivre", CardZone.Deck).InstanceId;

@@ -291,6 +291,9 @@ public sealed class FleauxSimpleCardRulesTests
         CardInstance incense = AddOwned(state, player, "fleaux:encens_noir", CardZone.None);
         player.Artifacts.Add(dagger.InstanceId);
         player.Artifacts.Add(incense.InstanceId);
+        // Incense inspects after the Cultist's draw. Keep a card in the deck so
+        // that this gain test does not shuffle the newly gained Horror out of discard.
+        AddOwned(state, player, "base:domaine", CardZone.Deck);
         AddOwned(state, player, "base:cuivre", CardZone.Deck);
         AddOwned(state, player, "base:argent", CardZone.Deck);
         CardInstance horror = new CardInstance(state.NextCardInstanceId++, "fleaux:horreur", string.Empty);

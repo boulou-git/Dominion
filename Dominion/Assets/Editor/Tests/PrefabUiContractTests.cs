@@ -40,7 +40,11 @@ public sealed class PrefabUiContractTests
         foreach (string iconName in iconNames)
         {
             GameObject icon = Load("Emotes/" + iconName);
-            Assert.NotNull(icon.GetComponent<EmoteCircleGraphic>());
+            // Final artwork may replace the placeholder circle with an Image.
+            Graphic[] graphics = icon.GetComponentsInChildren<Graphic>(true);
+            Assert.IsNotEmpty(graphics, iconName + " needs a UI visual.");
+            foreach (Graphic graphic in graphics)
+                Assert.IsFalse(graphic.raycastTarget, iconName + " must not intercept clicks.");
             CanvasGroup group = icon.GetComponent<CanvasGroup>();
             Assert.NotNull(group);
             Assert.IsFalse(group.blocksRaycasts);
